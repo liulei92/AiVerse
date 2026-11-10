@@ -259,7 +259,7 @@
     <string name="tts_code_block_announce">Announce code blocks</string>
     <string name="tts_code_block_announce_sub">Skip code blocks or say \'code block, please view\'</string>
     <string name="tts_change_engine">Change system TTS engine</string>
-    <string name="tts_change_engine_sub">Open system voice settings to choose engine or request permission</string>
+    <string name="tts_change_engine_sub">Open the system Text-to-speech output page to choose engine or request permission</string>
     <string name="tts_change_engine_failed">Unable to open system voice settings</string>
     <string name="tts_play">Read aloud</string>
     <string name="tts_stop">Stop reading</string>

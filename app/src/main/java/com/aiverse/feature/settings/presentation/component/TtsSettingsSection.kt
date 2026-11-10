@@ -95,15 +95,21 @@ internal fun TtsSettingsSection(viewModel: TtsSettingsViewModel) {
             title = stringResource(R.string.tts_change_engine),
             subtitle = stringResource(R.string.tts_change_engine_sub),
             onClick = {
-                // 打开系统设置（无障碍 → 文字转语音，可换引擎/申请权限），回退安装语音数据，再失败提示。
+                // 优先直接落到系统「文字转语音输出」页（com.android.settings.TTS_SETTINGS，非公开 action，
+                // 部分机型/ROM 可能没有该页面）；打不开再回退无障碍页（→ 文字转语音输出），最后回退安装语音数据。
                 val opened = runCatching {
-                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    context.startActivity(Intent("com.android.settings.TTS_SETTINGS"))
                 }.isSuccess
                 if (!opened) {
-                    runCatching {
-                        context.startActivity(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
-                    }.onFailure {
-                        Toast.makeText(context, context.getString(R.string.tts_change_engine_failed), Toast.LENGTH_SHORT).show()
+                    val openedA11y = runCatching {
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    }.isSuccess
+                    if (!openedA11y) {
+                        runCatching {
+                            context.startActivity(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
+                        }.onFailure {
+                            Toast.makeText(context, context.getString(R.string.tts_change_engine_failed), Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             }
