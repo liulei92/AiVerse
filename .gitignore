@@ -47,3 +47,6 @@ __pycache__/
 # 本地无关文件：不上传（保留在本地，不删除）
 /chouchiu-kazumi.zip
 /scripts/release-tag.sh
+/video_20261109.mp4
+/app/src/main/res/xml/phone_accessibility_service.xml
+/tmp/
