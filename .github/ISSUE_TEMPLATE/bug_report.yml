@@ -1,0 +1,50 @@
+name: Bug 报告
+description: 报告一个问题以帮助我们改进 AiVerse
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 版本号
+      description: 你使用的 AiVerse 版本号是多少？（在 App 设置或关于页面可以找到）
+      placeholder: "例如：v1.2.3"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 请一步步描述如何触发这个问题
+      placeholder: |
+        1. 打开 '...'
+        2. 点击 '...'
+        3. 滚动到 '...'
+        4. 看到错误
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期表现
+      description: 你期望发生什么？
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际表现
+      description: 实际发生了什么？（可附上错误日志）
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图 / 录屏
+      description: 如果可以，请拖拽或粘贴图片/视频来帮助说明问题
+    validations:
+      required: false
