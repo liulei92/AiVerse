@@ -1,7 +1,10 @@
 package com.aiverse.feature.browser.presentation
 
+import android.content.Intent
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -145,6 +148,44 @@ fun BrowserScreen(
     // 「The specified child already has a parent」。各持一份即可彻底避免。
     val context = LocalContext.current
     val container = remember { FrameLayout(context) }
+
+    // 系统文件/相册选择器：网页 input[type=file] 点击时由 BrowserManager 请求拉起，选完把 Uri 回传给页面。
+    // ActivityResultLauncher 必须在 Composition 中注册（要求存在 LocalActivityResultRegistryOwner）。
+    val fileChooserLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        browserManager.onFileChooserResult(result.data)
+    }
+    // 把启动器桥接到 BrowserManager：网页触发 onShowFileChooser 时用它拉起系统选择器。
+    // 用 owner 令牌标识本页面实例，防止 NavHost 过渡期间退场页清掉新页面的启动器。
+    val fileChooserOwner = remember { Any() }
+    DisposableEffect(browserManager, fileChooserOwner) {
+        browserManager.setFileChooserLauncher(fileChooserOwner) { intent ->
+            try {
+                fileChooserLauncher.launch(intent)
+            } catch (e: Exception) {
+                // 无可用 Activity / 特定 MIME 无处理器启动失败：回退用 */* 再试一次，
+                // 确保系统选择器仍能拉起并显示文件列表；再次失败才取消本次选择。
+                FileLogger.e(TAG, "启动文件选择器失败，尝试 */* 回退", e)
+                val fallback = Intent(Intent.ACTION_GET_CONTENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "*/*"
+                    if (intent.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)) {
+                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    }
+                }
+                try {
+                    fileChooserLauncher.launch(fallback)
+                } catch (e2: Exception) {
+                    FileLogger.e(TAG, "回退启动文件选择器也失败", e2)
+                    browserManager.onFileChooserResult(null)
+                }
+            }
+        }
+        onDispose {
+            browserManager.clearFileChooserLauncher(fileChooserOwner)
+        }
+    }
 
     var showTabsSheet by rememberSaveable { mutableStateOf(false) }
     val tabsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)

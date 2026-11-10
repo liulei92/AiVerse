@@ -792,12 +792,6 @@ fun AppNavigation(
                 }
                 navController.navigate("favorites")
             },
-            onOpenHistory = {
-                if (!permanentDrawer) {
-                    scope.launch { drawerState.snapTo(DrawerValue.Closed) }
-                }
-                navController.navigate("history")
-            },
             onNavigateToSettings = {
                 navController.navigate("settings")
                 if (!permanentDrawer) scope.launch { drawerState.snapTo(DrawerValue.Closed) }

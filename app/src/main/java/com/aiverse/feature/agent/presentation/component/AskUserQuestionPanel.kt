@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -23,15 +25,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -41,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,8 +59,8 @@ import com.aiverse.feature.agent.domain.tool.question.SingleAnswer
 import com.aiverse.feature.agent.domain.tool.question.UserQuestionAnswer
 import androidx.compose.ui.res.stringResource
 import com.aiverse.R
-import com.aiverse.core.ui.AppTextField
 import com.aiverse.core.ui.ExpandableChevronIcon
+import com.aiverse.core.ui.appTextFieldColors
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.ChevronDown
 import compose.icons.feathericons.ChevronUp
@@ -173,12 +179,15 @@ fun AskUserQuestionPanel(
 
                     Spacer(Modifier.height(Spacing.md))
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         AgentActionButton(
                             text = stringResource(R.string.ask_supplement),
                             onClick = onSkip,
-                            modifier = Modifier.weight(1f),
-                            tone = AgentActionTone.Neutral
+                            tone = AgentActionTone.Neutral,
+                            compact = true
                         )
                         AgentActionButton(
                             text = stringResource(R.string.ask_confirm),
@@ -194,8 +203,8 @@ fun AskUserQuestionPanel(
                                 }
                                 onConfirm(UserQuestionAnswer(answers))
                             },
-                            modifier = Modifier.weight(1f),
-                            tone = AgentActionTone.Success
+                            tone = AgentActionTone.Success,
+                            compact = true
                         )
                     }
                 }
@@ -217,8 +226,8 @@ private fun QuestionCard(
     onCustomTextChanged: (String) -> Unit
 ) {
     Column {
-        // 标题行：header 标签 + 问题文本
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // 标题行：header 标签 + 问题文本。标签与问题文本顶部对齐（问题换行时标签不被带到中间）。
+        Row(verticalAlignment = Alignment.Top) {
             if (item.header.isNotBlank()) {
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer,
@@ -267,24 +276,29 @@ private fun QuestionCard(
                         }
                         onSelectionChanged(newSelection)
                     }
-                    .padding(vertical = Spacing.xs, horizontal = Spacing.xs),
+                    .padding(vertical = 2.dp, horizontal = Spacing.xs),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (item.multiSelect) {
-                    Checkbox(
-                        checked = isSelected,
-                        onCheckedChange = { checked ->
-                            val newSelection = if (checked) selected + label else selected - label
-                            onSelectionChanged(newSelection)
-                        },
-                        modifier = Modifier.size(20.dp)
-                    )
-                } else {
-                    RadioButton(
-                        selected = isSelected,
-                        onClick = { onSelectionChanged(listOf(label)) },
-                        modifier = Modifier.size(20.dp)
-                    )
+                // M3 1.4.0 的 Checkbox/RadioButton 固定应用 48dp 最小交互区，Modifier.size 被顶住；
+                // 这里把 LocalMinimumInteractiveComponentSize 置 0 让 18dp 视觉尺寸真正生效，
+                // 热区仍由整行 clickable 提供（整行可点击切换选中）。
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                    if (item.multiSelect) {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = { checked ->
+                                val newSelection = if (checked) selected + label else selected - label
+                                onSelectionChanged(newSelection)
+                            },
+                            modifier = Modifier.size(18.dp)
+                        )
+                    } else {
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = { onSelectionChanged(listOf(label)) },
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
                 Spacer(Modifier.width(Spacing.sm))
                 Column(modifier = Modifier.weight(1f)) {
@@ -297,7 +311,7 @@ private fun QuestionCard(
                     if (description.isNotBlank()) {
                         Text(
                             text = description,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -307,17 +321,44 @@ private fun QuestionCard(
             // 「其他」被选中时展开文本输入框
             if (isOther && isSelected) {
                 Spacer(Modifier.height(Spacing.xs))
-                AppTextField(
-                    value = customText,
-                    onValueChange = onCustomTextChanged,
-                    placeholder = stringResource(R.string.ask_input_hint),
+                // 紧凑矮输入框（40dp）：M3 的 String 版 OutlinedTextField 固定 16dp 四周 padding、高度下不来，
+                // 这里用 Surface + BasicTextField 自绘一个单行矮框，与面板整体密度一致。
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 28.dp),
-                    textStyle = MaterialTheme.typography.bodySmall,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
-                )
+                    shape = RoundedCornerShape(Radius.mdLarge),
+                    color = appTextFieldColors().unfocusedContainerColor,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    BasicTextField(
+                        value = customText,
+                        onValueChange = onCustomTextChanged,
+                        textStyle = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .padding(horizontal = 12.dp),
+                        decorationBox = { innerTextField ->
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                if (customText.isEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.ask_input_hint),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                }
             }
         }
     }

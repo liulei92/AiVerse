@@ -495,7 +495,7 @@ fun SettingsScreen(
         SettingsSection.ContainerDownloads -> SettingsSection.Container
         SettingsSection.PluginRepo -> SettingsSection.Plugins
         SettingsSection.SearchProviderDetail -> SettingsSection.SearchProvider
-        SettingsSection.PhoneControl -> SettingsSection.General
+        SettingsSection.PhoneControl -> if (expanded) null else SettingsSection.Menu
         SettingsSection.PhoneControlAccessibilityGrant -> phoneControlGrantReturn
         SettingsSection.PhoneControlUnlock -> SettingsSection.PhoneControl
         SettingsSection.PhoneControlAppRules -> SettingsSection.PhoneControl

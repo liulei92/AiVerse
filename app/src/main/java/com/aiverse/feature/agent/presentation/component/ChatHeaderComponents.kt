@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -23,11 +24,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,8 +55,13 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -70,12 +81,9 @@ import com.aiverse.feature.settings.data.remote.ModelTestResult
 import com.aiverse.feature.settings.domain.model.AIProviderConfig
 import com.aiverse.feature.settings.domain.model.ModelMetadata
 import compose.icons.FeatherIcons
-import compose.icons.feathericons.ChevronLeft
-import compose.icons.feathericons.ChevronRight
-import compose.icons.feathericons.Download
 import compose.icons.feathericons.GitBranch
-import compose.icons.feathericons.Globe
 import compose.icons.feathericons.Menu
+import compose.icons.feathericons.MessageCircle
 import compose.icons.feathericons.Plus
 import compose.icons.feathericons.Terminal
 
@@ -111,7 +119,19 @@ internal fun ChatHeader(
     /** 选择模型回调（providerId, model）；为空则模型名不可点。 */
     onSelectModel: ((String, String) -> Unit)? = null,
     /** 模型「测试」入口，透传给模型切换弹窗。 */
-    runModelTest: (suspend (AIProviderConfig, String) -> ModelTestResult)? = null
+    runModelTest: (suspend (AIProviderConfig, String) -> ModelTestResult)? = null,
+    /** 上下文用量占比（0f~1f），驱动顶栏用量圆环。 */
+    tokenProgress: Float = 0f,
+    /** 用量是否为估算值（圆环语义文案区分「预计/已用」）。 */
+    tokenEstimated: Boolean = false,
+    /** 上下文用量明细（当前会话）；null 时圆环点击不弹气泡。 */
+    contextUsageDetail: ContextUsageDetail? = null,
+    /** 自动压缩触发阈值（百分比），用量明细进度条上画界限标记。 */
+    compactionThresholdPercent: Int = 85,
+    /** 一键压缩当前会话上下文。 */
+    onCompactContext: () -> Unit = {},
+    /** 打开当前会话的消息时间线浮窗（顶栏 ··· 菜单入口）。 */
+    onOpenMessageTimeline: () -> Unit = {}
 ) {
     Surface(
         color = MaterialTheme.colorScheme.background
@@ -121,8 +141,6 @@ internal fun ChatHeader(
                 .fillMaxWidth()
                 .statusBarsPadding()
         ) {
-            // 折叠状态：单一切换按钮。三个按钮显示时箭头向左 <（点击收起），隐藏时箭头向右 >（点击展开）。
-            var buttonsVisible by remember { mutableStateOf(true) }
             var showRenameDialog by remember { mutableStateOf(false) }
             var showModelSheet by remember { mutableStateOf(false) }
             Row(
@@ -213,37 +231,22 @@ internal fun ChatHeader(
                         }
                     }
                 }
-                // 顶部 3 个按钮（新建会话 / Git / 终端），可整体折叠收起。
-                if (buttonsVisible) {
-                    CompactHeaderIconButton(
-                        icon = FeatherIcons.Plus,
-                        contentDescription = stringResource(R.string.chat_new_session),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        onClick = onNewChat
-                    )
-                    WorkbenchIconButton(
-                        icon = FeatherIcons.GitBranch,
-                        contentDescription = stringResource(R.string.chat_open_git),
-                        active = gitActive,
-                        onClick = onNavigateToGit
-                    )
-                    WorkbenchIconButton(
-                        icon = FeatherIcons.Terminal,
-                        contentDescription = stringResource(R.string.chat_open_terminal),
-                        active = terminalActive,
-                        onClick = onNavigateToTerminal,
-                        modifier = Modifier.onboardingTarget(OnboardingStep.OPEN_TERMINAL)
-                    )
-                    // 思考强度入口（右上角）
-                    reasoningEntrance()
-                }
-                // 最右侧单一切换折叠按钮：三个按钮显示时箭头向左 <（点击收起），隐藏时箭头向右 >（点击展开）。
-                HeaderFoldButton(
-                    icon = if (buttonsVisible) FeatherIcons.ChevronLeft else FeatherIcons.ChevronRight,
-                    contentDescription = stringResource(
-                        if (buttonsVisible) R.string.chat_header_collapse else R.string.chat_header_expand
-                    ),
-                    onClick = { buttonsVisible = !buttonsVisible }
+                // 思考强度入口（右上角，常驻）
+                reasoningEntrance()
+                // 上下文用量圆环（··· 左边，固定显示），点击弹漫画气泡显示用量明细。
+                HeaderContextUsageButton(
+                    progress = tokenProgress,
+                    tokenEstimated = tokenEstimated,
+                    detail = contextUsageDetail,
+                    thresholdPercent = compactionThresholdPercent,
+                    onCompact = onCompactContext
+                )
+                // ··· 更多菜单：新建会话 / 打开 Git / 打开终端 收进下拉菜单。
+                HeaderOverflowMenu(
+                    onNewChat = onNewChat,
+                    onNavigateToGit = onNavigateToGit,
+                    onNavigateToTerminal = onNavigateToTerminal,
+                    onOpenMessageTimeline = onOpenMessageTimeline
                 )
             }
             // 远程模式：左边 SSH 连接状态，右边 token 累计统计
@@ -313,43 +316,230 @@ internal fun ChatHeader(
     }
 }
 
-/** 顶栏工作台入口按钮：大屏右栏开着对应内容时高亮，否则看不出点一下是开还是关。 */
+/** 顶栏 ··· 更多菜单：新建会话 / 消息导航 / 打开 Git / 打开终端 收进下拉菜单（原常驻 3 按钮）。 */
 @Composable
-private fun WorkbenchIconButton(
-    icon: ImageVector,
-    contentDescription: String,
-    active: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+private fun HeaderOverflowMenu(
+    onNewChat: () -> Unit,
+    onNavigateToGit: () -> Unit,
+    onNavigateToTerminal: () -> Unit,
+    onOpenMessageTimeline: () -> Unit = {}
 ) {
-    CompactHeaderIconButton(
-        icon = icon,
-        contentDescription = contentDescription,
-        tint = if (active) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        onClick = onClick,
-        modifier = modifier,
-        // 激活态：浅色主色块打底，一眼看出对应右栏已开。
-        activeBackground = active
-    )
+    var menuExpanded by remember { mutableStateOf(false) }
+    Box {
+        CompactHeaderIconButton(
+            icon = Icons.Default.MoreVert,
+            contentDescription = stringResource(R.string.chat_header_more),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            onClick = { menuExpanded = true }
+        )
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_new_session)) },
+                leadingIcon = {
+                    Icon(
+                        FeatherIcons.Plus,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = {
+                    menuExpanded = false
+                    onNewChat()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_message_navigation)) },
+                leadingIcon = {
+                    Icon(
+                        FeatherIcons.MessageCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = {
+                    menuExpanded = false
+                    onOpenMessageTimeline()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_open_git)) },
+                leadingIcon = {
+                    Icon(
+                        FeatherIcons.GitBranch,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = {
+                    menuExpanded = false
+                    onNavigateToGit()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_open_terminal)) },
+                leadingIcon = {
+                    Icon(
+                        FeatherIcons.Terminal,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = {
+                    menuExpanded = false
+                    onNavigateToTerminal()
+                }
+            )
+        }
+    }
 }
 
-/** 顶栏折叠切换按钮：紧凑尺寸，与工作台入口按钮同风格。 */
+/** 顶栏上下文用量圆环（··· 左边，固定显示）：点击从圆环下方弹「漫画对话气泡」显示用量明细。 */
 @Composable
-private fun HeaderFoldButton(
-    icon: ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit
+private fun HeaderContextUsageButton(
+    progress: Float,
+    tokenEstimated: Boolean,
+    detail: ContextUsageDetail?,
+    thresholdPercent: Int,
+    onCompact: () -> Unit
 ) {
-    CompactHeaderIconButton(
-        icon = icon,
-        contentDescription = contentDescription,
-        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        onClick = onClick
+    var bubbleExpanded by remember { mutableStateOf(false) }
+    Box {
+        ContextUsageRing(
+            progress = progress,
+            tokenEstimated = tokenEstimated,
+            onToggle = { if (detail != null) bubbleExpanded = !bubbleExpanded }
+        )
+        if (bubbleExpanded && detail != null) {
+            val dropOffset = with(LocalDensity.current) { 40.dp.roundToPx() }
+            Popup(
+                alignment = Alignment.TopEnd,
+                offset = IntOffset(0, dropOffset),
+                onDismissRequest = { bubbleExpanded = false },
+                properties = PopupProperties(focusable = true)
+            ) {
+                ComicUsageBubble(
+                    detail = detail,
+                    onCompact = onCompact,
+                    onClose = { bubbleExpanded = false },
+                    thresholdPercent = thresholdPercent
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 漫画风对话气泡：圆环作为「说话人头像」，气泡带指向圆环的小三角 tail；
+ * 内容为上下文用量明细卡（复用 ContextUsageDetailCard）。
+ */
+@Composable
+private fun ComicUsageBubble(
+    detail: ContextUsageDetail,
+    onCompact: () -> Unit,
+    onClose: () -> Unit,
+    thresholdPercent: Int
+) {
+    Column(
+        modifier = Modifier.widthIn(max = 340.dp),
+        horizontalAlignment = Alignment.End
+    ) {
+        // 指向圆环的小三角 tail（气泡顶部，尖点朝上指向圆环）。
+        // 注意：Canvas 的 draw lambda 不是 @Composable 上下文，MaterialTheme 需在 Canvas 外取值。
+        val tailColor = MaterialTheme.colorScheme.surface
+        Canvas(modifier = Modifier.size(16.dp, 8.dp)) {
+            val path = Path().apply {
+                moveTo(0f, size.height)
+                lineTo(size.width, size.height)
+                lineTo(size.width * 0.5f, 0f)
+                close()
+            }
+            drawPath(path, color = tailColor)
+        }
+        Surface(
+            shape = RoundedCornerShape(Radius.md),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            shadowElevation = 6.dp
+        ) {
+            ContextUsageDetailCard(
+                detail = detail,
+                onCompact = onCompact,
+                onClose = onClose,
+                thresholdPercent = thresholdPercent
+            )
+        }
+    }
+}
+
+/**
+ * 上下文用量环（顶栏常驻）：环内居中显示占用百分比；
+ * 颜色按占用程度：无占用白色、≤50% 绿色、≤75% 黄色、>75% 红色。
+ * 点击触发 onToggle（弹出漫画气泡）。
+ */
+@Composable
+private fun ContextUsageRing(
+    progress: Float,
+    tokenEstimated: Boolean,
+    onToggle: () -> Unit
+) {
+    val ringColor = contextRingColor(progress)
+    val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+    val usageLabel = stringResource(
+        if (tokenEstimated) R.string.chat_context_usage_estimated else R.string.chat_context_usage,
+        (progress * 100).toInt()
     )
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onToggle)
+            .semantics { contentDescription = usageLabel },
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val stroke = 3.dp.toPx()
+            val arcSize = size.minDimension - stroke
+            val topLeft = androidx.compose.ui.geometry.Offset(stroke / 2f, stroke / 2f)
+            // 无占用时轨道用灰色描边而非纯白：白色在浅色主题下不可见，会让圆环看起来"消失"。
+            drawArc(
+                color = trackColor,
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = androidx.compose.ui.geometry.Size(arcSize, arcSize),
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+            if (progress > 0f) {
+                drawArc(
+                    color = ringColor,
+                    startAngle = -90f,
+                    sweepAngle = 360f * progress,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = androidx.compose.ui.geometry.Size(arcSize, arcSize),
+                    style = Stroke(width = stroke, cap = StrokeCap.Round)
+                )
+            }
+        }
+        // 环内居中百分比数字：颜色跟随占用程度（无占用时用可读的浅色，避免白字在浅色主题下不可见）。
+        Text(
+            text = stringResource(R.string.chat_context_usage_percent, (progress * 100).toInt()),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (progress > 0f) ringColor else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** 上下文用量环颜色：无占用白色、≤50% 绿色、≤75% 黄色、>75% 红色。 */
+internal fun contextRingColor(progress: Float): Color = when {
+    progress <= 0f -> Color.White
+    progress > 0.75f -> Color(0xFFE53935)
+    progress > 0.5f -> Color(0xFFF9A825)
+    else -> Color(0xFF43A047)
 }
 
 /** 顶栏紧凑图标按钮：32dp 点击区 + 18dp 图标，比默认 IconButton（40dp）更省横向空间。 */

@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.aiverse.R
@@ -29,6 +30,8 @@ import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.ui.AppSwitch
 import com.aiverse.feature.settings.data.repository.InputBarPrefs
 import com.aiverse.feature.settings.data.repository.AppThemeMode
+import com.aiverse.feature.settings.data.repository.DEFAULT_QUICK_ACTION_ORDER
+import com.aiverse.feature.settings.data.repository.InputBarQuickAction
 import com.aiverse.feature.settings.data.repository.BackgroundSettingsRepository
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Box
@@ -39,12 +42,9 @@ import compose.icons.feathericons.Globe
 import compose.icons.feathericons.Image
 import compose.icons.feathericons.MessageSquare
 import compose.icons.feathericons.Moon
-import compose.icons.feathericons.PieChart
 import compose.icons.feathericons.RotateCcw
 import compose.icons.feathericons.Trash
 import compose.icons.feathericons.Zap
-import me.rerere.hugeicons.HugeIcons
-import me.rerere.hugeicons.stroke.MoneyBag02
 import kotlin.math.roundToInt
 
 /**
@@ -161,53 +161,16 @@ internal fun AppearanceSettingsSection(
 
         SettingsGroupHeader(text = stringResource(R.string.settings_appearance_input_bar))
         SettingsGroup {
-            SettingsRow(
-                icon = FeatherIcons.Box,
-                title = stringResource(R.string.settings_inputbar_mcp),
-                trailing = { AppSwitch(checked = inputBarPrefs.showMcp, onCheckedChange = { onInputBarPrefsChange(inputBarPrefs.copy(showMcp = it)) }) }
-            )
-            SettingsDivider()
-            SettingsRow(
-                icon = FeatherIcons.Zap,
-                title = stringResource(R.string.settings_inputbar_thinking),
-                trailing = { AppSwitch(checked = inputBarPrefs.showThinking, onCheckedChange = { onInputBarPrefsChange(inputBarPrefs.copy(showThinking = it)) }) }
-            )
-            SettingsDivider()
-            SettingsRow(
-                icon = FeatherIcons.Folder,
-                title = stringResource(R.string.settings_inputbar_folder),
-                trailing = { AppSwitch(checked = inputBarPrefs.showFolder, onCheckedChange = { onInputBarPrefsChange(inputBarPrefs.copy(showFolder = it)) }) }
-            )
-            SettingsDivider()
-            SettingsRow(
-                icon = FeatherIcons.Cpu,
-                title = stringResource(R.string.settings_inputbar_model),
-                trailing = { AppSwitch(checked = inputBarPrefs.showModel, onCheckedChange = { onInputBarPrefsChange(inputBarPrefs.copy(showModel = it)) }) }
-            )
-            SettingsDivider()
-            SettingsRow(
-                icon = FeatherIcons.PieChart,
-                title = stringResource(R.string.settings_inputbar_usage_card),
-                trailing = { AppSwitch(checked = inputBarPrefs.showUsageCard, onCheckedChange = { onInputBarPrefsChange(inputBarPrefs.copy(showUsageCard = it)) }) }
-            )
-            SettingsDivider()
-            SettingsRow(
-                icon = FeatherIcons.Trash,
-                title = stringResource(R.string.settings_inputbar_clear),
-                trailing = { AppSwitch(checked = inputBarPrefs.showClear, onCheckedChange = { onInputBarPrefsChange(inputBarPrefs.copy(showClear = it)) }) }
-            )
-            SettingsDivider()
-            SettingsRow(
-                icon = FeatherIcons.Globe,
-                title = stringResource(R.string.settings_inputbar_web_search),
-                trailing = { AppSwitch(checked = inputBarPrefs.showWebSearch, onCheckedChange = { onInputBarPrefsChange(inputBarPrefs.copy(showWebSearch = it)) }) }
-            )
-            SettingsDivider()
-            SettingsRow(
-                icon = HugeIcons.MoneyBag02,
-                title = stringResource(R.string.settings_inputbar_balance),
-                trailing = { AppSwitch(checked = inputBarPrefs.showBalance, onCheckedChange = { onInputBarPrefsChange(inputBarPrefs.copy(showBalance = it)) }) }
-            )
+            // 顺序与输入框快捷栏一致（共用 DEFAULT_QUICK_ACTION_ORDER，按使用频率）。
+            DEFAULT_QUICK_ACTION_ORDER.forEachIndexed { index, action ->
+                val spec = inputBarActionRowSpec(action, inputBarPrefs, onInputBarPrefsChange)
+                SettingsRow(
+                    icon = spec.icon,
+                    title = stringResource(spec.titleRes),
+                    trailing = { AppSwitch(checked = spec.checked, onCheckedChange = spec.onChecked) }
+                )
+                if (index < DEFAULT_QUICK_ACTION_ORDER.lastIndex) SettingsDivider()
+            }
         }
 
         SettingsGroup {
@@ -296,4 +259,32 @@ private fun ScaleSliderRow(
             valueRange = 0.85f..1.30f
         )
     }
+}
+
+/** 设置页快捷栏开关行的展示规格（图标/标题/开关状态/回调）。 */
+private class InputBarRowSpec(
+    val icon: ImageVector,
+    val titleRes: Int,
+    val checked: Boolean,
+    val onChecked: (Boolean) -> Unit
+)
+
+/** 快捷栏开关行按 [InputBarQuickAction] 映射：与输入框快捷栏共用同一默认顺序。 */
+private fun inputBarActionRowSpec(
+    action: InputBarQuickAction,
+    prefs: InputBarPrefs,
+    onChange: (InputBarPrefs) -> Unit
+): InputBarRowSpec = when (action) {
+    InputBarQuickAction.MODEL ->
+        InputBarRowSpec(FeatherIcons.Cpu, R.string.settings_inputbar_model, prefs.showModel) { onChange(prefs.copy(showModel = it)) }
+    InputBarQuickAction.THINKING ->
+        InputBarRowSpec(FeatherIcons.Zap, R.string.settings_inputbar_thinking, prefs.showThinking) { onChange(prefs.copy(showThinking = it)) }
+    InputBarQuickAction.WEB_SEARCH ->
+        InputBarRowSpec(FeatherIcons.Globe, R.string.settings_inputbar_web_search, prefs.showWebSearch) { onChange(prefs.copy(showWebSearch = it)) }
+    InputBarQuickAction.FOLDER ->
+        InputBarRowSpec(FeatherIcons.Folder, R.string.settings_inputbar_folder, prefs.showFolder) { onChange(prefs.copy(showFolder = it)) }
+    InputBarQuickAction.MCP ->
+        InputBarRowSpec(FeatherIcons.Box, R.string.settings_inputbar_mcp, prefs.showMcp) { onChange(prefs.copy(showMcp = it)) }
+    InputBarQuickAction.CLEAR ->
+        InputBarRowSpec(FeatherIcons.Trash, R.string.settings_inputbar_clear, prefs.showClear) { onChange(prefs.copy(showClear = it)) }
 }

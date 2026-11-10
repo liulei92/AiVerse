@@ -3,6 +3,8 @@ package com.aiverse.feature.settings.presentation.component
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +34,10 @@ import com.aiverse.R
 import com.aiverse.core.theme.ChatBubbleStyle
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.ui.AdaptiveModalBottomSheet
+import com.aiverse.feature.agent.presentation.component.MarkdownContent
+import com.aiverse.feature.agent.presentation.component.chatBlockColorsFor
+import com.aiverse.feature.agent.presentation.component.chatBubbleColorFor
+import com.aiverse.feature.agent.presentation.component.chatBubbleTextColorFor
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Check
 
@@ -53,6 +59,7 @@ internal fun ChatBubbleStyleSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(bottom = Spacing.xl)
         ) {
             SectionLabel(title)
@@ -71,9 +78,12 @@ internal fun ChatBubbleStyleSheet(
                         text = stringResource(style.labelRes),
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
-                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.width(Spacing.sm))
                     if (isSelected) {
                         Icon(
                             imageVector = FeatherIcons.Check,
@@ -87,26 +97,16 @@ internal fun ChatBubbleStyleSheet(
     }
 }
 
-/** 迷你预览气泡：按样式渲染，气泡内用固定示例文案（右侧才是样式名），固定宽度保证各行标签对齐。 */
+/**
+ * 迷你预览气泡：按样式渲染，气泡内放一行文案 + 迷你 Markdown 表格 + 代码块（检验表格/代码块
+ * 配色随气泡底色联动），右侧才是样式名，固定宽度保证各行标签对齐。
+ */
 @Composable
 private fun ChatBubblePreview(style: ChatBubbleStyle) {
-    val color = when (style) {
-        ChatBubbleStyle.CLASSIC_OUTLINE,
-        ChatBubbleStyle.SOFT_SHADOW,
-        ChatBubbleStyle.MINIMAL_WHITE -> MaterialTheme.colorScheme.surface
-        ChatBubbleStyle.DARK_MODE -> Color(0xFF121212)
-        ChatBubbleStyle.COMIC -> Color.White
-        ChatBubbleStyle.FRESH_GREEN -> Color(0xFF4CAF50)
-        ChatBubbleStyle.HEARTBEAT -> Color(0xFFF2F2F2)
-        ChatBubbleStyle.ORIGINAL -> MaterialTheme.colorScheme.primary
-        ChatBubbleStyle.NO_BUBBLE -> MaterialTheme.colorScheme.surface
-    }
-    val textColor = when (style) {
-        ChatBubbleStyle.DARK_MODE -> Color.White
-        ChatBubbleStyle.FRESH_GREEN -> Color(0xFF1B1B1B)
-        ChatBubbleStyle.ORIGINAL -> MaterialTheme.colorScheme.onPrimary
-        else -> MaterialTheme.colorScheme.onSurface
-    }
+    // 气泡底色/文字色/块级元素配色全部复用实际气泡的推导，避免预览与真实渲染两套不一致。
+    val color = chatBubbleColorFor(style)
+    val textColor = chatBubbleTextColorFor(style)
+    val (blockBackground, blockTextColor) = chatBlockColorsFor(style)
     val border = when (style) {
         ChatBubbleStyle.CLASSIC_OUTLINE -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.onSurface)
         ChatBubbleStyle.COMIC -> BorderStroke(2.dp, Color.Black)
@@ -123,24 +123,37 @@ private fun ChatBubblePreview(style: ChatBubbleStyle) {
     // 预览区固定宽度：气泡 + 漫画箭头都在固定区内，右侧样式名起始位置每行对齐。
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.width(104.dp)
+        modifier = Modifier.width(148.dp)
     ) {
         Surface(
             shape = shape,
             color = color,
             border = border,
             shadowElevation = elevation,
-            modifier = Modifier.width(88.dp)
+            modifier = Modifier.width(140.dp)
         ) {
-            Text(
-                text = stringResource(R.string.bubble_preview_text),
-                color = textColor,
-                fontSize = 13.sp,
-                textAlign = TextAlign.Center,
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            )
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.bubble_preview_text),
+                    color = textColor,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                MarkdownContent(
+                    text = stringResource(R.string.bubble_preview_markdown),
+                    color = textColor,
+                    blockBackground = blockBackground,
+                    blockTextColor = blockTextColor,
+                    compact = true,
+                    fontSizeSp = 10,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
         if (style == ChatBubbleStyle.COMIC) {
             Canvas(

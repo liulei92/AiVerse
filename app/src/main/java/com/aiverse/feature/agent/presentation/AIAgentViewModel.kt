@@ -1264,7 +1264,7 @@ class AIAgentViewModel @Inject constructor(
         if (enabled) refreshBalance(provider)
     }
 
-    /** 刷新某提供商余额（点击胶囊；由快捷栏 showBalance 控制显示，不再受 config.enabled 拦截）。 */
+    /** 刷新某提供商余额（点击胶囊；显示由模型编辑页「余额信息」开关决定，不再受 config.enabled 拦截）。 */
     fun refreshBalance(provider: AIProviderConfig) {
         val config = balanceSettingsRepository.configFor(provider) ?: return
         val id = provider.id

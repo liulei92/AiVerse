@@ -35,7 +35,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -46,6 +50,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -80,6 +86,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aiverse.R
@@ -87,6 +94,7 @@ import com.aiverse.core.theme.Spacing
 import com.aiverse.core.tts.LocalTtsController
 import com.aiverse.core.ui.ImageViewerHost
 import com.aiverse.core.ui.LocalImageViewer
+import com.aiverse.core.ui.AdaptiveModalBottomSheet
 import com.aiverse.core.ui.readableContentMaxWidth
 import com.aiverse.core.ui.rememberImageViewerState
 import com.aiverse.core.ui.rememberViewerDecodeSpec
@@ -108,6 +116,9 @@ import com.aiverse.feature.workspace.domain.WorkspacePathMapper
 import com.aiverse.feature.workspace.presentation.WorkspaceViewModel
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.ArrowDown
+import compose.icons.feathericons.Code
+import compose.icons.feathericons.MessageCircle
+import compose.icons.feathericons.User
 import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -783,6 +794,8 @@ fun AIChatPanel(
     var editingMessage by remember { mutableStateOf<AgentUIMessage?>(null) }
     var queuedEditing by remember { mutableStateOf<QueuedRequest?>(null) }
     val listState = rememberLazyListState()
+    // 消息时间线浮窗（顶栏 ··· 菜单「消息导航」入口）：显示当前会话各条消息，点某条滚动定位。
+    var showMessageTimeline by remember { mutableStateOf(false) }
     // 消息未就绪时的加载提示：本地读库通常几十毫秒，立刻显示反而闪一下，等一小会儿还没就绪才提示。
     var showMessagesLoading by remember(currentSessionId) { mutableStateOf(false) }
     LaunchedEffect(currentSessionId, messagesReady) {
@@ -947,11 +960,28 @@ fun AIChatPanel(
     val canUploadImages = projectRoot.isNotBlank()
     val reasoningEffort by viewModel.currentSessionReasoningEffort.collectAsStateWithLifecycle()
 
+    // 上下文用量占比与「是否估算」标记：驱动顶栏用量圆环（原在快捷栏，现固定顶栏）。
+    val contextTokenEstimated = contextUsages[currentSessionId]?.estimated
+        ?: (currentSessionId != null &&
+            (contextUsages[currentSessionId]?.inputTokens?.takeIf { it > 0 }
+                ?: sessionLastInputTokens.takeIf { it > 0 } ?: 0) == 0)
+    val contextTokenProgress = run {
+        val contextLimit = activeModelMetadata?.let {
+            com.aiverse.feature.settings.domain.model.ModelContextPolicy.effectiveInputBudget(it)
+        } ?: 0
+        // 上下文用量：优先用最近一次真实 ContextUsage 事件（流式预测/实际，随每轮更新）；
+        // 无事件时用会话 DB 记录的真实 lastInputTokens（重开/回放历史准确值）；
+        // 仅真实值也为 0（新会话/发送前）且消息非空时才退回消息快照估算（estimateTotal）。
+        val usedTokens = contextUsages[currentSessionId]?.inputTokens?.takeIf { it > 0 }
+            ?: sessionLastInputTokens.takeIf { it > 0 }
+            ?: 0
+        val effectiveUsed = if (usedTokens > 0) usedTokens
+        else if (messages.isNotEmpty()) ContextUsageEstimator.estimateTotal(messages) else 0
+        if (contextLimit > 0) (effectiveUsed.toFloat() / contextLimit).coerceIn(0f, 1f) else 0f
+    }
+
     val providerDashboards by (settingsViewModel?.providerDashboards?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyMap()) })
     val currentDashboardState = activeProvider?.let { providerDashboards[it.id] } ?: ProviderDashboardState.Idle
-
-    // 余额胶囊：仅适配余额查询的提供商（deepseek/硅基流动）有状态；当前模型余额显示在快捷栏。
-    val balanceStates by viewModel.balanceStates.collectAsStateWithLifecycle()
 
     // 键盘弹出时收起面板，避免输入框被挤压
     val imeBottomPx = WindowInsets.ime.getBottom(LocalDensity.current)
@@ -1612,6 +1642,8 @@ fun AIChatPanel(
                     isChunkFooter = item.isChunkFooter,
                     // 该消息仍在生成中（AI 思考/流式）：隐藏朗读按钮，回答完毕才显示。
                     messageInProgress = isBusy && message.id == messages.lastOrNull()?.id,
+                    // 整轮回复仍在进行中（isBusy）：整轮期间隐藏所有朗读按钮，待整轮结束才显示。
+                    turnBusy = isBusy,
                     reasoningVisible = item.reasoningVisible,
                     contentPadding = if (item.groupMember) ToolGroupMemberPadding else PaddingValues(0.dp),
                     onRewindClick = { viewModel.openRewindMenu(it) },
@@ -1675,7 +1707,13 @@ fun AIChatPanel(
                 providers = providers,
                 modelMetadata = modelMetadata,
                 onSelectModel = { p, m -> viewModel.setSessionProviderModel(p, m) },
-                runModelTest = settingsViewModel?.let { svm -> { p, m -> svm.runModelTest(p, m) } }
+                runModelTest = settingsViewModel?.let { svm -> { p, m -> svm.runModelTest(p, m) } },
+                tokenProgress = contextTokenProgress,
+                tokenEstimated = contextTokenEstimated,
+                contextUsageDetail = contextUsageDetail,
+                compactionThresholdPercent = compactionThresholdPercent,
+                onCompactContext = { viewModel.compactCurrentSession() },
+                onOpenMessageTimeline = { showMessageTimeline = true }
             )
         }
     ) { padding ->
@@ -1952,24 +1990,6 @@ fun AIChatPanel(
                         settingsViewModel?.refreshProviderDashboard(it, context = context, force = true)
                     }
                 },
-                tokenEstimated = contextUsages[currentSessionId]?.estimated
-                    ?: (currentSessionId != null &&
-                        (contextUsages[currentSessionId]?.inputTokens?.takeIf { it > 0 }
-                            ?: sessionLastInputTokens.takeIf { it > 0 } ?: 0) == 0),
-                tokenProgress = run {
-                    val contextLimit = activeModelMetadata?.let {
-                        com.aiverse.feature.settings.domain.model.ModelContextPolicy.effectiveInputBudget(it)
-                    } ?: 0
-                    // 上下文用量：优先用最近一次真实 ContextUsage 事件（流式预测/实际，随每轮更新）；
-                    // 无事件时用会话 DB 记录的真实 lastInputTokens（重开/回放历史准确值）；
-                    // 仅真实值也为 0（新会话/发送前）且消息非空时才退回消息快照估算（estimateTotal）。
-                    val usedTokens = contextUsages[currentSessionId]?.inputTokens?.takeIf { it > 0 }
-                        ?: sessionLastInputTokens.takeIf { it > 0 }
-                        ?: 0
-                    val effectiveUsed = if (usedTokens > 0) usedTokens
-                    else if (messages.isNotEmpty()) ContextUsageEstimator.estimateTotal(messages) else 0
-                    if (contextLimit > 0) (effectiveUsed.toFloat() / contextLimit).coerceIn(0f, 1f) else 0f
-                },
                 isScrolling = listState.isScrollInProgress,
                 forceOpenModelSheet = onboardingStep == OnboardingStep.SIMULATE_CHOOSE_MODEL,
                 onSelectModelInOnboarding = onSelectModelInOnboarding,
@@ -1978,19 +1998,10 @@ fun AIChatPanel(
                 onOpenMcp = onOpenMcp,
                 // 主页模型弹层的「测试」按钮：直接复用设置页的连通性测试链路，状态由弹层自己持有。
                 onRunModelTest = settingsViewModel?.let { svm -> { p, m -> svm.runModelTest(p, m) } },
-                contextUsageDetail = contextUsageDetail,
-                compactionThresholdPercent = compactionThresholdPercent,
                 inputBarPrefs = inputBarPrefs,
-                onCompactContext = { viewModel.compactCurrentSession() },
                 onClearChat = { currentSessionId?.let { viewModel.deleteSession(it) } },
                 onToggleWebSearch = { viewModel.toggleWebSearch() },
                 webSearchEnabled = webSearchEnabled,
-                balanceState = activeProvider?.let { p ->
-                    balanceStates[p.id] ?: viewModel.balanceStateFor(p)
-                },
-                onRefreshBalance = {
-                    activeProvider?.let { viewModel.refreshBalance(it) }
-                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .onboardingTarget(OnboardingStep.SEND_MESSAGE)
@@ -2113,6 +2124,17 @@ fun AIChatPanel(
 
         // Dialog 是独立 window、不占父布局尺寸，挂在 Scaffold 之后即可覆盖整屏 ——
         // 平板双栏下不会只盖住聊天列，也不会被 MainActivity 画在最上层的全局背景水印压住。
+        if (showMessageTimeline) {
+            MessageTimelineSheet(
+                messages = messages,
+                onDismiss = { showMessageTimeline = false },
+                onSelectMessage = { message ->
+                    val sid = currentSessionId
+                    showMessageTimeline = false
+                    if (sid != null) viewModel.locateMessage(sid, message.id)
+                }
+            )
+        }
         ImageViewerHost(state = imageViewerState, load = chatImageLoad)
     }
 }
@@ -2196,6 +2218,153 @@ private fun ScrollToBottomButton(
                 contentDescription = stringResource(R.string.common_scroll_to_bottom),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+/**
+ * 消息导航时间线是否应列出该条消息：只保留「用户说的话」与「AI 的最终文本回答」。
+ *
+ * - 用户消息：排除系统注入的压缩分隔线（[isCompactionMarker]）与后台通知条（[isBackgroundNotification]）——
+ *   它们不是用户真正说出的内容。
+ * - 助手消息：排除系统卡片（压缩摘要 / 压缩失败等，见 [isSystemCardInTurn]）以及「只有思考、无正文」的
+ *   消息（[reasoning] 是独立字段、不参与预览；content 无可见内容即无可视正文，不列）。
+ * - 工具调用条目（[MessageRole.TOOL]）与思考过程一律不列。
+ */
+private fun AgentUIMessage.isTimelineEntry(): Boolean = when (role) {
+    MessageRole.USER -> !isCompactionMarker && !isBackgroundNotification
+    MessageRole.ASSISTANT -> !isSystemCardInTurn() && content.hasVisibleContent()
+    MessageRole.TOOL -> false
+}
+
+/**
+ * 当前会话的消息时间线浮窗（顶栏 ··· 菜单「消息导航」）。
+ *
+ * 按顺序列出当前会话各条消息，区分用户 / 助手 / 工具角色，每条取正文首行作预览；
+ * 点某条关闭浮窗并滚动定位到该消息（[AIAgentViewModel.locateMessage] 登记待定位消息，
+ * 聊天页在消息就绪后按 [findChatMessageIndex] 定位到对应渲染项）。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MessageTimelineSheet(
+    messages: List<AgentUIMessage>,
+    onDismiss: () -> Unit,
+    onSelectMessage: (AgentUIMessage) -> Unit,
+) {
+    AdaptiveModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        // 只列用户消息 + AI 最终文本回答（过滤思考过程与工具调用，见 [isTimelineEntry]）。
+        val timelineEntries = messages.filter { it.isTimelineEntry() }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 480.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.chat_message_navigation),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .padding(horizontal = Spacing.lg)
+                    .padding(bottom = Spacing.sm)
+            )
+            if (timelineEntries.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = Spacing.xl),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.chat_message_timeline_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp),
+                    contentPadding = PaddingValues(bottom = Spacing.lg)
+                ) {
+                    itemsIndexed(timelineEntries, key = { _, m -> m.id }) { _, message ->
+                        MessageTimelineRow(
+                            message = message,
+                            onClick = { onSelectMessage(message) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 消息时间线里的一行：左侧角色图标 + 正文首行预览（单行省略）。 */
+@Composable
+private fun MessageTimelineRow(
+    message: AgentUIMessage,
+    onClick: () -> Unit,
+) {
+    val (roleColor, roleIcon, roleLabelRes) = when (message.role) {
+        MessageRole.USER -> Triple(
+            MaterialTheme.colorScheme.primary,
+            FeatherIcons.User,
+            R.string.chat_role_user
+        )
+        MessageRole.ASSISTANT -> Triple(
+            MaterialTheme.colorScheme.secondary,
+            FeatherIcons.MessageCircle,
+            R.string.chat_role_assistant
+        )
+        MessageRole.TOOL -> Triple(
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            FeatherIcons.Code,
+            R.string.chat_role_tool
+        )
+    }
+    val roleLabel = stringResource(roleLabelRes)
+    val preview = remember(message.id, message.content) {
+        message.content.lineSequence()
+            .firstOrNull { it.isNotBlank() }
+            ?.trim()
+            ?.take(120)
+            ?: message.toolName
+            ?: ""
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = roleColor.copy(alpha = 0.14f),
+            modifier = Modifier.size(28.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = roleIcon,
+                    contentDescription = roleLabel,
+                    tint = roleColor,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(Spacing.md))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = preview.ifEmpty { roleLabel },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

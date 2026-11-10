@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    AiVerse monochrome launcher icon (Android 13+ themed icons).
+    Single-color atom mark: 3 elliptical rings (semi-major 22, semi-minor 10)
+    rotated 0/60/120 degrees about the center (54,54) + filled nucleus (r 2.6).
+    Entire mark is contained within the adaptive-icon safe zone (central 66dp
+    circle, radius 33 units): outermost point is at 23.4 units from center.
+    The system tints this drawable with the theme color; base color is black.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Elliptical ring, rotated 0deg about center (54,54) -->
+    <group
+        android:rotation="0"
+        android:pivotX="54"
+        android:pivotY="54">
+        <path
+            android:pathData="M76,54 A22,10 0 1,1 32,54 A22,10 0 1,1 76,54 Z"
+            android:strokeColor="#FF000000"
+            android:strokeWidth="2.8"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000" />
+    </group>
+
+    <!-- Elliptical ring, rotated 60deg -->
+    <group
+        android:rotation="60"
+        android:pivotX="54"
+        android:pivotY="54">
+        <path
+            android:pathData="M76,54 A22,10 0 1,1 32,54 A22,10 0 1,1 76,54 Z"
+            android:strokeColor="#FF000000"
+            android:strokeWidth="2.8"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000" />
+    </group>
+
+    <!-- Elliptical ring, rotated 120deg -->
+    <group
+        android:rotation="120"
+        android:pivotX="54"
+        android:pivotY="54">
+        <path
+            android:pathData="M76,54 A22,10 0 1,1 32,54 A22,10 0 1,1 76,54 Z"
+            android:strokeColor="#FF000000"
+            android:strokeWidth="2.8"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000" />
+    </group>
+
+    <!-- Nucleus: filled circle at center -->
+    <path
+        android:pathData="M56.6,54 A2.6,2.6 0 1,1 51.4,54 A2.6,2.6 0 1,1 56.6,54 Z"
+        android:fillColor="#FF000000" />
+</vector>

@@ -9,7 +9,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,6 +35,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,13 +60,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ClipEntry
@@ -72,15 +73,11 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
@@ -118,6 +115,8 @@ import com.aiverse.feature.agent.presentation.AgentUIState
 import com.aiverse.feature.agent.presentation.QueuedRequest
 import com.aiverse.feature.settings.data.remote.ModelTestResult
 import com.aiverse.feature.settings.data.repository.InputBarPrefs
+import com.aiverse.feature.settings.data.repository.DEFAULT_QUICK_ACTION_ORDER
+import com.aiverse.feature.settings.data.repository.InputBarQuickAction
 import com.aiverse.feature.settings.domain.model.AIProviderConfig
 import com.aiverse.feature.settings.domain.model.ModelMetadata
 import com.aiverse.feature.settings.domain.model.modelMetadataKey
@@ -129,7 +128,6 @@ import compose.icons.FeatherIcons
 import compose.icons.feathericons.AlertCircle
 import compose.icons.feathericons.ArrowUp
 import compose.icons.feathericons.Check
-import compose.icons.feathericons.ChevronUp
 import compose.icons.feathericons.Copy
 import compose.icons.feathericons.Pause
 import compose.icons.feathericons.Play
@@ -138,25 +136,37 @@ import compose.icons.feathericons.X
 import compose.icons.feathericons.Maximize
 import compose.icons.feathericons.Minimize
 import compose.icons.feathericons.Box
+import compose.icons.feathericons.Cpu
+import compose.icons.feathericons.Folder
 import compose.icons.feathericons.Globe
 import compose.icons.feathericons.Plus
 import compose.icons.feathericons.Trash
 import compose.icons.feathericons.Square
 import compose.icons.feathericons.Shield
+import compose.icons.feathericons.Zap
 import kotlinx.coroutines.launch
 
 /** 输入框区域蒙版高度：盖住圆角容器，滚动内容滑入时被渐变遮罩；随键盘（IME）上移。 */
 private val INPUT_BAR_MASK_HEIGHT = 110.dp
 
-/** 输入框高度上下限：超过上限后文本在框内滚动，右上角露出「展开」按钮。与 TextField 的 heightIn 一致。 */
+/** 输入框高度上下限：超过上限后文本在框内滚动。与 TextField 的 heightIn 一致。 */
 private val INPUT_FIELD_MIN_HEIGHT = 44.dp
 private val INPUT_FIELD_MAX_HEIGHT = 140.dp
 
 /**
- * M3 无标签 TextField 的默认 contentPadding（上下左右各 16dp）。
- * 文本是否超过输入框高度要先用相同约束实测一遍，反推文本可视区域得靠这个值。
+ * 输入框快捷栏的一个可开关项插槽：供可见按钮渲染与溢出菜单（图标+文字）复用。
+ *
+ * [buttonContent] 为可见时渲染的按钮；[hostContent] 为溢出时承载内部弹层的隐形宿主
+ * （buttonVisible=false，不显示按钮，但保持组合以响应 [QuickActionSlot.onTrigger] 打开弹层）。
  */
-private val INPUT_FIELD_CONTENT_PADDING = 16.dp
+private class QuickActionSlot(
+    val action: InputBarQuickAction,
+    val icon: ImageVector,
+    val labelRes: Int,
+    val onTrigger: () -> Unit,
+    val buttonContent: @Composable () -> Unit,
+    val hostContent: @Composable () -> Unit
+)
 
 @Composable
 internal fun ChatInputBar(
@@ -198,8 +208,6 @@ internal fun ChatInputBar(
     onMoveQueued: (Int, Int) -> Unit = { _, _ -> },
     onEditQueued: (QueuedRequest) -> Unit = {},
     onInterjectQueued: (String) -> Unit = {},
-    tokenProgress: Float = 0f,
-    tokenEstimated: Boolean = false,
     dashboardState: ProviderDashboardState = ProviderDashboardState.Idle,
     onRefreshDashboard: () -> Unit = {},
     onRefreshDashboardByButton: () -> Unit = {},
@@ -219,32 +227,20 @@ internal fun ChatInputBar(
     onOpenMcp: () -> Unit = {},
     /** 主页模型弹层的连通性测试：null（无设置页 ViewModel 的宿主）时弹层不显示测试按钮。 */
     onRunModelTest: (suspend (AIProviderConfig, String) -> ModelTestResult)? = null,
-    /** 上下文用量明细（当前会话；null 时圆环点击不弹卡）。 */
-    contextUsageDetail: ContextUsageDetail? = null,
-    /** 自动压缩触发阈值（百分比），圆环明细卡进度条上画界限标记。 */
-    compactionThresholdPercent: Int = 85,
     /** 输入框快捷栏可开关项快照。 */
     inputBarPrefs: InputBarPrefs = InputBarPrefs(),
-    /** 一键压缩当前会话上下文。 */
-    onCompactContext: () -> Unit = {},
     /** 清空当前对话。 */
     onClearChat: () -> Unit = {},
     /** 切换联网搜索工具启用状态。 */
     onToggleWebSearch: () -> Unit = {},
     /** 联网搜索工具当前是否启用。 */
     webSearchEnabled: Boolean = true,
-    /** 余额胶囊状态（当前模型；未开启时胶囊不显示）。 */
-    balanceState: BalanceCapsuleState? = null,
-    /** 刷新当前模型余额。 */
-    onRefreshBalance: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val hasContent = value.isNotBlank() || pendingAttachments.isNotEmpty()
     val canSend = hasContent
     var showAttachmentSheet by remember { mutableStateOf(false) }
     var showFullScreenInput by remember { mutableStateOf(false) }
-    // 上下文用量面板展开态：点圆环展开（圆环变叉=关闭按钮），点叉收起。
-    var usagePanelExpanded by remember { mutableStateOf(false) }
     // TextField 的 String 重载在整串替换时会保留旧 selection 下标（点快捷命令补全时光标会停在中间），
     // 这里自持 TextFieldValue：外部改值时把光标移到末尾。
     var inputFieldValue by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
@@ -280,25 +276,6 @@ internal fun ChatInputBar(
             inputFieldValue = TextFieldValue(newText, TextRange(newText.length))
             onValueChange(newText)
         }
-    }
-
-    // 文本是否已经超出输入框高度（超出后框内滚动，展开按钮才有意义）。
-    // 按换行符数硬编码阈值在长行自动折行时会判断错，这里按 TextField 的实际宽度实测文本高度。
-    val textMeasurer = rememberTextMeasurer()
-    val inputDensity = LocalDensity.current
-    var inputFieldWidthPx by remember { mutableStateOf(0) }
-    val inputTextStyle = MaterialTheme.typography.bodyLarge
-    val inputOverflows = remember(value, inputFieldWidthPx, inputDensity, inputTextStyle) {
-        val horizontalPaddingPx = with(inputDensity) { INPUT_FIELD_CONTENT_PADDING.toPx() }
-        val contentWidthPx = inputFieldWidthPx - (horizontalPaddingPx * 2).toInt()
-        val maxTextHeightPx = with(inputDensity) {
-            (INPUT_FIELD_MAX_HEIGHT - INPUT_FIELD_CONTENT_PADDING * 2).toPx()
-        }
-        contentWidthPx > 0 && value.isNotEmpty() && textMeasurer.measure(
-            text = AnnotatedString(value),
-            style = inputTextStyle,
-            constraints = Constraints(maxWidth = contentWidthPx)
-        ).size.height > maxTextHeightPx
     }
 
     Surface(
@@ -512,23 +489,6 @@ internal fun ChatInputBar(
                 )
             }
 
-            // 上下文用量面板：点圆环展开（内嵌输入框上方、占满横向），圆环变叉为关闭按钮。
-            AnimatedVisibility(
-                visible = usagePanelExpanded && contextUsageDetail != null,
-                enter = fadeIn(tween(220)) + expandVertically(tween(220)),
-                exit = fadeOut(tween(180)) + shrinkVertically(tween(180))
-            ) {
-                if (contextUsageDetail != null) {
-                    ContextUsageDetailCard(
-                        detail = contextUsageDetail,
-                        onCompact = onCompactContext,
-                        onClose = { usagePanelExpanded = false },
-                        thresholdPercent = compactionThresholdPercent,
-                        modifier = Modifier.padding(bottom = Spacing.sm)
-                    )
-                }
-            }
-
             val hyperOS = LocalHyperOSStyle.current
             val inputShape = if (hyperOS) RoundedCornerShape(20.dp) else RoundedCornerShape(Radius.lg)
             Column(
@@ -576,7 +536,6 @@ internal fun ChatInputBar(
                         value = inputFieldValue,
                         onValueChange = { new ->
                             inputFieldValue = new
-                            usagePanelExpanded = false
                             onValueChange(new.text)
                         },
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
@@ -584,9 +543,7 @@ internal fun ChatInputBar(
                         ),
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = INPUT_FIELD_MIN_HEIGHT, max = INPUT_FIELD_MAX_HEIGHT)
-                            .onFocusChanged { if (it.isFocused) usagePanelExpanded = false }
-                            .onSizeChanged { inputFieldWidthPx = it.width },
+                            .heightIn(min = INPUT_FIELD_MIN_HEIGHT, max = INPUT_FIELD_MAX_HEIGHT),
                         placeholder = {
                             Text(
                                 stringResource(if (isBusy) R.string.chat_queue_hint else R.string.chat_input_placeholder),
@@ -614,18 +571,16 @@ internal fun ChatInputBar(
                         )
                     )
 
-                    if (inputOverflows) {
-                        IconButton(
-                            onClick = { showFullScreenInput = true },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                FeatherIcons.Maximize,
-                                contentDescription = stringResource(R.string.chat_input_expand),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                    IconButton(
+                        onClick = { showFullScreenInput = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            FeatherIcons.Maximize,
+                            contentDescription = stringResource(R.string.chat_input_expand),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
 
@@ -756,101 +711,169 @@ internal fun ChatInputBar(
                         BoxWithConstraints(modifier = Modifier.weight(1f)) {
                             val density = LocalDensity.current
                             val maxWpx = with(density) { maxWidth.toPx() }
-                            var itemWidths by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
-                            // 快捷栏按钮顺序统一为设置页「快捷栏」排序：MCP → 思考 → 文件夹 → 模型 → 用量 → 清空 → 网页搜索 → 余额
-                            val toolbarOrder = listOf(2, 3, 1, 0, -1, 6, 7, 5)
-                            val toolbarItems: List<Pair<Int, @Composable () -> Unit>> = buildList {
-                                if (inputBarPrefs.showUsageCard) add(-1 to @Composable {
-                                    ContextUsageRing(
-                                        progress = tokenProgress.coerceIn(0f, 1f),
-                                        tokenEstimated = tokenEstimated,
-                                        onToggle = { if (contextUsageDetail != null) usagePanelExpanded = !usagePanelExpanded }
-                                    )
-                                })
-                                if (inputBarPrefs.showModel) add(0 to @Composable {
-                                    ModelIconButton(
-                                        provider = activeProvider,
-                                        providers = providers,
-                                        modelMetadata = modelMetadata,
-                                        onSelectModel = onSelectModel,
-                                        forceOpenSheet = forceOpenModelSheet,
-                                        onSelectSuccessInOnboarding = onSelectModelInOnboarding,
-                                        onSheetDismiss = onModelSheetDismiss,
-                                        onOpenProviders = onOpenProviders,
-                                        runModelTest = onRunModelTest,
-                                        modifier = Modifier.onboardingTarget(OnboardingStep.OPEN_MODEL_PICKER)
-                                    )
-                                })
-                                if (workspaceViewModel != null && inputBarPrefs.showFolder) add(1 to @Composable {
-                                    WorkspaceIconButton(
-                                        viewModel = workspaceViewModel,
-                                        hasRunningSessions = hasRunningSessions,
-                                        onSwitchConfirmed = onSwitchWorkspaceConfirmed,
-                                        modifier = Modifier.size(36.dp),
-                                        iconSize = 20.dp
-                                    )
-                                })
-                                if (inputBarPrefs.showMcp) add(2 to @Composable {
-                                    IconButton(onClick = onOpenMcp, modifier = Modifier.size(36.dp)) {
-                                        Icon(
-                                            FeatherIcons.Box,
-                                            contentDescription = stringResource(R.string.settings_mcp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(20.dp)
+                            var itemWidths by remember { mutableStateOf<Map<InputBarQuickAction, Int>>(emptyMap()) }
+                            // 溢出菜单打开弹层信号：每次点击溢出项时递增，对应弹层组件（隐形宿主）据此打开。
+                            var modelOpenSignal by remember { mutableStateOf(0) }
+                            var thinkingOpenSignal by remember { mutableStateOf(0) }
+                            var folderOpenSignal by remember { mutableStateOf(0) }
+                            // 快捷栏按钮顺序统一为设置页「快捷栏」排序（按使用频率，高频靠前）。
+                            // 每个可开关项携带图标/中文名/触发逻辑，供溢出菜单以「图标+文字」项展示。
+                            val quickSlots: List<QuickActionSlot> = buildList {
+                                if (inputBarPrefs.showModel) add(QuickActionSlot(
+                                    action = InputBarQuickAction.MODEL,
+                                    icon = FeatherIcons.Cpu,
+                                    labelRes = R.string.inputbar_action_model,
+                                    onTrigger = { modelOpenSignal++ },
+                                    buttonContent = @Composable {
+                                        ModelIconButton(
+                                            provider = activeProvider,
+                                            providers = providers,
+                                            modelMetadata = modelMetadata,
+                                            onSelectModel = onSelectModel,
+                                            forceOpenSheet = forceOpenModelSheet,
+                                            onSelectSuccessInOnboarding = onSelectModelInOnboarding,
+                                            onSheetDismiss = onModelSheetDismiss,
+                                            onOpenProviders = onOpenProviders,
+                                            runModelTest = onRunModelTest,
+                                            openSignal = modelOpenSignal,
+                                            modifier = Modifier.onboardingTarget(OnboardingStep.OPEN_MODEL_PICKER)
+                                        )
+                                    },
+                                    hostContent = @Composable {
+                                        ModelIconButton(
+                                            provider = activeProvider,
+                                            providers = providers,
+                                            modelMetadata = modelMetadata,
+                                            onSelectModel = onSelectModel,
+                                            onOpenProviders = onOpenProviders,
+                                            runModelTest = onRunModelTest,
+                                            openSignal = modelOpenSignal,
+                                            buttonVisible = false
                                         )
                                     }
-                                })
-                                if (hasReasoningControl && inputBarPrefs.showThinking) add(3 to @Composable {
-                                    ReasoningEffortSelector(
-                                        effort = reasoningEffort,
-                                        capability = capability,
-                                        protocol = activeProvider?.let { reasoningProtocolOf(it) } ?: ReasoningProtocol.OPENAI_CHAT,
-                                        model = activeProvider?.effectiveModel.orEmpty(),
-                                        onChange = onReasoningEffortChange,
-                                        enabled = !isBusy
-                                    )
-                                })
-                                if (inputBarPrefs.showBalance) {
-                                    balanceState?.takeIf { it.enabled }?.let { st ->
-                                        add(5 to @Composable {
-                                            BalanceCapsule(state = st, onRefresh = onRefreshBalance)
-                                        })
-                                    }
+                                ))
+                                if (workspaceViewModel != null && inputBarPrefs.showFolder) {
+                                    val ws = workspaceViewModel
+                                    add(QuickActionSlot(
+                                        action = InputBarQuickAction.FOLDER,
+                                        icon = FeatherIcons.Folder,
+                                        labelRes = R.string.inputbar_action_folder,
+                                        onTrigger = { folderOpenSignal++ },
+                                        buttonContent = @Composable {
+                                            WorkspaceIconButton(
+                                                viewModel = ws,
+                                                hasRunningSessions = hasRunningSessions,
+                                                onSwitchConfirmed = onSwitchWorkspaceConfirmed,
+                                                openSignal = folderOpenSignal,
+                                                modifier = Modifier.size(36.dp),
+                                                iconSize = 20.dp
+                                            )
+                                        },
+                                        hostContent = @Composable {
+                                            WorkspaceIconButton(
+                                                viewModel = ws,
+                                                hasRunningSessions = hasRunningSessions,
+                                                onSwitchConfirmed = onSwitchWorkspaceConfirmed,
+                                                openSignal = folderOpenSignal,
+                                                buttonVisible = false
+                                            )
+                                        }
+                                    ))
                                 }
-                                if (inputBarPrefs.showClear) add(6 to @Composable {
-                                    IconButton(onClick = onClearChat, enabled = !isBusy, modifier = Modifier.size(36.dp)) {
-                                        Icon(
-                                            FeatherIcons.Trash,
-                                            contentDescription = stringResource(R.string.chat_clear_chat),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(20.dp)
+                                if (inputBarPrefs.showMcp) add(QuickActionSlot(
+                                    action = InputBarQuickAction.MCP,
+                                    icon = FeatherIcons.Box,
+                                    labelRes = R.string.inputbar_action_mcp,
+                                    onTrigger = { onOpenMcp() },
+                                    buttonContent = @Composable {
+                                        IconButton(onClick = onOpenMcp, modifier = Modifier.size(36.dp)) {
+                                            Icon(
+                                                FeatherIcons.Box,
+                                                contentDescription = stringResource(R.string.settings_mcp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    },
+                                    hostContent = @Composable { }
+                                ))
+                                if (hasReasoningControl && inputBarPrefs.showThinking) add(QuickActionSlot(
+                                    action = InputBarQuickAction.THINKING,
+                                    icon = FeatherIcons.Zap,
+                                    labelRes = R.string.inputbar_action_thinking,
+                                    onTrigger = { thinkingOpenSignal++ },
+                                    buttonContent = @Composable {
+                                        ReasoningEffortSelector(
+                                            effort = reasoningEffort,
+                                            capability = capability,
+                                            protocol = activeProvider?.let { reasoningProtocolOf(it) } ?: ReasoningProtocol.OPENAI_CHAT,
+                                            model = activeProvider?.effectiveModel.orEmpty(),
+                                            onChange = onReasoningEffortChange,
+                                            enabled = !isBusy,
+                                            openSignal = thinkingOpenSignal
+                                        )
+                                    },
+                                    hostContent = @Composable {
+                                        ReasoningEffortSelector(
+                                            effort = reasoningEffort,
+                                            capability = capability,
+                                            protocol = activeProvider?.let { reasoningProtocolOf(it) } ?: ReasoningProtocol.OPENAI_CHAT,
+                                            model = activeProvider?.effectiveModel.orEmpty(),
+                                            onChange = onReasoningEffortChange,
+                                            enabled = !isBusy,
+                                            openSignal = thinkingOpenSignal,
+                                            buttonVisible = false
                                         )
                                     }
-                                })
-                                if (inputBarPrefs.showWebSearch) add(7 to @Composable {
-                                    IconButton(onClick = onToggleWebSearch, modifier = Modifier.size(36.dp)) {
-                                        Icon(
-                                            FeatherIcons.Globe,
-                                            contentDescription = stringResource(R.string.chat_web_search_toggle),
-                                            tint = if (webSearchEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                })
-                            }.sortedBy { toolbarOrder.indexOf(it.first) }
-                            val visibleItems = mutableListOf<Pair<Int, @Composable () -> Unit>>()
-                            val overflowItems = mutableListOf<Pair<Int, @Composable () -> Unit>>()
+                                ))
+                                if (inputBarPrefs.showClear) add(QuickActionSlot(
+                                    action = InputBarQuickAction.CLEAR,
+                                    icon = FeatherIcons.Trash,
+                                    labelRes = R.string.inputbar_action_clear,
+                                    onTrigger = { onClearChat() },
+                                    buttonContent = @Composable {
+                                        IconButton(onClick = onClearChat, enabled = !isBusy, modifier = Modifier.size(36.dp)) {
+                                            Icon(
+                                                FeatherIcons.Trash,
+                                                contentDescription = stringResource(R.string.chat_clear_chat),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    },
+                                    hostContent = @Composable { }
+                                ))
+                                if (inputBarPrefs.showWebSearch) add(QuickActionSlot(
+                                    action = InputBarQuickAction.WEB_SEARCH,
+                                    icon = FeatherIcons.Globe,
+                                    labelRes = R.string.inputbar_action_web_search,
+                                    onTrigger = { onToggleWebSearch() },
+                                    buttonContent = @Composable {
+                                        IconButton(onClick = onToggleWebSearch, modifier = Modifier.size(36.dp)) {
+                                            Icon(
+                                                FeatherIcons.Globe,
+                                                contentDescription = stringResource(R.string.chat_web_search_toggle),
+                                                tint = if (webSearchEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    },
+                                    hostContent = @Composable { }
+                                ))
+                            }.sortedBy { DEFAULT_QUICK_ACTION_ORDER.indexOf(it.action) }
+                            val visibleItems = mutableListOf<QuickActionSlot>()
+                            val overflowItems = mutableListOf<QuickActionSlot>()
                             // 首帧测量完成前 itemWidths 为空，用预估宽度分配，避免把全部按钮塞进单行被裁剪
                             // （表现为按钮「隐藏」且无溢出入口）。
                             val estimateW = with(density) { 36.dp.toPx() }.toInt()
                             var used = 0
-                            for ((id, content) in toolbarItems) {
-                                val w = itemWidths[id] ?: estimateW
+                            for (slot in quickSlots) {
+                                val w = itemWidths[slot.action] ?: estimateW
                                 if (used + w <= maxWpx) {
-                                    visibleItems.add(id to content)
+                                    visibleItems.add(slot)
                                     used += w
                                 } else {
-                                    overflowItems.add(id to content)
+                                    overflowItems.add(slot)
                                 }
                             }
                             var overflowExpanded by remember { mutableStateOf(false) }
@@ -858,46 +881,53 @@ internal fun ChatInputBar(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                visibleItems.forEach { (id, content) ->
+                                visibleItems.forEach { slot ->
                                     Box(
                                         modifier = Modifier.onSizeChanged {
-                                            itemWidths = itemWidths + (id to it.width)
+                                            itemWidths = itemWidths + (slot.action to it.width)
                                         }
-                                    ) { content() }
+                                    ) { slot.buttonContent() }
                                 }
                                 if (overflowItems.isNotEmpty()) {
                                     Box {
+                                        // 溢出入口：MoreVert（···）图标，点开标准 DropdownMenu（图标+文字项）。
                                         IconButton(onClick = { overflowExpanded = !overflowExpanded }, modifier = Modifier.size(36.dp)) {
                                             Icon(
-                                                FeatherIcons.ChevronUp,
+                                                Icons.Default.MoreVert,
                                                 contentDescription = stringResource(R.string.chat_more_tools),
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.size(20.dp)
                                             )
                                         }
-                                        if (overflowExpanded) {
-                                            Popup(
-                                                alignment = Alignment.BottomStart,
-                                                onDismissRequest = { overflowExpanded = false },
-                                                properties = PopupProperties(focusable = true, dismissOnBackPress = true)
-                                            ) {
-                                                Surface(
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    color = MaterialTheme.colorScheme.surface,
-                                                    shadowElevation = 8.dp,
-                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                                                ) {
-                                                    Column(
-                                                        modifier = Modifier
-                                                            .width(IntrinsicSize.Min)
-                                                            .padding(vertical = 4.dp)
-                                                    ) {
-                                                        overflowItems.forEach { (_, content) -> content() }
+                                        DropdownMenu(
+                                            expanded = overflowExpanded,
+                                            onDismissRequest = { overflowExpanded = false }
+                                        ) {
+                                            overflowItems.forEach { slot ->
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(slot.labelRes)) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            slot.icon,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        overflowExpanded = false
+                                                        slot.onTrigger()
                                                     }
-                                                }
+                                                )
                                             }
                                         }
                                     }
+                                }
+                            }
+                            // 隐形宿主：让溢出项中的弹层组件（model/thinking/folder）保持组合，
+                            // 点击溢出菜单项递增 openSignal 时才能打开对应弹层（按钮本身隐藏）。
+                            overflowItems.forEach { slot ->
+                                Box(modifier = Modifier.size(0.dp)) {
+                                    slot.hostContent()
                                 }
                             }
                         }
@@ -1116,79 +1146,6 @@ internal fun SendButton(
             }
         }
     }
-}
-
-/**
- * 快捷栏的上下文用量环（与其它快捷按钮并排）：始终显示（设置开启时），环内居中显示占用百分比；
- * 颜色按占用程度：无占用白色、≤50% 绿色、≤75% 黄色、>75% 红色。
- * 点击弹出上下文用量明细浮层。
- */
-@Composable
-private fun ContextUsageRing(
-    progress: Float,
-    tokenEstimated: Boolean,
-    onToggle: () -> Unit
-) {
-    val ringColor = contextRingColor(progress)
-    val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-    val usageLabel = stringResource(
-        if (tokenEstimated) R.string.chat_context_usage_estimated else R.string.chat_context_usage,
-        (progress * 100).toInt()
-    )
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onToggle)
-            .semantics { contentDescription = usageLabel },
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val stroke = 3.dp.toPx()
-            val arcSize = size.minDimension - stroke
-            val topLeft = androidx.compose.ui.geometry.Offset(stroke / 2f, stroke / 2f)
-            // 无占用时轨道用灰色描边而非纯白：白色在浅色主题下不可见，会让圆环看起来"消失"。
-            drawArc(
-                color = trackColor,
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = topLeft,
-                size = androidx.compose.ui.geometry.Size(arcSize, arcSize),
-                style = Stroke(width = stroke, cap = StrokeCap.Round)
-            )
-            if (progress > 0f) {
-                drawArc(
-                    color = ringColor,
-                    startAngle = -90f,
-                    sweepAngle = 360f * progress,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = androidx.compose.ui.geometry.Size(arcSize, arcSize),
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
-                )
-            }
-        }
-        // 圆环始终显示占用百分比；面板关闭按钮已移至明细卡右侧，圆环不再变叉。
-        Text(
-            text = "${(progress * 100).toInt()}%",
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 8.sp,
-                fontWeight = FontWeight.Bold
-            ),
-            color = if (progress <= 0f) MaterialTheme.colorScheme.onSurfaceVariant else ringColor,
-            maxLines = 1,
-            softWrap = false
-        )
-    }
-}
-
-/** 上下文用量环颜色：无占用白色、≤50% 绿色、≤75% 黄色、>75% 红色。 */
-internal fun contextRingColor(progress: Float): Color = when {
-    progress <= 0f -> Color.White
-    progress > 0.75f -> Color(0xFFE53935)
-    progress > 0.5f -> Color(0xFFF9A825)
-    else -> Color(0xFF43A047)
 }
 
 @Composable

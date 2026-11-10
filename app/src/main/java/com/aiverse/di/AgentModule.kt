@@ -39,6 +39,10 @@ import com.aiverse.feature.agent.domain.tool.container.ExecuteCommandTool
 import com.aiverse.feature.agent.domain.tool.container.TerminalSessionTool
 import com.aiverse.feature.agent.domain.tool.explorer.ListFilesTool
 import com.aiverse.feature.agent.domain.tool.explorer.SearchCodeTool
+import com.aiverse.feature.git.domain.tool.CreateGitHubIssueTool
+import com.aiverse.feature.git.domain.tool.GetGitHubIssueTool
+import com.aiverse.feature.git.domain.tool.ListGitHubIssuesTool
+import com.aiverse.feature.git.domain.tool.UpdateGitHubIssueTool
 import com.aiverse.feature.agent.domain.tool.remote.SshDownloadTool
 import com.aiverse.feature.agent.domain.tool.remote.SshExecTool
 import com.aiverse.feature.agent.domain.tool.remote.SshListTool
@@ -402,7 +406,11 @@ object AgentModule {
         messagePeerTool: MessagePeerTool,
         browserTool: BrowserTool,
         reviewTool: ReviewTool,
-        reviewPrTool: ReviewPrTool
+        reviewPrTool: ReviewPrTool,
+        listGitHubIssuesTool: ListGitHubIssuesTool,
+        getGitHubIssueTool: GetGitHubIssueTool,
+        createGitHubIssueTool: CreateGitHubIssueTool,
+        updateGitHubIssueTool: UpdateGitHubIssueTool
     ): ToolRegistry {
         return ToolRegistry().apply {
             register("readFile", readFileTool)
@@ -441,6 +449,10 @@ object AgentModule {
             register("browser", browserTool)
             register("review", reviewTool)
             register("reviewPr", reviewPrTool)
+            register("listIssues", listGitHubIssuesTool)
+            register("getIssue", getGitHubIssueTool)
+            register("createIssue", createGitHubIssueTool)
+            register("updateIssue", updateGitHubIssueTool)
         }
     }
 

@@ -32,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -91,39 +93,64 @@ internal object ChatStyle {
     val rowIconSize = 16.dp
 }
 
+/** 当前角色的气泡样式（由全局 CompositionLocal 注入）。 */
+@Composable
+private fun chatBubbleStyleOf(role: ChatBubbleRole): ChatBubbleStyle = when (role) {
+    ChatBubbleRole.USER -> LocalUserBubbleStyle.current
+    ChatBubbleRole.ASSISTANT -> LocalAssistantBubbleStyle.current
+}
+
 /** 聊天气泡底色（按所选聊天气泡样式返回）：用户与助手两侧可各自独立配置。 */
 @Composable
-internal fun chatBubbleColor(role: ChatBubbleRole): Color {
-    val style = when (role) {
-        ChatBubbleRole.USER -> LocalUserBubbleStyle.current
-        ChatBubbleRole.ASSISTANT -> LocalAssistantBubbleStyle.current
-    }
-    return when (style) {
-        ChatBubbleStyle.CLASSIC_OUTLINE,
-        ChatBubbleStyle.SOFT_SHADOW,
-        ChatBubbleStyle.MINIMAL_WHITE -> MaterialTheme.colorScheme.surface
-        ChatBubbleStyle.DARK_MODE -> Color(0xFF121212)
-        ChatBubbleStyle.COMIC -> Color.White
-        ChatBubbleStyle.FRESH_GREEN -> Color(0xFF4CAF50)
-        ChatBubbleStyle.HEARTBEAT -> Color(0xFFF2F2F2)
-        ChatBubbleStyle.ORIGINAL -> MaterialTheme.colorScheme.primary
-        // 无气泡样式：AI 回复不套容器（正文直接铺底色），这里给用户消息一个普通底色兜底。
-        ChatBubbleStyle.NO_BUBBLE -> MaterialTheme.colorScheme.surface
-    }
+internal fun chatBubbleColor(role: ChatBubbleRole): Color =
+    chatBubbleColorFor(chatBubbleStyleOf(role))
+
+/** 聊天气泡底色：按具体样式取值，供设置页预览复用同一推导。 */
+@Composable
+internal fun chatBubbleColorFor(style: ChatBubbleStyle): Color = when (style) {
+    ChatBubbleStyle.CLASSIC_OUTLINE,
+    ChatBubbleStyle.SOFT_SHADOW,
+    ChatBubbleStyle.MINIMAL_WHITE -> MaterialTheme.colorScheme.surface
+    ChatBubbleStyle.DARK_MODE -> Color(0xFF121212)
+    ChatBubbleStyle.COMIC -> Color.White
+    ChatBubbleStyle.FRESH_GREEN -> Color(0xFF4CAF50)
+    ChatBubbleStyle.HEARTBEAT -> Color(0xFFF2F2F2)
+    ChatBubbleStyle.ORIGINAL -> MaterialTheme.colorScheme.primary
+    // 无气泡样式：AI 回复不套容器（正文直接铺底色），这里给用户消息一个普通底色兜底。
+    ChatBubbleStyle.NO_BUBBLE -> MaterialTheme.colorScheme.surface
 }
 
 /** 聊天气泡文字色（按所选聊天气泡样式返回）：用户与助手两侧可各自独立配置。 */
 @Composable
-internal fun chatBubbleTextColor(role: ChatBubbleRole): Color {
-    val style = when (role) {
-        ChatBubbleRole.USER -> LocalUserBubbleStyle.current
-        ChatBubbleRole.ASSISTANT -> LocalAssistantBubbleStyle.current
-    }
-    return when (style) {
-        ChatBubbleStyle.DARK_MODE -> Color.White
-        ChatBubbleStyle.FRESH_GREEN -> Color(0xFF1B1B1B)
-        ChatBubbleStyle.ORIGINAL -> MaterialTheme.colorScheme.onPrimary
-        else -> MaterialTheme.colorScheme.onSurface
+internal fun chatBubbleTextColor(role: ChatBubbleRole): Color =
+    chatBubbleTextColorFor(chatBubbleStyleOf(role))
+
+/** 聊天气泡文字色：按具体样式取值，供设置页预览复用同一推导。 */
+@Composable
+internal fun chatBubbleTextColorFor(style: ChatBubbleStyle): Color = when (style) {
+    ChatBubbleStyle.DARK_MODE -> Color.White
+    ChatBubbleStyle.FRESH_GREEN -> Color(0xFF1B1B1B)
+    ChatBubbleStyle.ORIGINAL -> MaterialTheme.colorScheme.onPrimary
+    else -> MaterialTheme.colorScheme.onSurface
+}
+
+/** 气泡内块级元素（Markdown 表格/代码块）配色：跟随气泡底色深浅联动，避免深底气泡里
+ *  主题浅灰块底压白字看不清。深底气泡 → 块底用同色系略亮的深色 + 浅字；浅底气泡 → 沿用
+ *  主题默认（mutedSurface 底 + onSurface 字）。返回 Pair(块底色?, 块文字色?)，null = 主题默认。 */
+@Composable
+internal fun chatBlockColors(role: ChatBubbleRole): Pair<Color?, Color?> =
+    chatBlockColorsFor(chatBubbleStyleOf(role))
+
+/** 气泡内块级元素配色：按具体样式取值，供设置页预览复用同一推导。 */
+@Composable
+internal fun chatBlockColorsFor(style: ChatBubbleStyle): Pair<Color?, Color?> {
+    val bubble = chatBubbleColorFor(style)
+    return if (bubble.luminance() < 0.5f) {
+        // 深底气泡：块底叠白提亮（仍是同色系深色），块文字与气泡正文同色（浅色）
+        lerp(bubble, Color.White, 0.12f) to chatBubbleTextColorFor(style)
+    } else {
+        // 浅底气泡：沿用主题默认，不改
+        null to null
     }
 }
 

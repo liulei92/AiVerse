@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,7 +22,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Update
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.AlertDialog
@@ -51,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -109,80 +113,74 @@ fun PluginListSection(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = stringResource(R.string.settings_plugins),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                // 顶栏已展示「脚本插件」标题，页内不再重复；帮助图标与「安装插件」按钮同一行基线靠右。
                 Spacer(Modifier.weight(1f))
-                // 安装脚本正上方：跳转脚本插件使用文档的入口图标。
-                Column(horizontalAlignment = Alignment.End) {
-                    val context = LocalContext.current
-                    IconButton(
-                        onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SCRIPTS_DOCS_URL)))
-                        },
-                        modifier = Modifier.size(32.dp)
+                val context = LocalContext.current
+                IconButton(
+                    onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SCRIPTS_DOCS_URL)))
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = FeatherIcons.HelpCircle,
+                        contentDescription = stringResource(R.string.plugins_scripts_docs),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+                Box {
+                    Button(
+                        onClick = { showInstallMenu = true },
+                        enabled = !installing
                     ) {
                         Icon(
-                            imageVector = FeatherIcons.HelpCircle,
-                            contentDescription = stringResource(R.string.plugins_scripts_docs),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
+                        Spacer(Modifier.width(6.dp))
+                        if (installing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(stringResource(R.string.plugins_install))
                     }
-                    Box {
-                        Button(
-                            onClick = { showInstallMenu = true },
-                            enabled = !installing
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            if (installing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary
+                    DropdownMenu(
+                        expanded = showInstallMenu,
+                        onDismissRequest = { showInstallMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.plugins_install_from_repo)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Storefront,
+                                    contentDescription = null
                                 )
-                                Spacer(Modifier.width(8.dp))
+                            },
+                            onClick = {
+                                showInstallMenu = false
+                                onOpenRepo()
                             }
-                            Text(stringResource(R.string.plugins_install))
-                        }
-                        DropdownMenu(
-                            expanded = showInstallMenu,
-                            onDismissRequest = { showInstallMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.plugins_install_from_repo)) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Storefront,
-                                        contentDescription = null
-                                    )
-                                },
-                                onClick = {
-                                    showInstallMenu = false
-                                    onOpenRepo()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.plugins_install_from_local)) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Folder,
-                                        contentDescription = null
-                                    )
-                                },
-                                onClick = {
-                                    showInstallMenu = false
-                                    zipPicker.launch("application/zip")
-                                }
-                            )
-                        }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.plugins_install_from_local)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Folder,
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                showInstallMenu = false
+                                zipPicker.launch("application/zip")
+                            }
+                        )
                     }
                 }
             }
@@ -351,8 +349,9 @@ private fun RepoCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -457,21 +456,28 @@ private fun PluginCard(
     onToggleEnabled: (Boolean) -> Unit,
     onUninstall: () -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Column(Modifier.padding(12.dp)) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = plugin.manifest.name,
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         if (hasUpdate) {
                             Spacer(Modifier.width(6.dp))
@@ -499,22 +505,9 @@ private fun PluginCard(
                         Text(
                             text = meta,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                if (hasUpdate) {
-                    TextButton(onClick = onUpdate) {
-                        Icon(
-                            imageVector = Icons.Default.Update,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = stringResource(R.string.plugins_update),
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -522,19 +515,65 @@ private fun PluginCard(
                     checked = plugin.enabled,
                     onCheckedChange = onToggleEnabled
                 )
+                Spacer(Modifier.width(4.dp))
+                Box {
+                    IconButton(
+                        onClick = { menuExpanded = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.plugins_more_actions),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        if (hasUpdate) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.plugins_update)) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Update,
+                                        contentDescription = null
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onUpdate()
+                                }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.plugins_uninstall)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Delete,
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onUninstall()
+                            }
+                        )
+                    }
+                }
             }
 
             if (plugin.manifest.description.isNotBlank()) {
-                Spacer(Modifier.size(4.dp))
                 Text(
                     text = plugin.manifest.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
             if (plugin.manifest.permissions.isNotEmpty()) {
-                Spacer(Modifier.size(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     plugin.manifest.permissions.forEach { perm ->
                         val label = PluginPermissions.LABELS[perm] ?: perm
@@ -556,18 +595,6 @@ private fun PluginCard(
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = onUninstall) {
-                    Text(
-                        text = stringResource(R.string.plugins_uninstall),
-                        color = MaterialTheme.colorScheme.error
-                    )
                 }
             }
         }

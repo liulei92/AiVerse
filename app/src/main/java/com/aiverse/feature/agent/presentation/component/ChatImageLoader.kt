@@ -11,8 +11,13 @@ import java.io.File
 import java.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 private const val TAG = "ChatImageLoader"
+
+/** 远程 URL 图片下载客户端（延迟创建）。 */
+private val urlClient by lazy { OkHttpClient() }
 
 /**
  * 聊天区图片加载器：把 [ImageSource] 落成位图交给全屏查看器。全项目只有这一份解码策略。
@@ -36,11 +41,32 @@ internal fun chatImageLoader(
 
                 is ImageSource.Base64 ->
                     decodeSampledBitmap(Base64.getDecoder().decode(source.data), maxEdge, maxPixels)
+
+                is ImageSource.Url ->
+                    decodeRemoteUrl(source.url, maxEdge, maxPixels)
             }
         } catch (e: Exception) {
             FileLogger.w(TAG, "图片加载失败: $source", e)
             null
         }
+    }
+}
+
+/**
+ * 下载远程图片 URL 并采样解码（GitHub user-attachments 等无需鉴权图片）。
+ * 非 2xx、空体、解码失败均返回 null（查看器显示失败占位）。
+ */
+private fun decodeRemoteUrl(url: String, maxEdge: Int, maxPixels: Long): ImageBitmap? {
+    val request = Request.Builder()
+        .url(url)
+        .header("User-Agent", "AiVerse")
+        .get()
+        .build()
+    urlClient.newCall(request).execute().use { resp ->
+        if (!resp.isSuccessful) return null
+        val bytes = resp.body?.bytes() ?: return null
+        if (bytes.isEmpty()) return null
+        return decodeSampledBitmap(bytes, maxEdge, maxPixels)
     }
 }
 

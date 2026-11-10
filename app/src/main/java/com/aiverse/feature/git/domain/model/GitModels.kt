@@ -63,4 +63,4 @@ data class GitStatus(
         get() = staged.isNotEmpty() || unstaged.isNotEmpty() || untracked.isNotEmpty() || conflicted.isNotEmpty()
 }
 
-enum class GitTab { STATUS, BRANCHES, LOG }
+enum class GitTab { STATUS, BRANCHES, LOG, ISSUES }

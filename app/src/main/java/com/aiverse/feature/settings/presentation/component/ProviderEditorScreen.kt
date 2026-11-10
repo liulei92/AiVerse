@@ -60,6 +60,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import com.aiverse.core.ui.AdaptiveModalBottomSheet
+import com.aiverse.core.ui.BatchDeleteConfirmDialog
 import com.aiverse.core.ui.SwipeToDeleteRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -1144,35 +1145,22 @@ fun ProviderEditorScreen(
     }
 
     if (showBatchDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showBatchDeleteConfirm = false },
-            title = { Text(stringResource(R.string.provider_models_batch_delete_title)) },
-            text = {
-                Text(stringResource(R.string.provider_models_batch_delete_confirm, selectedModels.size))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showBatchDeleteConfirm = false
-                        val toDelete = selectedModels.toList()
-                        models.removeAll(toDelete.toSet())
-                        selectedModels.clear()
-                        isSelectionMode = false
-                        scope.launch {
-                            toDelete.forEach { m -> customMetadataStore.remove(providerId, m) }
-                            customMetadata = customMetadataStore.all()
-                        }
-                        saveCurrent()
-                    }
-                ) {
-                    Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error)
+        BatchDeleteConfirmDialog(
+            title = stringResource(R.string.provider_models_batch_delete_title),
+            message = stringResource(R.string.provider_models_batch_delete_confirm, selectedModels.size),
+            onConfirm = {
+                showBatchDeleteConfirm = false
+                val toDelete = selectedModels.toList()
+                models.removeAll(toDelete.toSet())
+                selectedModels.clear()
+                isSelectionMode = false
+                scope.launch {
+                    toDelete.forEach { m -> customMetadataStore.remove(providerId, m) }
+                    customMetadata = customMetadataStore.all()
                 }
+                saveCurrent()
             },
-            dismissButton = {
-                TextButton(onClick = { showBatchDeleteConfirm = false }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            }
+            onDismiss = { showBatchDeleteConfirm = false }
         )
     }
 

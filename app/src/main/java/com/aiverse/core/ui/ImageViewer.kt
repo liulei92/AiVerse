@@ -76,6 +76,13 @@ sealed interface ImageSource {
 
     /** 内存里的 base64 图片数据。 */
     data class Base64(val data: String) : ImageSource
+
+    /**
+     * 网络图片 URL（如 GitHub user-attachments，`https://github.com/user-attachments/assets/...`）。
+     * 查看器加载器（如 [com.aiverse.feature.agent.presentation.component.chatImageLoader]）负责
+     * 下载并采样解码；GitHub 该域名图片无需鉴权，直接下载即可。
+     */
+    data class Url(val url: String) : ImageSource
 }
 
 /**

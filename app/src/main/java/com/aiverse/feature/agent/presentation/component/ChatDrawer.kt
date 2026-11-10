@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -62,6 +64,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import com.aiverse.core.ui.AppTextField
+import com.aiverse.core.ui.BatchDeleteConfirmDialog
 import com.aiverse.core.ui.dialogTextFieldColors
 import com.aiverse.feature.onboarding.domain.OnboardingStep
 import com.aiverse.feature.onboarding.presentation.onboardingTarget
@@ -120,7 +123,6 @@ import compose.icons.feathericons.ChevronDown
 import compose.icons.feathericons.ChevronRight
 import compose.icons.feathericons.CheckSquare
 import compose.icons.feathericons.Clipboard
-import compose.icons.feathericons.Clock
 import compose.icons.feathericons.Copy
 import compose.icons.feathericons.Download
 import compose.icons.feathericons.Edit2
@@ -196,7 +198,6 @@ fun ChatDrawerContent(
     onClearBatchCut: () -> Unit,
     onNavigateToBrowser: (() -> Unit)? = null,
     onOpenFavorites: (() -> Unit)? = null,
-    onOpenHistory: (() -> Unit)? = null,
     onNavigateToSettings: () -> Unit,
     searchQuery: String,
     searchState: ChatSearchState,
@@ -400,14 +401,6 @@ fun ChatDrawerContent(
         }
 
         SettingsGroup {
-            if (onOpenHistory != null) {
-                SettingsRow(
-                    icon = FeatherIcons.Clock,
-                    title = stringResource(R.string.history_title),
-                    onClick = onOpenHistory
-                )
-                SettingsDivider()
-            }
             if (onOpenFavorites != null) {
                 SettingsRow(
                     icon = FeatherIcons.Bookmark,
@@ -501,34 +494,23 @@ fun ChatDrawerContent(
     }
 
     if (showBatchDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showBatchDeleteConfirm = false },
-            title = { Text(stringResource(R.string.chat_batch_delete_title)) },
-            text = {
-                Text(stringResource(R.string.chat_batch_delete_confirm, selectedSessionIds.size))
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showBatchDeleteConfirm = false
-                    val toDelete = selectedSessionIds.toSet()
-                    selectedSessionIds.clear()
-                    isSelectionMode = false
-                    if (onDeleteSessions != null) {
-                        onDeleteSessions(toDelete)
-                    } else {
-                        toDelete.forEach { sid: String ->
-                            sessions.firstOrNull { it.id == sid }?.let { onDelete(it) }
-                        }
+        BatchDeleteConfirmDialog(
+            title = stringResource(R.string.chat_batch_delete_title),
+            message = stringResource(R.string.chat_batch_delete_confirm, selectedSessionIds.size),
+            onConfirm = {
+                showBatchDeleteConfirm = false
+                val toDelete = selectedSessionIds.toSet()
+                selectedSessionIds.clear()
+                isSelectionMode = false
+                if (onDeleteSessions != null) {
+                    onDeleteSessions(toDelete)
+                } else {
+                    toDelete.forEach { sid: String ->
+                        sessions.firstOrNull { it.id == sid }?.let { onDelete(it) }
                     }
-                }) {
-                    Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showBatchDeleteConfirm = false }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            }
+            onDismiss = { showBatchDeleteConfirm = false }
         )
     }
 
@@ -911,6 +893,7 @@ private fun SubAgentExpandToggle(
  * 每行共享同一横向滚动，路径过深时左右滑动查看完整名称，不再截断成省略号。
  * 新建文件/文件夹通过长按目录（含工作区根）行的菜单发起。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FileBrowserTab(
     state: FileBrowseState,
@@ -966,6 +949,8 @@ private fun FileBrowserTab(
     var menuNode by remember { mutableStateOf<FileTreeNode?>(null) }
     var pendingRename by remember { mutableStateOf<FileTreeNode?>(null) }
     var pendingDelete by remember { mutableStateOf<FileTreeNode?>(null) }
+    // 多选批量删除二次确认弹窗可见性（复用设置页 BatchDeleteConfirmDialog 模式）
+    var showBatchDeleteConfirm by remember { mutableStateOf(false) }
     val hScroll = rememberScrollState()
     val browseNodes = (state as? FileBrowseState.Success)?.nodes.orEmpty()
     fun isSelected(path: String): Boolean =
@@ -1162,76 +1147,95 @@ private fun FileBrowserTab(
                 )
             }
         }
-        // 多选批量操作栏：编辑模式且选中后底部显示分享/导出/复制/移动/粘贴/删除/取消；图标行可横向滚动避免小屏挤爆
+        // 多选批量操作栏：编辑模式且选中后底部显示分享/导出/复制/移动/粘贴/删除/取消。
+        // FlowRow 自动换行：窄屏下 7 个动作全部可见，不再横向滚动；容器圆角与其他浮层保持一致。
         if (inSelectionMode && selectedPaths.isNotEmpty()) {
+            val pasteEnabled = batchCut.isNotEmpty()
             Surface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth(),
+                shape = RoundedCornerShape(Radius.xl),
                 color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 8.dp,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
-                Row(
+                FlowRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.xs)
                 ) {
                     Text(
                         text = stringResource(R.string.file_browser_selected_count, selectedPaths.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = Spacing.xs)
+                        modifier = Modifier
+                            .align(Alignment.CenterVertically)
+                            .padding(horizontal = Spacing.xs)
                     )
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                        verticalAlignment = Alignment.CenterVertically
+                    IconButton(onClick = { onShareEntries(selectedPaths) }, modifier = Modifier.size(36.dp)) {
+                        Icon(FeatherIcons.Share2, contentDescription = stringResource(R.string.file_browser_share), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(onClick = {
+                        exportPendingPaths = selectedPaths
+                        exportLauncher.launch("export_${System.currentTimeMillis()}.zip")
+                    }, modifier = Modifier.size(36.dp)) {
+                        Icon(FeatherIcons.Download, contentDescription = stringResource(R.string.file_browser_export), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(onClick = {
+                        onCopyEntries(selectedPaths)
+                        selectedPaths = emptySet()
+                        unselectedFromFolders = emptySet()
+                    }, modifier = Modifier.size(36.dp)) {
+                        Icon(FeatherIcons.Copy, contentDescription = stringResource(R.string.common_copy), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(onClick = {
+                        onCutEntries(selectedPaths)
+                        selectedPaths = emptySet()
+                        unselectedFromFolders = emptySet()
+                    }, modifier = Modifier.size(36.dp)) {
+                        Icon(FeatherIcons.CornerUpRight, contentDescription = stringResource(R.string.file_browser_move), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
+                    }
+                    // 粘贴：把批量剪切板内容粘贴到工作区根；复制/剪切后点任意子目录也能粘贴到那里。
+                    // 无批量剪切板内容时置灰（enabled=false），与 App 其他批量操作栏的置灰行为一致。
+                    IconButton(
+                        onClick = { batchRootPath?.let { onPasteEntries(it) } },
+                        enabled = pasteEnabled,
+                        modifier = Modifier.size(36.dp)
                     ) {
-                        IconButton(onClick = { onShareEntries(selectedPaths) }, modifier = Modifier.size(36.dp)) {
-                            Icon(FeatherIcons.Share2, contentDescription = stringResource(R.string.file_browser_share), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
-                        }
-                        IconButton(onClick = {
-                            exportPendingPaths = selectedPaths
-                            exportLauncher.launch("export_${System.currentTimeMillis()}.zip")
-                        }, modifier = Modifier.size(36.dp)) {
-                            Icon(FeatherIcons.Download, contentDescription = stringResource(R.string.file_browser_export), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
-                        }
-                        IconButton(onClick = {
-                            onCopyEntries(selectedPaths)
-                            selectedPaths = emptySet()
-                            unselectedFromFolders = emptySet()
-                        }, modifier = Modifier.size(36.dp)) {
-                            Icon(FeatherIcons.Copy, contentDescription = stringResource(R.string.common_copy), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
-                        }
-                        IconButton(onClick = {
-                            onCutEntries(selectedPaths)
-                            selectedPaths = emptySet()
-                            unselectedFromFolders = emptySet()
-                        }, modifier = Modifier.size(36.dp)) {
-                            Icon(FeatherIcons.CornerUpRight, contentDescription = stringResource(R.string.file_browser_move), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
-                        }
-                        // 粘贴：把批量剪切板内容粘贴到工作区根；复制/剪切后点任意子目录也能粘贴到那里
-                        IconButton(
-                            onClick = { batchRootPath?.let { onPasteEntries(it) } },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(FeatherIcons.Clipboard, contentDescription = stringResource(R.string.file_browser_paste_here), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                        }
-                        IconButton(onClick = {
-                            selectedPaths.forEach { onBatchDelete(it) }
-                            selectedPaths = emptySet()
-                            unselectedFromFolders = emptySet()
-                        }, modifier = Modifier.size(36.dp)) {
-                            Icon(FeatherIcons.Trash2, contentDescription = stringResource(R.string.common_delete), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                        }
-                        IconButton(onClick = { selectedPaths = emptySet(); unselectedFromFolders = emptySet(); editMode = false }, modifier = Modifier.size(36.dp)) {
-                            Icon(FeatherIcons.X, contentDescription = stringResource(R.string.file_browser_cancel_selection), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                        }
+                        Icon(
+                            FeatherIcons.Clipboard,
+                            contentDescription = stringResource(R.string.file_browser_paste_here),
+                            tint = if (pasteEnabled) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    // 删除：先弹二次确认，与技能/子代理/MCP/提供商/提示词页的批量删除确认保持一致。
+                    IconButton(onClick = { showBatchDeleteConfirm = true }, modifier = Modifier.size(36.dp)) {
+                        Icon(FeatherIcons.Trash2, contentDescription = stringResource(R.string.common_delete), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(onClick = { selectedPaths = emptySet(); unselectedFromFolders = emptySet(); editMode = false }, modifier = Modifier.size(36.dp)) {
+                        Icon(FeatherIcons.X, contentDescription = stringResource(R.string.file_browser_cancel_selection), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     }
                 }
             }
+        }
+        // 多选批量删除二次确认：确认后逐条删除并清空选择（与设置页 BatchDeleteConfirmDialog 同款）。
+        if (showBatchDeleteConfirm) {
+            BatchDeleteConfirmDialog(
+                title = stringResource(R.string.file_browser_batch_delete_title),
+                message = stringResource(R.string.file_browser_batch_delete_confirm, selectedPaths.size),
+                onConfirm = {
+                    showBatchDeleteConfirm = false
+                    selectedPaths.forEach { onBatchDelete(it) }
+                    selectedPaths = emptySet()
+                    unselectedFromFolders = emptySet()
+                },
+                onDismiss = { showBatchDeleteConfirm = false }
+            )
         }
         // 批量移动：有 batchCut 时底部提示点击目标目录粘贴
         if (batchCut.isNotEmpty()) {

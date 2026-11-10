@@ -12,11 +12,15 @@ import com.aiverse.feature.agent.domain.workflow.AgentWorkflow
 import com.aiverse.feature.git.domain.GitCommandFailureException
 import com.aiverse.feature.git.domain.GitOutputTooLargeException
 import com.aiverse.feature.git.domain.GitErrorMessage
+import com.aiverse.feature.git.domain.GitHubIssuesRepository
 import com.aiverse.feature.git.domain.GitRepository
+import com.aiverse.feature.git.domain.parseGithubRepoUrl
 import com.aiverse.feature.git.domain.model.GitBranch
 import com.aiverse.feature.git.domain.model.GitCommit
 import com.aiverse.feature.git.domain.model.GitFileChange
 import com.aiverse.feature.git.domain.model.GitGraph
+import com.aiverse.feature.git.domain.model.GitHubComment
+import com.aiverse.feature.git.domain.model.GitHubIssue
 import com.aiverse.feature.git.domain.model.GitStash
 import com.aiverse.feature.git.domain.model.GitStatus
 import com.aiverse.feature.git.domain.model.GitTab
@@ -31,6 +35,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
@@ -55,6 +60,7 @@ private fun GitGraph.toGitCommits() =
 @HiltViewModel
 class GitViewModel @Inject constructor(
     private val repository: GitRepository,
+    private val issuesRepository: GitHubIssuesRepository,
     @param:ApplicationContext private val context: Context,
     private val themeSettings: ThemeSettingsRepository,
     private val agentWorkflow: AgentWorkflow
@@ -131,7 +137,47 @@ class GitViewModel @Inject constructor(
         /** 正在查看 diff 的文件路径；加载中（diffData 为 null）时供顶栏显示文件名。 */
         val diffPath: String? = null,
         /** diff 视图数据；非 null 时 diff 页渲染内容。 */
-        val diffData: DiffData? = null
+        val diffData: DiffData? = null,
+        /** GitHub issue 列表。 */
+        val issues: List<GitHubIssue> = emptyList(),
+        /** 是否正在加载 issue 列表。 */
+        val issuesLoading: Boolean = false,
+        /** issue 列表是否已加载（成功或失败都置 true，控制懒加载只触发一次）。 */
+        val issuesLoaded: Boolean = false,
+        /** 当前 issue 过滤："open"/"closed"。 */
+        val issuesFilter: String = "open",
+        /** issue 列表加载失败的错误信息。 */
+        val issuesError: String? = null,
+        /** 当前仓库 remote URL（用于识别 GitHub 与懒加载触发）。 */
+        val remoteUrl: String = "",
+        /** 当前 remote 是否为 GitHub。 */
+        val isGitHub: Boolean = false,
+        /** 是否已配置 GitHub token。 */
+        val hasGitHubToken: Boolean = false,
+        /** 正在查看详情的 issue 编号；null 表示未打开详情。 */
+        val issueDetailNumber: Long? = null,
+        /** 正在查看的 issue 详情。 */
+        val issueDetail: GitHubIssue? = null,
+        /** 是否正在加载 issue 详情。 */
+        val issueDetailLoading: Boolean = false,
+        /** 详情页的评论列表。 */
+        val issueComments: List<GitHubComment> = emptyList(),
+        /** 是否正在加载评论列表。 */
+        val issueCommentsLoading: Boolean = false,
+        /** 仓库贡献者 login 列表（受理人候选）。 */
+        val contributors: List<String> = emptyList(),
+        /** 详情页是否正在执行写操作（关闭/重开/评论/标签/受理人/锁定）。 */
+        val issueActionBusy: Boolean = false,
+        /** 详情页写操作失败提示。 */
+        val issueActionError: String? = null,
+        /** issue 列表排序方式。 */
+        val issuesSort: String = "newest",
+        /** 是否处于多选模式。 */
+        val issueSelectionMode: Boolean = false,
+        /** 已选中的 issue 编号集合。 */
+        val selectedIssueNumbers: Set<Long> = emptySet(),
+        /** 是否正在执行批量操作。 */
+        val issueBulkBusy: Boolean = false
     )
 
     private val _state = MutableStateFlow(GitUiState())
@@ -147,8 +193,12 @@ class GitViewModel @Inject constructor(
         val graph: GitGraph,
         val hasRemote: Boolean,
         val hasIdentity: Boolean = false,
-        val untrackedDirFiles: Map<String, List<String>> = emptyMap()
-    )
+        val untrackedDirFiles: Map<String, List<String>> = emptyMap(),
+        val remoteUrl: String = "",
+        val hasGitHubToken: Boolean = false
+    ) {
+        val isGitHub: Boolean get() = parseGithubRepoUrl(remoteUrl) != null
+    }
 
     /** 并发拉取轻量快照：status + graph(本地 refs) + remote + 可选 identity。 */
     private suspend fun loadSnapshot(includeIdentity: Boolean): RepoSnapshot = coroutineScope {
@@ -157,8 +207,10 @@ class GitViewModel @Inject constructor(
         val r = async { repository.hasRemote() }
         val id = async { if (includeIdentity) repository.getUserName().isNotBlank() else false }
         val g = async { repository.graph(refs = localRefs.await()) }
+        val remoteUrl = async { repository.getRepoUrl() }
+        val hasToken = async { issuesRepository.hasGitHubToken() }
         val status = s.await()
-        RepoSnapshot(status, g.await(), r.await(), id.await(), reloadExpandedUntrackedDirs(status))
+        RepoSnapshot(status, g.await(), r.await(), id.await(), reloadExpandedUntrackedDirs(status), remoteUrl.await(), hasToken.await())
     }
 
     /**
@@ -248,15 +300,33 @@ class GitViewModel @Inject constructor(
                 val snap = loadSnapshot(includeIdentity = true)
                 val commits = snap.graph.toGitCommits()
                 _state.update {
-                    it.copy(loading = false, notARepo = false, status = snap.status, commits = commits, graph = snap.graph, hasRemote = snap.hasRemote, hasIdentity = snap.hasIdentity, untrackedDirFiles = snap.untrackedDirFiles, branchesLoaded = false, branchesLoading = false, branches = emptyList(), tags = emptyList(), repos = repos, subdirs = subdirs, workspaceRoot = workspaceRoot, currentRepo = effectiveRepo)
+                    it.copy(loading = false, notARepo = false, status = snap.status, commits = commits, graph = snap.graph, hasRemote = snap.hasRemote, hasIdentity = snap.hasIdentity, untrackedDirFiles = snap.untrackedDirFiles, branchesLoaded = false, branchesLoading = false, branches = emptyList(), tags = emptyList(), repos = repos, subdirs = subdirs, workspaceRoot = workspaceRoot, currentRepo = effectiveRepo, issues = emptyList(), issuesLoading = false, issuesLoaded = false, issuesError = null, issueDetailNumber = null, issueDetail = null, issueDetailLoading = false, issueComments = emptyList(), issueCommentsLoading = false, contributors = emptyList(), issueActionBusy = false, issueActionError = null, issueSelectionMode = false, selectedIssueNumbers = emptySet(), issueBulkBusy = false, remoteUrl = snap.remoteUrl, isGitHub = snap.isGitHub, hasGitHubToken = snap.hasGitHubToken)
                 }
                 // 页面已打开：后台拉取全量分支/标签，用户切到 BRANCHES tab 时无需再等。
                 loadBranches()
+                // GitHub 仓库且有 token 时后台拉取 issue 列表；切仓库/手动刷新都会重置 issuesLoaded 重新拉取。
+                loadIssues()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 FileLogger.e(TAG, "刷新失败", e)
                 _state.update { it.copy(loading = false, toast = context.getString(R.string.git_toast_refresh_failed, e.message)) }
             }
+        }
+    }
+
+    /**
+     * 轻量重查 GitHub token 状态：配完密钥从凭证页返回时立即反映，避免 issue tab 仍误报「需要 token」。
+     * [hasGitHubToken] 此前只在 [refresh] 里计算一次，而 refresh 仅在 init/手动刷新触发；
+     * 用户切去凭证页配完 token 用返回键回到 Git 页时，ViewModel 实例被保留、init 不重跑，
+     * state.hasGitHubToken 仍是进入时的 false。这里只重查 token 并更新状态（不重跑 git 快照），
+     * 侵入最小；若 token 从无到有（刚配好密钥）且当前为 GitHub 仓库，顺带补拉 issue 列表。
+     */
+    fun refreshGitHubTokenState() {
+        viewModelScope.launch {
+            val hasToken = issuesRepository.hasGitHubToken()
+            val wasWithoutToken = !_state.value.hasGitHubToken
+            _state.update { it.copy(hasGitHubToken = hasToken) }
+            if (hasToken && wasWithoutToken) loadIssues()
         }
     }
 
@@ -460,6 +530,247 @@ class GitViewModel @Inject constructor(
     }
 
     fun closeCommitDetail() = _state.update { it.copy(commitDetailHash = null) }
+
+    /** 正在进行的 issue 列表加载任务；切换过滤/刷新时取消旧的，避免过期结果覆盖。 */
+    private var issuesLoadJob: Job? = null
+
+    /**
+     * 加载当前过滤下的 GitHub issue 列表。仅 GitHub 仓库且有 token 时请求；否则置已加载（展示相应提示态）。
+     * 不置 busy——只读查看不应阻塞 status/branches 的写操作。
+     */
+    fun loadIssues() {
+        val current = _state.value
+        if (!current.isGitHub || !current.hasGitHubToken) {
+            issuesLoadJob?.cancel()
+            _state.update { it.copy(issuesLoaded = true, issuesLoading = false) }
+            return
+        }
+        val filter = current.issuesFilter
+        issuesLoadJob?.cancel()
+        _state.update { it.copy(issuesLoading = true, issuesError = null) }
+        issuesLoadJob = viewModelScope.launch {
+            try {
+                val list = issuesRepository.listIssues(filter).getOrThrow()
+                _state.update { it.copy(issues = list, issuesLoading = false, issuesLoaded = true, issuesError = null) }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                FileLogger.e(TAG, "加载 issue 列表失败", e)
+                _state.update { it.copy(issuesLoading = false, issuesLoaded = true, issuesError = e.message) }
+            }
+        }
+    }
+
+    /** 切换 issue 过滤（"open"/"closed"）并重新拉取。 */
+    fun setIssuesFilter(filter: String) {
+        if (_state.value.issuesFilter == filter) return
+        _state.update { it.copy(issuesFilter = filter, issues = emptyList(), issuesLoaded = false, issuesError = null) }
+        loadIssues()
+    }
+
+    /** 打开某条 issue 的详情页并拉取详情；加载失败时页内显示错误+重试（issueDetail 保持 null）。 */
+    fun openIssueDetail(number: Long) {
+        val current = _state.value
+        if (current.issueDetailNumber == number && current.issueDetail != null) return
+        _state.update { it.copy(issueDetailNumber = number, issueDetail = null, issueDetailLoading = true) }
+        viewModelScope.launch {
+            try {
+                val issue = issuesRepository.getIssue(number).getOrThrow()
+                // 只应用仍为当前查看编号的结果，避免快速切换时过期详情覆盖。
+                if (_state.value.issueDetailNumber != number) return@launch
+                _state.update { it.copy(issueDetail = issue, issueDetailLoading = false) }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                FileLogger.e(TAG, "加载 issue 详情失败: $number", e)
+                if (_state.value.issueDetailNumber != number) return@launch
+                _state.update { it.copy(issueDetail = null, issueDetailLoading = false) }
+            }
+        }
+    }
+
+    /** 关闭 issue 详情页。 */
+    fun closeIssueDetail() = _state.update { it.copy(issueDetailNumber = null, issueDetail = null, issueDetailLoading = false) }
+
+    /** 切换 issue 排序方式（newest/oldest/updated/comments）。 */
+    fun setIssuesSort(sort: String) {
+        if (_state.value.issuesSort == sort) return
+        _state.update { it.copy(issuesSort = sort) }
+    }
+
+    /** 切换多选：进入/退出多选模式，进入时清空已选。 */
+    fun toggleIssueSelectionMode() {
+        _state.update { it.copy(issueSelectionMode = !it.issueSelectionMode, selectedIssueNumbers = emptySet()) }
+    }
+
+    /** 勾选/取消勾选单条 issue。 */
+    fun toggleIssueSelection(number: Long) {
+        _state.update {
+            val selected = it.selectedIssueNumbers
+            it.copy(selectedIssueNumbers = if (number in selected) selected - number else selected + number)
+        }
+    }
+
+    /** 清空多选（退出多选并清空选中）。 */
+    fun clearIssueSelection() = _state.update { it.copy(issueSelectionMode = false, selectedIssueNumbers = emptySet()) }
+
+    /** 全选当前列表中的 issue。 */
+    fun selectAllVisibleIssues() {
+        _state.update { it.copy(selectedIssueNumbers = it.issues.map { i -> i.number }.toSet()) }
+    }
+
+    /** 批量关闭选中的 issue；成功后刷新列表并清空选择。 */
+    fun bulkCloseSelected() {
+        val selected = _state.value.selectedIssueNumbers
+        if (selected.isEmpty() || _state.value.issueBulkBusy) return
+        _state.update { it.copy(issueBulkBusy = true, issueActionError = null) }
+        viewModelScope.launch {
+            var failed = 0
+            try {
+                for (number in selected) {
+                    val r = issuesRepository.closeIssue(number)
+                    if (r.isFailure) failed++
+                }
+                _state.update {
+                    it.copy(
+                        issueBulkBusy = false,
+                        issueSelectionMode = false,
+                        selectedIssueNumbers = emptySet(),
+                        toast = context.getString(
+                            if (failed == 0) R.string.git_issue_bulk_close_success
+                            else R.string.git_issue_bulk_close_partial, selected.size - failed, failed
+                        )
+                    )
+                }
+                loadIssues()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                FileLogger.e(TAG, "批量关闭 issue 失败", e)
+                _state.update { it.copy(issueBulkBusy = false, issueActionError = e.message) }
+            }
+        }
+    }
+
+    /** 批量给选中的 issue 添加标签；成功后刷新列表并清空选择。 */
+    fun bulkAddLabelsToSelected(labels: List<String>) {
+        val selected = _state.value.selectedIssueNumbers
+        if (selected.isEmpty() || labels.isEmpty() || _state.value.issueBulkBusy) return
+        _state.update { it.copy(issueBulkBusy = true, issueActionError = null) }
+        viewModelScope.launch {
+            var failed = 0
+            try {
+                for (number in selected) {
+                    val r = issuesRepository.addLabels(number, labels)
+                    if (r.isFailure) failed++
+                }
+                _state.update {
+                    it.copy(
+                        issueBulkBusy = false,
+                        issueSelectionMode = false,
+                        selectedIssueNumbers = emptySet(),
+                        toast = context.getString(
+                            if (failed == 0) R.string.git_issue_bulk_label_success
+                            else R.string.git_issue_bulk_label_partial, selected.size - failed, failed
+                        )
+                    )
+                }
+                loadIssues()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                FileLogger.e(TAG, "批量加标签失败", e)
+                _state.update { it.copy(issueBulkBusy = false, issueActionError = e.message) }
+            }
+        }
+    }
+
+    /** 懒加载当前 issue 的评论列表。 */
+    fun loadIssueComments(number: Long) {
+        if (_state.value.issueCommentsLoading) return
+        _state.update { it.copy(issueCommentsLoading = true) }
+        viewModelScope.launch {
+            try {
+                val comments = issuesRepository.getComments(number).getOrThrow()
+                if (_state.value.issueDetailNumber != number) return@launch
+                _state.update { it.copy(issueComments = comments, issueCommentsLoading = false) }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                FileLogger.e(TAG, "加载评论失败: $number", e)
+                if (_state.value.issueDetailNumber != number) return@launch
+                _state.update { it.copy(issueCommentsLoading = false) }
+            }
+        }
+    }
+
+    /** 懒加载仓库贡献者（受理人候选）。 */
+    fun loadContributors() {
+        if (_state.value.contributors.isNotEmpty()) return
+        viewModelScope.launch {
+            val list = runCatching { issuesRepository.getContributors().getOrThrow() }.getOrDefault(emptyList())
+            _state.update { it.copy(contributors = list) }
+        }
+    }
+
+    /**
+     * 详情页通用写操作：置 busy → 执行 → 成功后重新拉取详情（+评论），失败置 [GitUiState.issueActionError]。
+     * [nameRes] 用于成功 toast；[refreshComments] 为 true 时操作后一并刷新评论。
+     */
+    private fun runIssueAction(
+        @StringRes nameRes: Int,
+        refreshComments: Boolean = false,
+        action: suspend (Long) -> Result<*>
+    ) {
+        if (_state.value.issueActionBusy) return
+        val number = _state.value.issueDetailNumber ?: return
+        _state.update { it.copy(issueActionBusy = true, issueActionError = null) }
+        viewModelScope.launch {
+            val name = context.getString(nameRes)
+            try {
+                action(number).getOrThrow()
+                val issue = issuesRepository.getIssue(number).getOrNull()
+                _state.update {
+                    it.copy(
+                        issueDetail = issue ?: it.issueDetail,
+                        issueActionBusy = false,
+                        toast = context.getString(R.string.git_toast_action_success, name)
+                    )
+                }
+                if (refreshComments) loadIssueComments(number)
+                // 详情可能影响列表（关闭/重开/标签/受理人/里程碑），刷新列表保持同步。
+                loadIssues()
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                FileLogger.e(TAG, "issue 详情写操作失败: $number", e)
+                _state.update {
+                    it.copy(
+                        issueActionBusy = false,
+                        issueActionError = e.message,
+                        toast = context.getString(R.string.git_toast_action_failed, name, e.message ?: "")
+                    )
+                }
+            }
+        }
+    }
+
+    fun closeIssueInDetail(stateReason: String) = runIssueAction(R.string.git_issue_action_close) { n ->
+        issuesRepository.closeIssue(n, stateReason)
+    }
+    fun reopenIssueInDetail() = runIssueAction(R.string.git_issue_action_reopen) { n -> issuesRepository.reopenIssue(n) }
+    fun addIssueComment(body: String) = runIssueAction(R.string.git_issue_action_comment, refreshComments = true) { n ->
+        issuesRepository.addComment(n, body)
+    }
+    fun deleteIssueComment(commentId: Long) = runIssueAction(R.string.git_issue_action_delete_comment, refreshComments = true) { n ->
+        issuesRepository.deleteComment(commentId)
+    }
+    fun addIssueLabels(labels: List<String>) = runIssueAction(R.string.git_issue_action_label) { n ->
+        issuesRepository.addLabels(n, labels)
+    }
+    fun removeIssueLabel(label: String) = runIssueAction(R.string.git_issue_action_label) { n ->
+        issuesRepository.removeLabel(n, label)
+    }
+    fun setIssueAssignees(assignees: List<String>) = runIssueAction(R.string.git_issue_action_assignee) { n ->
+        issuesRepository.setAssignees(n, assignees)
+    }
+    fun toggleIssueLock(locked: Boolean) = runIssueAction(R.string.git_issue_action_lock) { n ->
+        issuesRepository.setIssueLock(n, locked)
+    }
 
     fun consumeToast() = _state.update { it.copy(toast = null) }
 

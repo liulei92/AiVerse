@@ -249,6 +249,9 @@ internal fun AgentMessageItem(
     isChunkFooter: Boolean = true,
     /** 该消息仍在生成中（AI 思考/流式输出尚未完成）：隐藏朗读按钮，回答完毕才显示。 */
     messageInProgress: Boolean = false,
+    /** 整轮回复仍在进行中（isBusy：AI 多步工具调用尚未全部完成）：整轮期间隐藏所有消息的朗读按钮，
+     *  待整轮结束才显示，避免中间步骤消息被误判为已完成而提前挂出喇叭。 */
+    turnBusy: Boolean = false,
 ) {
     if (message.isCompactionMarker) {
         // 压缩内部锚点不再渲染分隔线：摘要卡片已提供压缩反馈，避免与卡片重复。
@@ -428,6 +431,8 @@ internal fun AgentMessageItem(
                                             backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
                                         )
                                     ) {
+                                        // 块级元素（表格/代码块）配色跟随气泡底色深浅，避免深底气泡里白字压主题浅灰块底看不清。
+                                        val (blockBackground, blockTextColor) = chatBlockColors(ChatBubbleRole.ASSISTANT)
                                         MarkdownContent(
                                             text = contentSlice ?: message.content,
                                             color = chatBubbleTextColor(ChatBubbleRole.ASSISTANT),
@@ -445,7 +450,9 @@ internal fun AgentMessageItem(
                                             cache = markdownCache,
                                             fontSizeSp = chatFontSizeSp,
                                             readProgress = readProgressState
-                                                ?.takeIf { it.messageId == message.id && isThisSpeaking }?.ratio
+                                                ?.takeIf { it.messageId == message.id && isThisSpeaking }?.ratio,
+                                            blockBackground = blockBackground,
+                                            blockTextColor = blockTextColor
                                         )
                                     }
                                 }
@@ -491,7 +498,7 @@ internal fun AgentMessageItem(
                 val durationText = taskDurationMs?.let { formatTaskDuration(it) }
                 val hasMeta = isUser || tokenStats != null || cacheHitRate != null || durationText != null
                 val actionsVisible = isUser || showActions
-                val canSpeak = !isUser && ttsController != null && hasContent && isChunkFooter && !messageInProgress
+                val canSpeak = !isUser && ttsController != null && hasContent && isChunkFooter && !messageInProgress && !turnBusy
                 if ((hasContent || hasAttachments) && message.role != MessageRole.TOOL && isChunkFooter &&
                     (actionsVisible || hasMeta || canSpeak)
                 ) {

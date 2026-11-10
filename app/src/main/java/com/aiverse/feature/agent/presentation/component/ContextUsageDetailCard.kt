@@ -119,24 +119,20 @@ internal fun ContextUsageDetailCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = stringResource(R.string.chat_context_used_tokens, formatTokenCount(detail.usedTokens)),
+                        text = stringResource(
+                            R.string.chat_context_used_over_budget,
+                            formatTokenCount(detail.usedTokens),
+                            formatTokenCount(detail.budgetTokens)
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    Spacer(Modifier.width(Spacing.xs))
-                    Text(
-                        text = stringResource(R.string.chat_context_budget_tokens, formatTokenCount(detail.budgetTokens)),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                     Spacer(Modifier.width(Spacing.sm))
                     Text(
-                        text = "${(usedRatio * 100).toInt()}%",
+                        text = percentLabel(usedRatio * 100),
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = contextRingColor(usedRatio)
                     )
@@ -248,13 +244,23 @@ private fun DetailRow(label: String, value: Int, total: Int, color: androidx.com
             modifier = Modifier.weight(1f)
         )
         Text(
-            text = "${formatTokenCount(value)}  ($pct%)",
+            text = "${formatTokenCount(value)}  (${percentLabel(pct)})",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.End
         )
     }
 }
+
+/** 百分比数字：≥0.1% 保留一位小数，更小保留四位（避免科学计数法/超长小数）。 */
+private fun percentNumber(pct: Float): String =
+    if (pct >= 0.1f) String.format(java.util.Locale.US, "%.1f", pct)
+    else String.format(java.util.Locale.US, "%.4f", pct)
+
+/** 百分比标签：数字 + %，文案走 stringResource。 */
+@Composable
+private fun percentLabel(pct: Float): String =
+    stringResource(R.string.chat_context_usage_percent_decimal, percentNumber(pct))
 
 /** 把 token 数格式化成易读形式（委托 Long 版重载，保持 %.1f 格式一致）。 */
 internal fun formatTokenCount(value: Int): String = formatTokenCount(value.toLong())

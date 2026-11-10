@@ -21,6 +21,7 @@ import com.aiverse.core.ui.AdaptiveModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,22 +72,31 @@ internal fun ModelIconButton(
     onSheetDismiss: (() -> Unit)? = null,
     /** 长按模型图标：直接跳到 AI 供应商设置页，方便添加供应商。 */
     onOpenProviders: (() -> Unit)? = null,
-    runModelTest: (suspend (AIProviderConfig, String) -> ModelTestResult)? = null
+    runModelTest: (suspend (AIProviderConfig, String) -> ModelTestResult)? = null,
+    /** 外部触发信号：每次递增时打开模型选择弹层（供溢出菜单调用）。 */
+    openSignal: Int = 0,
+    /** 是否渲染按钮本身（溢出菜单用隐形宿主承载弹层时传 false）。 */
+    buttonVisible: Boolean = true
 ) {
     var showSheet by remember { mutableStateOf(false) }
+    LaunchedEffect(openSignal) {
+        if (openSignal > 0) showSheet = true
+    }
     val effectiveShowSheet = showSheet || forceOpenSheet
 
-    Box(
-        modifier = modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .combinedClickable(
-                onClick = { showSheet = true },
-                onLongClick = onOpenProviders
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        ModelLogoIcon(modelName = provider?.effectiveModel.orEmpty(), size = 20.dp)
+    if (buttonVisible) {
+        Box(
+            modifier = modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .combinedClickable(
+                    onClick = { showSheet = true },
+                    onLongClick = onOpenProviders
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            ModelLogoIcon(modelName = provider?.effectiveModel.orEmpty(), size = 20.dp)
+        }
     }
 
     if (effectiveShowSheet) {
@@ -123,9 +133,16 @@ internal fun ReasoningEffortSelector(
     protocol: ReasoningProtocol,
     model: String,
     onChange: (ReasoningEffort) -> Unit,
-    enabled: Boolean
+    enabled: Boolean,
+    /** 外部触发信号：每次递增时打开思考强度弹层（供溢出菜单调用）。 */
+    openSignal: Int = 0,
+    /** 是否渲染按钮本身（溢出菜单用隐形宿主承载弹层时传 false）。 */
+    buttonVisible: Boolean = true
 ) {
     var showSheet by remember { mutableStateOf(false) }
+    LaunchedEffect(openSignal) {
+        if (openSignal > 0) showSheet = true
+    }
     // 与实际请求同源：这里算出的「实际生效档位」就是适配器接下来会发出的档位。
     val plan = remember(effort, capability, protocol, model) {
         ReasoningResolver.plan(protocol, model, effort.apiValue, capability)
@@ -157,17 +174,19 @@ internal fun ReasoningEffortSelector(
     }
 
     // 闪电入口：整块可点，点开同一个弹层。
-    IconButton(
-        onClick = { showSheet = true },
-        enabled = enabled,
-        modifier = Modifier.size(36.dp)
-    ) {
-        Icon(
-            FeatherIcons.Zap,
-            contentDescription = stringResource(effort.labelRes()),
-            tint = tint,
-            modifier = Modifier.size(20.dp)
-        )
+    if (buttonVisible) {
+        IconButton(
+            onClick = { showSheet = true },
+            enabled = enabled,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(
+                FeatherIcons.Zap,
+                contentDescription = stringResource(effort.labelRes()),
+                tint = tint,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 
     if (showSheet) {

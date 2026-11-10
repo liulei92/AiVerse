@@ -1,6 +1,7 @@
 package com.aiverse.feature.agent.domain.tool.browser
 
 import android.content.Context
+import android.content.Intent
 import android.content.MutableContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -18,8 +19,10 @@ import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.JsPromptResult
 import android.webkit.JsResult
+import android.webkit.MimeTypeMap
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
+import android.webkit.ValueCallback
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -225,6 +228,16 @@ class BrowserManager @Inject constructor(
     private var tabSeq = 1
     private var containerView: FrameLayout? = null
     private var hiddenHost: ViewGroup? = null
+
+    /** 当前等待用户选择文件的回调（onShowFileChooser 传入，UI 选完/取消后回传）。 */
+    private var pendingFilePathCallback: ValueCallback<Array<Uri>>? = null
+
+    /**
+     * UI 层注入的选择器启动器。以 [owner] 标识挂载方，配合 [clearFileChooserLauncher]
+     * 避免 NavHost 过渡期间旧页面退出时误清掉新页面刚注入的启动器（两实例共用单例）。
+     */
+    private var fileChooserLauncher: ((Intent) -> Unit)? = null
+    private var fileChooserLauncherOwner: Any? = null
 
     /** App 外观是否为深色，由 UI 层通过 [setAppDarkTheme] 推送。 */
     private var appDarkTheme: Boolean = false
@@ -448,6 +461,42 @@ class BrowserManager @Inject constructor(
                 holdDialog(tab, "prompt", message.orEmpty(), defaultValue, result)
                 return true
             }
+
+            /**
+             * 网页 `input[type=file]`（如 GitHub 的 "Paste, drop, or click to add files" 上传区）点击时回调。
+             * 系统默认实现不处理，Android WebView 没有此回调时点击静默无效；这里保存回调、
+             * 构造选择 Intent，并通过 UI 层注入的 [fileChooserLauncher] 拉起系统文件/相册选择器。
+             */
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: WebChromeClient.FileChooserParams?
+            ): Boolean {
+                val callback = filePathCallback ?: return false
+                val params = fileChooserParams ?: run {
+                    callback.onReceiveValue(null)
+                    return false
+                }
+                val intent = try {
+                    createFileChooserIntent(params)
+                } catch (e: Exception) {
+                    FileLogger.e(TAG, "构造文件选择器 Intent 失败", e)
+                    callback.onReceiveValue(null)
+                    return false
+                }
+                // 上一次未决请求若还没回传，先取消，避免旧回调悬挂导致页面 JS 一直等待
+                pendingFilePathCallback?.onReceiveValue(null)
+                pendingFilePathCallback = callback
+                val launcher = fileChooserLauncher
+                if (launcher == null) {
+                    // 无 UI 挂载（面板离屏 / AI 后台操作）：直接取消，避免页面阻塞，也无法伪装成 App 自身 UI
+                    pendingFilePathCallback = null
+                    callback.onReceiveValue(null)
+                    return false
+                }
+                launcher(intent)
+                return true
+            }
         }
 
         wv.settings.javaScriptEnabled = true
@@ -497,6 +546,104 @@ class BrowserManager @Inject constructor(
         tab.dialogTimeout = timeout
         mainHandler.postDelayed(timeout, DIALOG_TIMEOUT_MS)
         publishState()
+    }
+
+    // ================= 文件选择（input[type=file]）支持 =================
+
+    /**
+     * UI 层在挂载时注入选择器启动器：收到 [Intent] 后交给 ActivityResultLauncher.launch。
+     * 由持有 launcher 的 Composable（BrowserScreen）在挂载时设置、卸载时置 null。
+     */
+    fun setFileChooserLauncher(owner: Any, launcher: (Intent) -> Unit) {
+        fileChooserLauncher = launcher
+        fileChooserLauncherOwner = owner
+    }
+
+    /**
+     * UI 层卸载时移除启动器。仅当 [owner] 仍是当前挂载方才真正清空，
+     * 避免 NavHost 过渡期间退场页把新页面刚注入的启动器误清掉。
+     */
+    fun clearFileChooserLauncher(owner: Any) {
+        if (fileChooserLauncherOwner !== owner) return
+        fileChooserLauncher = null
+        fileChooserLauncherOwner = null
+        // UI 卸载后若仍有未决请求，取消之，避免页面 JS 永久阻塞
+        pendingFilePathCallback?.onReceiveValue(null)
+        pendingFilePathCallback = null
+    }
+
+    /**
+     * UI 层选择文件完成后回传结果（data 为 ActivityResult 携带的 Intent，取消时 data 为 null）。
+     * 结果回传给 WebView 的 filePathCallback，网页据此拿到所选 Uri 并上传。
+     */
+    fun onFileChooserResult(data: Intent?) {
+        val callback = pendingFilePathCallback ?: return
+        pendingFilePathCallback = null
+        callback.onReceiveValue(extractFileUris(data))
+    }
+
+    /** 按 input 元素语义构造系统文件选择器 Intent（ACTION_GET_CONTENT，尊重 accept 类型与多选）。 */
+    private fun createFileChooserIntent(params: WebChromeClient.FileChooserParams): Intent {
+        val mimeTypes = resolveMimeTypes(params.acceptTypes)
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            when {
+                // 页面未声明 accept（或声明了无法识别的扩展名）：不限类型，显示全部文件
+                mimeTypes.isEmpty() -> type = "*/*"
+                // 单一类型：直接限定，系统选择器只展示该类型文件
+                mimeTypes.size == 1 -> type = mimeTypes[0]
+                // 多类型：type 用通配符 + EXTRA_MIME_TYPES 精确过滤，避免只取第一个类型漏掉其它可上传文件
+                else -> {
+                    type = "*/*"
+                    putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
+                }
+            }
+        }
+        // input[multiple]：允许一次选多个文件，系统选择器返回 ClipData
+        if (params.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) {
+            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        return intent
+    }
+
+    /**
+     * 把网页 `accept` 属性中的各项规范化成合法 MIME 类型列表。
+     *
+     * `WebChromeClient.FileChooserParams.acceptTypes` 是 accept 属性按逗号切分的结果，
+     * 可能是 MIME（如 image/ 开头）、文件扩展名（如 .png）或空串。文件扩展名不是合法
+     * MIME，直接当作 Intent.type 会导致系统选择器不显示任何文件（或启动失败），
+     * 这里统一转成 MIME；无法识别的条目丢弃，保证 Intent 始终携带合法 MIME。
+     */
+    private fun resolveMimeTypes(acceptTypes: Array<String>?): List<String> {
+        val normalized = acceptTypes.orEmpty()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .mapNotNull { raw ->
+                if (raw.contains('/')) {
+                    // 已是 MIME（含通配符如 image/*、application/pdf）
+                    raw
+                } else {
+                    // 文件扩展名（如 .png / png）→ MIME；无法识别则丢弃
+                    val ext = raw.removePrefix(".").lowercase()
+                    if (ext.isEmpty()) null else MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+                }
+            }
+            .distinct()
+        // */* 表示不限类型，直接采用并忽略其它细分类型（否则 EXTRA_MIME_TYPES 里混着 */* 无意义）
+        if (normalized.any { it == "*/*" }) return listOf("*/*")
+        return normalized
+    }
+
+    /** 从选择器返回的 Intent 中提取 Uri 数组；取消（data 为 null）时返回 null。 */
+    private fun extractFileUris(data: Intent?): Array<Uri>? {
+        if (data == null) return null
+        data.clipData?.let { clip ->
+            if (clip.itemCount > 0) {
+                return (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }.toTypedArray()
+            }
+        }
+        val uri = data.data ?: return null
+        return arrayOf(uri)
     }
 
     private fun createTabInternal(id: String, initialUrl: String?): TabHolder {
@@ -896,6 +1043,10 @@ class BrowserManager @Inject constructor(
         tabs.clear()
         containerView?.removeAllViews()
         containerView = null
+        // 清理未决的文件选择回调，避免页面 JS 永久阻塞
+        pendingFilePathCallback?.onReceiveValue(null)
+        pendingFilePathCallback = null
+        fileChooserLauncher = null
         publishState()
     }
 

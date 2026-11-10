@@ -122,20 +122,29 @@ fun WorkspaceIconButton(
     hasRunningSessions: () -> Boolean = { false },
     onSwitchConfirmed: () -> Unit = {},
     modifier: Modifier = Modifier,
-    iconSize: Dp = 24.dp
+    iconSize: Dp = 24.dp,
+    /** 外部触发信号：每次递增时打开工作区选择弹层（供溢出菜单调用）。 */
+    openSignal: Int = 0,
+    /** 是否渲染按钮本身（溢出菜单用隐形宿主承载弹层时传 false）。 */
+    buttonVisible: Boolean = true
 ) {
     var showSheet by remember { mutableStateOf(false) }
+    LaunchedEffect(openSignal) {
+        if (openSignal > 0) showSheet = true
+    }
 
-    IconButton(
-        onClick = { showSheet = true },
-        modifier = modifier
-    ) {
-        Icon(
-            FeatherIcons.Folder,
-            contentDescription = stringResource(R.string.workspace_open),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(iconSize)
-        )
+    if (buttonVisible) {
+        IconButton(
+            onClick = { showSheet = true },
+            modifier = modifier
+        ) {
+            Icon(
+                FeatherIcons.Folder,
+                contentDescription = stringResource(R.string.workspace_open),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(iconSize)
+            )
+        }
     }
 
     // 远程工作区路径/默认工作区创建失败提示：消费后清除，避免重复弹 Toast

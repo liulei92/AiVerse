@@ -136,7 +136,14 @@ internal fun MarkdownContent(
     /** 聊天字号（外观设置）：非 null 时覆盖正文/列表/引用字号与行高。 */
     fontSizeSp: Int? = null,
     /** TTS 朗读进度（0..1，已读比例；null=未朗读）。已读部分用主题色高亮，随进度逐段变色。 */
-    readProgress: Float? = null
+    readProgress: Float? = null,
+    /** 块级元素（代码块/表格）底色：非 null 时覆盖主题默认（semantic.mutedSurface），
+     *  深底气泡场景由调用方传入与气泡底色匹配的深色，保证浅字压深底可读。 */
+    blockBackground: Color? = null,
+    /** 块级元素（代码块正文）文字色：非 null 时覆盖主题默认（onSurface），
+     *  深底气泡场景由调用方传入浅色，保证深底上可读。代码块顶部语言标签行跟随 [color]
+     *  （即气泡文字色），深底气泡下同为浅色，随 [blockBackground] 转深底后自然可读。 */
+    blockTextColor: Color? = null
 ) {
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val semantic = MaterialTheme.semanticColors
@@ -146,10 +153,10 @@ internal fun MarkdownContent(
     // remember（套了会报 “@Composable invocations can only happen from ...”）。直接调用即可。
     val mdColors = markdownColor(
         text = color,
-        codeBackground = semantic.mutedSurface,
+        codeBackground = blockBackground ?: semantic.mutedSurface,
         inlineCodeBackground = MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.22f else 0.12f),
         dividerColor = semantic.subtleBorder,
-        tableBackground = semantic.mutedSurface,
+        tableBackground = blockBackground ?: semantic.mutedSurface,
     )
 
     val typography = MaterialTheme.typography
@@ -168,8 +175,8 @@ internal fun MarkdownContent(
         h5 = (if (compact) typography.bodySmall else typography.bodyLarge).copy(fontWeight = FontWeight.Medium, color = color),
         h6 = (if (compact) typography.bodySmall else typography.bodyMedium).copy(fontWeight = FontWeight.Medium, color = color),
         paragraph = body.copy(color = color, lineHeight = bodyLineHeight),
-        code = TextStyle(fontFamily = CodeFontFamily, fontSize = codeSize, color = MaterialTheme.colorScheme.onSurface),
-        inlineCode = TextStyle(fontFamily = CodeFontFamily, color = MaterialTheme.colorScheme.onSurface),
+        code = TextStyle(fontFamily = CodeFontFamily, fontSize = codeSize, color = blockTextColor ?: MaterialTheme.colorScheme.onSurface),
+        inlineCode = TextStyle(fontFamily = CodeFontFamily, color = blockTextColor ?: MaterialTheme.colorScheme.onSurface),
         ordered = body.copy(color = color, lineHeight = bodyLineHeight),
         bullet = body.copy(color = color, lineHeight = bodyLineHeight),
         table = typography.bodySmall.copy(color = color),
@@ -189,8 +196,11 @@ internal fun MarkdownContent(
         tableCornerSize = 6.dp,
     )
 
-    val highlightsBuilder = remember(isDark) {
-        Highlights.Builder().theme(SyntaxThemes.atom(darkMode = isDark))
+    // 代码高亮配色跟随**块底**（而非页面底）的深浅：深底气泡的块底被调成深色后，若仍用
+    // 浅色语法主题（深色 token）会压深底看不清，故按块底深浅选 atom 主题。
+    val codeIsDark = (blockBackground ?: semantic.mutedSurface).luminance() < 0.5f
+    val highlightsBuilder = remember(codeIsDark) {
+        Highlights.Builder().theme(SyntaxThemes.atom(darkMode = codeIsDark))
     }
 
     val processed = remember(text) { MarkdownPreprocessor.process(text) }
@@ -420,7 +430,7 @@ private fun SafeMarkdownHighlightedCode(
     highlightsBuilder: Highlights.Builder,
     showHeader: Boolean,
 ) {
-    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val isDark = LocalMarkdownColors.current.codeBackground.luminance() < 0.5f
     val cached = CodeHighlightCache.get(code, language, isDark)
     val highlighted: AnnotatedString by produceState(
         initialValue = cached ?: AnnotatedString(code),

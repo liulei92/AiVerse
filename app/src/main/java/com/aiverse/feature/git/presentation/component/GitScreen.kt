@@ -43,6 +43,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +65,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.aiverse.R
 import com.aiverse.core.theme.Radius
 import com.aiverse.core.theme.Spacing
@@ -80,6 +84,7 @@ import com.aiverse.feature.git.domain.model.GitTab
 import com.aiverse.feature.git.presentation.GitViewModel
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Activity
+import compose.icons.feathericons.AlertCircle
 import compose.icons.feathericons.ArrowLeft
 import compose.icons.feathericons.ChevronDown
 import compose.icons.feathericons.Download
@@ -115,6 +120,17 @@ fun GitScreen(
         }
     }
 
+    // 从凭证页配完密钥返回（或页面重新可见）时，轻量重查 GitHub token 状态，
+    // 让 issue tab 立即反映最新 token，而不是沿用进入页面时缓存的 false。
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshGitHubTokenState()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     var showCommitDialog by remember { mutableStateOf(false) }
     var showPullConfirm by remember { mutableStateOf(false) }
     var showMasterRenameConfirm by remember { mutableStateOf(false) }
@@ -123,10 +139,11 @@ fun GitScreen(
     // 打开作者页前若正显示提交详情弹窗，保存其 hash 以便系统返回时恢复详情页。
     var savedDetailHash by remember { mutableStateOf<String?>(null) }
 
-    // 三个 tab 的滚动状态统一提升到页面层，聚合出「是否正在滚动」用于底部 tab 栏滚动弱化。
+    // 四个 tab 的滚动状态统一提升到页面层，聚合出「是否正在滚动」用于底部 tab 栏滚动弱化。
     val statusListState = rememberLazyListState()
     val branchesListState = rememberLazyListState()
     val logListState = rememberLazyListState()
+    val issuesListState = rememberLazyListState()
 
     val pagerState = rememberPagerState { GitTab.entries.size }
 
@@ -134,7 +151,8 @@ fun GitScreen(
         derivedStateOf {
             statusListState.isScrollInProgress ||
                 branchesListState.isScrollInProgress ||
-                logListState.isScrollInProgress
+                logListState.isScrollInProgress ||
+                issuesListState.isScrollInProgress
         }
     }
 
@@ -145,6 +163,32 @@ fun GitScreen(
             filePath = state.diffPath,
             onBack = { viewModel.clearDiff() },
             onOpenInEditor = onOpenFile
+        )
+        return
+    }
+
+    // issue 详情：独立全屏页，覆盖整个面板，返回按钮回列表。
+    if (state.issueDetailNumber != null) {
+        GitIssueDetailPage(
+            issue = state.issueDetail,
+            loading = state.issueDetailLoading,
+            comments = state.issueComments,
+            commentsLoading = state.issueCommentsLoading,
+            contributors = state.contributors,
+            actionBusy = state.issueActionBusy,
+            actionError = state.issueActionError,
+            onBack = viewModel::closeIssueDetail,
+            onRetry = { state.issueDetailNumber?.let(viewModel::openIssueDetail) },
+            onClose = viewModel::closeIssueInDetail,
+            onReopen = viewModel::reopenIssueInDetail,
+            onAddComment = viewModel::addIssueComment,
+            onDeleteComment = viewModel::deleteIssueComment,
+            onAddLabels = viewModel::addIssueLabels,
+            onRemoveLabel = viewModel::removeIssueLabel,
+            onSetAssignees = viewModel::setIssueAssignees,
+            onToggleLock = viewModel::toggleIssueLock,
+            onLoadComments = { state.issueDetailNumber?.let(viewModel::loadIssueComments) },
+            onLoadContributors = viewModel::loadContributors
         )
         return
     }
@@ -301,6 +345,31 @@ fun GitScreen(
                                 viewModel.closeCommitDetail()
                             }
                         )
+                        GitTab.ISSUES -> IssuesTab(
+                            issues = state.issues,
+                            loading = state.issuesLoading,
+                            loaded = state.issuesLoaded,
+                            filter = state.issuesFilter,
+                            isGitHub = state.isGitHub,
+                            hasToken = state.hasGitHubToken,
+                            error = state.issuesError,
+                            remoteUrl = state.remoteUrl,
+                            listState = issuesListState,
+                            sort = state.issuesSort,
+                            selectionMode = state.issueSelectionMode,
+                            selected = state.selectedIssueNumbers,
+                            bulkBusy = state.issueBulkBusy,
+                            onLoad = viewModel::loadIssues,
+                            onFilterChange = viewModel::setIssuesFilter,
+                            onOpenIssue = viewModel::openIssueDetail,
+                            onSortChange = viewModel::setIssuesSort,
+                            onToggleSelectionMode = viewModel::toggleIssueSelectionMode,
+                            onToggleSelection = viewModel::toggleIssueSelection,
+                            onClearSelection = viewModel::clearIssueSelection,
+                            onSelectAll = viewModel::selectAllVisibleIssues,
+                            onBulkClose = viewModel::bulkCloseSelected,
+                            onBulkAddLabels = viewModel::bulkAddLabelsToSelected
+                        )
                     }
                 }
             }
@@ -314,7 +383,8 @@ fun GitScreen(
                 items = listOf(
                     FloatingTabItem(FeatherIcons.Activity, stringResource(R.string.git_tab_status)),
                     FloatingTabItem(FeatherIcons.GitBranch, stringResource(R.string.git_tab_branches)),
-                    FloatingTabItem(FeatherIcons.GitCommit, stringResource(R.string.git_tab_commits))
+                    FloatingTabItem(FeatherIcons.GitCommit, stringResource(R.string.git_tab_commits)),
+                    FloatingTabItem(FeatherIcons.AlertCircle, stringResource(R.string.git_tab_issues))
                 ),
                 maskColor = settingsPageBackground(),
                 isScrolling = tabsScrolling,
