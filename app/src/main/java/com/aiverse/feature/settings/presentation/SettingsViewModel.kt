@@ -674,6 +674,12 @@ class SettingsViewModel @Inject constructor(
     private val _bubbleStyle = MutableStateFlow(ChatBubbleStyle.CLASSIC_OUTLINE)
     val bubbleStyle: StateFlow<ChatBubbleStyle> = _bubbleStyle.asStateFlow()
 
+    private val _userBubbleStyle = MutableStateFlow(ChatBubbleStyle.CLASSIC_OUTLINE)
+    val userBubbleStyle: StateFlow<ChatBubbleStyle> = _userBubbleStyle.asStateFlow()
+
+    private val _assistantBubbleStyle = MutableStateFlow(ChatBubbleStyle.CLASSIC_OUTLINE)
+    val assistantBubbleStyle: StateFlow<ChatBubbleStyle> = _assistantBubbleStyle.asStateFlow()
+
     /** 全局自定义背景图文件路径（null=未设置），供设置弹窗展示与预览。 */
     private val _backgroundImagePath = MutableStateFlow<String?>(null)
     val backgroundImagePath: StateFlow<String?> = _backgroundImagePath.asStateFlow()
@@ -1141,6 +1147,16 @@ class SettingsViewModel @Inject constructor(
             launch {
                 themeSettingsRepository.bubbleStyleFlow.collectLatest {
                     _bubbleStyle.value = it
+                }
+            }
+            launch {
+                themeSettingsRepository.userBubbleStyleFlow.collectLatest {
+                    _userBubbleStyle.value = it
+                }
+            }
+            launch {
+                themeSettingsRepository.assistantBubbleStyleFlow.collectLatest {
+                    _assistantBubbleStyle.value = it
                 }
             }
 
@@ -2391,6 +2407,18 @@ class SettingsViewModel @Inject constructor(
     fun setBubbleStyle(style: ChatBubbleStyle) {
         viewModelScope.launch {
             themeSettingsRepository.setBubbleStyle(style)
+        }
+    }
+
+    fun setUserBubbleStyle(style: ChatBubbleStyle) {
+        viewModelScope.launch {
+            themeSettingsRepository.setUserBubbleStyle(style)
+        }
+    }
+
+    fun setAssistantBubbleStyle(style: ChatBubbleStyle) {
+        viewModelScope.launch {
+            themeSettingsRepository.setAssistantBubbleStyle(style)
         }
     }
 

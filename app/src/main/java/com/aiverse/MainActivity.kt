@@ -86,7 +86,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.aiverse.core.theme.AIEditorTheme
 import com.aiverse.core.theme.AppThemePreset
-import com.aiverse.core.theme.ChatBubbleStyle
 import com.aiverse.core.ui.BetaWatermark
 import com.aiverse.core.ui.ImageSource
 import com.aiverse.core.ui.ImageViewerHost
@@ -311,11 +310,14 @@ class MainActivity : ComponentActivity() {
                 )
                 return@setContent
             }
+            // 聊天区用户/AI 两侧独立气泡样式：复用 Activity 作用域 SettingsViewModel（与 AppNavigation 内共享同一实例）。
+            val settingsViewModel: SettingsViewModel = hiltViewModel()
+            val userBubbleStyle by settingsViewModel.userBubbleStyle.collectAsStateWithLifecycle()
+            val assistantBubbleStyle by settingsViewModel.assistantBubbleStyle.collectAsStateWithLifecycle()
             val themeMode by themeSettings.themeModeFlow.collectAsStateWithLifecycle(initialValue = AppThemeMode.AUTO)
             val themePresetId by themeSettings.themePresetIdFlow.collectAsStateWithLifecycle(initialValue = null)
             val dynamicColor by themeSettings.dynamicColorFlow.collectAsStateWithLifecycle(initialValue = false)
             val iconColorful by themeSettings.iconColorFlow.collectAsStateWithLifecycle(initialValue = true)
-            val bubbleStyle by themeSettings.bubbleStyleFlow.collectAsStateWithLifecycle(initialValue = ChatBubbleStyle.CLASSIC_OUTLINE)
             val chatFontSizeSp by appearanceSettings.chatFontSizeSpFlow.collectAsStateWithLifecycle(initialValue = AppearanceSettingsRepository.DEFAULT_CHAT_FONT_SIZE_SP)
             val inputFontSizeSp by appearanceSettings.inputFontSizeSpFlow.collectAsStateWithLifecycle(initialValue = AppearanceSettingsRepository.DEFAULT_INPUT_FONT_SIZE_SP)
             val uiFontScale by appearanceSettings.uiFontScaleFlow.collectAsStateWithLifecycle(initialValue = AppearanceSettingsRepository.DEFAULT_UI_FONT_SCALE)
@@ -341,7 +343,8 @@ class MainActivity : ComponentActivity() {
                 preset = AppThemePreset.findById(themePresetId),
                 dynamicColor = dynamicColor,
                 iconColorful = iconColorful,
-                bubbleStyle = bubbleStyle,
+                userBubbleStyle = userBubbleStyle,
+                assistantBubbleStyle = assistantBubbleStyle,
                 chatFontSizeSp = chatFontSizeSp,
                 inputFontSizeSp = inputFontSizeSp,
                 uiFontScale = uiFontScale

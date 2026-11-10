@@ -39,6 +39,7 @@ import compose.icons.feathericons.Check
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ChatBubbleStyleSheet(
+    title: String,
     selected: ChatBubbleStyle,
     onSelect: (ChatBubbleStyle) -> Unit,
     onDismiss: () -> Unit
@@ -54,7 +55,7 @@ internal fun ChatBubbleStyleSheet(
                 .fillMaxWidth()
                 .padding(bottom = Spacing.xl)
         ) {
-            SectionLabel(stringResource(R.string.settings_chat_bubble))
+            SectionLabel(title)
             ChatBubbleStyle.entries.forEach { style ->
                 val isSelected = style == selected
                 Row(

@@ -397,7 +397,8 @@ fun AIEditorTheme(
     preset: AppThemePreset = AppThemePreset.DEFAULT,
     dynamicColor: Boolean = false,
     iconColorful: Boolean = true,
-    bubbleStyle: ChatBubbleStyle = ChatBubbleStyle.CLASSIC_OUTLINE,
+    userBubbleStyle: ChatBubbleStyle = ChatBubbleStyle.CLASSIC_OUTLINE,
+    assistantBubbleStyle: ChatBubbleStyle = ChatBubbleStyle.CLASSIC_OUTLINE,
     chatFontSizeSp: Int = 16,
     inputFontSizeSp: Int = 16,
     uiFontScale: Float = 1f,
@@ -424,7 +425,8 @@ fun AIEditorTheme(
         LocalAppSemanticColors provides themeColors.semanticColors,
         LocalHyperOSStyle provides isHyperOS,
         LocalIconColorful provides iconColorful,
-        LocalChatBubbleStyle provides bubbleStyle,
+        LocalUserBubbleStyle provides userBubbleStyle,
+        LocalAssistantBubbleStyle provides assistantBubbleStyle,
         LocalChatFontSizeSp provides chatFontSizeSp,
         LocalInputFontSizeSp provides inputFontSizeSp
     ) {

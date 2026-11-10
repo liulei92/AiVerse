@@ -42,6 +42,8 @@ class ThemeSettingsRepository @Inject constructor(
         val DYNAMIC_COLOR_KEY = booleanPreferencesKey("dynamic_color_enabled")
         val ICON_COLOR_KEY = booleanPreferencesKey("icon_colorful_enabled")
         val CHAT_BUBBLE_STYLE_KEY = stringPreferencesKey("chat_bubble_style")
+        val CHAT_BUBBLE_STYLE_USER_KEY = stringPreferencesKey("chat_bubble_style_user")
+        val CHAT_BUBBLE_STYLE_ASSISTANT_KEY = stringPreferencesKey("chat_bubble_style_assistant")
     }
 
     val themeModeFlow: Flow<AppThemeMode> = context.themeDataStore.data.map { prefs ->
@@ -61,9 +63,21 @@ class ThemeSettingsRepository @Inject constructor(
     val iconColorFlow: Flow<Boolean> =
         context.themeDataStore.data.map { it[ICON_COLOR_KEY] != false }
 
-    /** 聊天气泡样式（用户消息气泡）。 */
+    /** 聊天气泡样式（旧键，语义=用户消息气泡，兼容旧用户读取）。 */
     val bubbleStyleFlow: Flow<ChatBubbleStyle> =
         context.themeDataStore.data.map { ChatBubbleStyle.fromId(it[CHAT_BUBBLE_STYLE_KEY]) }
+
+    /** 用户（我发出的）聊天气泡样式；未单独设置时回退旧键。 */
+    val userBubbleStyleFlow: Flow<ChatBubbleStyle> =
+        context.themeDataStore.data.map { prefs ->
+            ChatBubbleStyle.fromId(prefs[CHAT_BUBBLE_STYLE_USER_KEY] ?: prefs[CHAT_BUBBLE_STYLE_KEY])
+        }
+
+    /** AI 回复聊天气泡样式；未单独设置时回退旧键。 */
+    val assistantBubbleStyleFlow: Flow<ChatBubbleStyle> =
+        context.themeDataStore.data.map { prefs ->
+            ChatBubbleStyle.fromId(prefs[CHAT_BUBBLE_STYLE_ASSISTANT_KEY] ?: prefs[CHAT_BUBBLE_STYLE_KEY])
+        }
 
     suspend fun setThemeMode(mode: AppThemeMode) {
         context.themeDataStore.edit { it[THEME_MODE_KEY] = mode.name }
@@ -81,8 +95,21 @@ class ThemeSettingsRepository @Inject constructor(
         context.themeDataStore.edit { it[ICON_COLOR_KEY] = enabled }
     }
 
+    /** 同时设置用户与 AI 两侧聊天气泡样式（并保留旧键，兼容旧读取路径）。 */
     suspend fun setBubbleStyle(style: ChatBubbleStyle) {
-        context.themeDataStore.edit { it[CHAT_BUBBLE_STYLE_KEY] = style.id }
+        context.themeDataStore.edit {
+            it[CHAT_BUBBLE_STYLE_USER_KEY] = style.id
+            it[CHAT_BUBBLE_STYLE_ASSISTANT_KEY] = style.id
+            it[CHAT_BUBBLE_STYLE_KEY] = style.id
+        }
+    }
+
+    suspend fun setUserBubbleStyle(style: ChatBubbleStyle) {
+        context.themeDataStore.edit { it[CHAT_BUBBLE_STYLE_USER_KEY] = style.id }
+    }
+
+    suspend fun setAssistantBubbleStyle(style: ChatBubbleStyle) {
+        context.themeDataStore.edit { it[CHAT_BUBBLE_STYLE_ASSISTANT_KEY] = style.id }
     }
 
     /** 备份快照：返回当前持久化的主题模式名（未设置时为 null，导入时回退默认）。 */

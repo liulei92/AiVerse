@@ -56,7 +56,8 @@ internal fun AppearanceSettingsSection(
     themeMode: AppThemeMode,
     themePresetId: String?,
     dynamicColorEnabled: Boolean,
-    bubbleStyle: ChatBubbleStyle,
+    userBubbleStyle: ChatBubbleStyle,
+    assistantBubbleStyle: ChatBubbleStyle,
     backgroundImagePath: String?,
     backgroundAlpha: Float,
     chatFontSizeSp: Int,
@@ -64,7 +65,8 @@ internal fun AppearanceSettingsSection(
     uiFontScale: Float,
     onOpenThemeSheet: () -> Unit,
     onOpenBackgroundSheet: () -> Unit,
-    onOpenBubbleStyleSheet: () -> Unit,
+    onOpenUserBubbleStyleSheet: () -> Unit,
+    onOpenAssistantBubbleStyleSheet: () -> Unit,
     onSetChatFontSizeSp: (Int) -> Unit,
     onSetInputFontSizeSp: (Int) -> Unit,
     onSetUiFontScale: (Float) -> Unit,
@@ -102,9 +104,16 @@ internal fun AppearanceSettingsSection(
             SettingsDivider()
             SettingsRow(
                 icon = FeatherIcons.MessageSquare,
-                title = stringResource(R.string.settings_chat_bubble),
-                subtitle = stringResource(bubbleStyle.labelRes),
-                onClick = onOpenBubbleStyleSheet
+                title = stringResource(R.string.bubble_user),
+                subtitle = stringResource(userBubbleStyle.labelRes),
+                onClick = onOpenUserBubbleStyleSheet
+            )
+            SettingsDivider()
+            SettingsRow(
+                icon = FeatherIcons.MessageSquare,
+                title = stringResource(R.string.bubble_assistant),
+                subtitle = stringResource(assistantBubbleStyle.labelRes),
+                onClick = onOpenAssistantBubbleStyleSheet
             )
             SettingsDivider()
             SettingsRow(

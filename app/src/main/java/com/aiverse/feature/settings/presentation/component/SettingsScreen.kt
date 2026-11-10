@@ -296,7 +296,8 @@ fun SettingsScreen(
     val themePresetId by viewModel.themePresetId.collectAsStateWithLifecycle()
     val dynamicColorEnabled by viewModel.dynamicColorEnabled.collectAsStateWithLifecycle()
     val iconColorEnabled by viewModel.iconColorEnabled.collectAsStateWithLifecycle()
-    val bubbleStyle by viewModel.bubbleStyle.collectAsStateWithLifecycle()
+    val userBubbleStyle by viewModel.userBubbleStyle.collectAsStateWithLifecycle()
+    val assistantBubbleStyle by viewModel.assistantBubbleStyle.collectAsStateWithLifecycle()
     val backgroundImagePath by viewModel.backgroundImagePath.collectAsStateWithLifecycle()
     val backgroundAlpha by viewModel.backgroundAlpha.collectAsStateWithLifecycle()
     val chatFontSizeSp by viewModel.chatFontSizeSp.collectAsStateWithLifecycle()
@@ -470,7 +471,8 @@ fun SettingsScreen(
     var showImageSourceSheet by remember { mutableStateOf(false) }
     var showThemeSheet by remember { mutableStateOf(false) }
     var showBackgroundSheet by remember { mutableStateOf(false) }
-    var showBubbleStyleSheet by remember { mutableStateOf(false) }
+    var showUserBubbleStyleSheet by remember { mutableStateOf(false) }
+    var showAssistantBubbleStyleSheet by remember { mutableStateOf(false) }
     var showLanguageSheet by remember { mutableStateOf(false) }
     var showResetTokenStats by remember { mutableStateOf(false) }
 
@@ -559,7 +561,8 @@ fun SettingsScreen(
             terminalSettings = terminalSettings,
             currentLanguageDisplayName = currentLanguageDisplayName,
             onOpenTerminalSettingsSheet = { showTerminalSettingsSheet = true },
-            bubbleStyle = bubbleStyle,
+            userBubbleStyle = userBubbleStyle,
+            assistantBubbleStyle = assistantBubbleStyle,
             onOpenLanguageSheet = { showLanguageSheet = true },
             onOpenManual = {
                 context.startActivity(
@@ -1028,7 +1031,8 @@ fun SettingsScreen(
                     themeMode = themeMode,
                     themePresetId = themePresetId,
                     dynamicColorEnabled = dynamicColorEnabled,
-                    bubbleStyle = bubbleStyle,
+                    userBubbleStyle = userBubbleStyle,
+                    assistantBubbleStyle = assistantBubbleStyle,
                     backgroundImagePath = backgroundImagePath,
                     backgroundAlpha = backgroundAlpha,
                     chatFontSizeSp = chatFontSizeSp,
@@ -1036,7 +1040,8 @@ fun SettingsScreen(
                     uiFontScale = uiFontScale,
                     onOpenThemeSheet = { showThemeSheet = true },
                     onOpenBackgroundSheet = { showBackgroundSheet = true },
-                    onOpenBubbleStyleSheet = { showBubbleStyleSheet = true },
+                    onOpenUserBubbleStyleSheet = { showUserBubbleStyleSheet = true },
+                    onOpenAssistantBubbleStyleSheet = { showAssistantBubbleStyleSheet = true },
                     onSetChatFontSizeSp = { viewModel.setChatFontSizeSp(it) },
                     onSetInputFontSizeSp = { viewModel.setInputFontSizeSp(it) },
                     onSetUiFontScale = { viewModel.setUiFontScale(it) },
@@ -1589,11 +1594,21 @@ fun SettingsScreen(
         )
     }
 
-    if (showBubbleStyleSheet) {
+    if (showUserBubbleStyleSheet) {
         ChatBubbleStyleSheet(
-            selected = bubbleStyle,
-            onSelect = { viewModel.setBubbleStyle(it) },
-            onDismiss = { showBubbleStyleSheet = false }
+            title = stringResource(R.string.bubble_user),
+            selected = userBubbleStyle,
+            onSelect = { viewModel.setUserBubbleStyle(it) },
+            onDismiss = { showUserBubbleStyleSheet = false }
+        )
+    }
+
+    if (showAssistantBubbleStyleSheet) {
+        ChatBubbleStyleSheet(
+            title = stringResource(R.string.bubble_assistant),
+            selected = assistantBubbleStyle,
+            onSelect = { viewModel.setAssistantBubbleStyle(it) },
+            onDismiss = { showAssistantBubbleStyleSheet = false }
         )
     }
 
@@ -1854,7 +1869,8 @@ internal fun SettingsMenu(
     themeMode: AppThemeMode,
     terminalSettings: TerminalSettings,
     currentLanguageDisplayName: String,
-    bubbleStyle: ChatBubbleStyle,
+    userBubbleStyle: ChatBubbleStyle,
+    assistantBubbleStyle: ChatBubbleStyle,
     onOpenTerminalSettingsSheet: () -> Unit,
     onOpenLanguageSheet: () -> Unit,
     onOpenManual: () -> Unit,
@@ -1881,7 +1897,7 @@ internal fun SettingsMenu(
             SettingsRow(
                 icon = FeatherIcons.Sliders,
                 title = stringResource(R.string.settings_appearance),
-                subtitle = "${stringResource(themeMode.labelRes)} · ${stringResource(bubbleStyle.labelRes)}",
+                subtitle = "${stringResource(themeMode.labelRes)} · ${stringResource(userBubbleStyle.labelRes)}",
                 onClick = { onOpen(SettingsSection.Appearance) }
             )
             SettingsDivider()

@@ -20,5 +20,11 @@ enum class ChatBubbleStyle(val id: String, @androidx.annotation.StringRes val la
     }
 }
 
-/** 当前聊天气泡样式，全局可读（由 AIEditorTheme 注入）。 */
-val LocalChatBubbleStyle = staticCompositionLocalOf { ChatBubbleStyle.CLASSIC_OUTLINE }
+/** 聊天气泡所属角色：用户发出的消息（USER）与 AI 回复（ASSISTANT），两侧可各自独立配置样式。 */
+enum class ChatBubbleRole { USER, ASSISTANT }
+
+/** 用户消息气泡样式，全局可读（由 AIEditorTheme 注入）。 */
+val LocalUserBubbleStyle = staticCompositionLocalOf { ChatBubbleStyle.CLASSIC_OUTLINE }
+
+/** AI 回复气泡样式，全局可读（由 AIEditorTheme 注入）。 */
+val LocalAssistantBubbleStyle = staticCompositionLocalOf { ChatBubbleStyle.CLASSIC_OUTLINE }

@@ -63,8 +63,9 @@ import com.aiverse.R
 import com.aiverse.core.theme.Brand
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
+import com.aiverse.core.theme.ChatBubbleRole
 import com.aiverse.core.theme.ChatBubbleStyle
-import com.aiverse.core.theme.LocalChatBubbleStyle
+import com.aiverse.core.theme.LocalUserBubbleStyle
 import com.aiverse.core.theme.LocalChatFontSizeSp
 import com.aiverse.core.tts.LocalTtsController
 import com.aiverse.core.tts.ReadProgress
@@ -364,7 +365,7 @@ internal fun AgentMessageItem(
                                 )
                             }
                         } else if (isUser) {
-                            val bubbleStyle = LocalChatBubbleStyle.current
+                            val bubbleStyle = LocalUserBubbleStyle.current
                             val chatFontSizeSp = LocalChatFontSizeSp.current
                             // 用户消息：右对齐气泡，外观由所选聊天气泡样式决定。
                             Row(
@@ -372,10 +373,10 @@ internal fun AgentMessageItem(
                                 modifier = Modifier.widthIn(max = maxUserBubbleWidth)
                             ) {
                                 Surface(
-                                    shape = chatBubbleShape(),
-                                    color = chatBubbleColor(),
-                                    border = chatBubbleBorder(),
-                                    shadowElevation = chatBubbleShadowElevation(),
+                                    shape = chatBubbleShape(ChatBubbleRole.USER),
+                                    color = chatBubbleColor(ChatBubbleRole.USER),
+                                    border = chatBubbleBorder(ChatBubbleRole.USER),
+                                    shadowElevation = chatBubbleShadowElevation(ChatBubbleRole.USER),
                                     modifier = Modifier.weight(1f, fill = false)
                                 ) {
                                     SelectionContainer {
@@ -387,7 +388,7 @@ internal fun AgentMessageItem(
                                         ) {
                                             Text(
                                                 text = message.content,
-                                                color = chatBubbleTextColor(),
+                                                color = chatBubbleTextColor(ChatBubbleRole.USER),
                                                 style = MaterialTheme.typography.bodyMedium.copy(
                                                     fontSize = chatFontSizeSp.sp,
                                                     lineHeight = (chatFontSizeSp + 4).sp
@@ -419,10 +420,10 @@ internal fun AgentMessageItem(
                             // 分块之间只留一个段落间距，整条消息看起来仍是连续的一段正文。
                             val chatFontSizeSp = LocalChatFontSizeSp.current
                             Surface(
-                                shape = chatBubbleShape(),
-                                color = chatBubbleColor(),
-                                border = chatBubbleBorder(),
-                                shadowElevation = chatBubbleShadowElevation(),
+                                shape = chatBubbleShape(ChatBubbleRole.ASSISTANT),
+                                color = chatBubbleColor(ChatBubbleRole.ASSISTANT),
+                                border = chatBubbleBorder(ChatBubbleRole.ASSISTANT),
+                                shadowElevation = chatBubbleShadowElevation(ChatBubbleRole.ASSISTANT),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 SelectionContainer {
@@ -434,7 +435,7 @@ internal fun AgentMessageItem(
                                     ) {
                                         MarkdownContent(
                                             text = contentSlice ?: message.content,
-                                            color = chatBubbleTextColor(),
+                                            color = chatBubbleTextColor(ChatBubbleRole.ASSISTANT),
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(horizontal = Spacing.md, vertical = Spacing.sm)

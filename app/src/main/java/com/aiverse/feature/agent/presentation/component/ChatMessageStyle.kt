@@ -45,8 +45,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
 import com.aiverse.R
 import com.aiverse.core.theme.Spacing
+import com.aiverse.core.theme.ChatBubbleRole
 import com.aiverse.core.theme.ChatBubbleStyle
-import com.aiverse.core.theme.LocalChatBubbleStyle
+import com.aiverse.core.theme.LocalAssistantBubbleStyle
+import com.aiverse.core.theme.LocalUserBubbleStyle
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Check
 import compose.icons.feathericons.Copy
@@ -89,10 +91,14 @@ internal object ChatStyle {
     val rowIconSize = 16.dp
 }
 
-/** 聊天气泡底色（收发两侧共用）：按所选聊天气泡样式返回。 */
+/** 聊天气泡底色（按所选聊天气泡样式返回）：用户与助手两侧可各自独立配置。 */
 @Composable
-internal fun chatBubbleColor(): Color {
-    return when (LocalChatBubbleStyle.current) {
+internal fun chatBubbleColor(role: ChatBubbleRole): Color {
+    val style = when (role) {
+        ChatBubbleRole.USER -> LocalUserBubbleStyle.current
+        ChatBubbleRole.ASSISTANT -> LocalAssistantBubbleStyle.current
+    }
+    return when (style) {
         ChatBubbleStyle.CLASSIC_OUTLINE,
         ChatBubbleStyle.SOFT_SHADOW,
         ChatBubbleStyle.MINIMAL_WHITE -> MaterialTheme.colorScheme.surface
@@ -104,10 +110,14 @@ internal fun chatBubbleColor(): Color {
     }
 }
 
-/** 聊天气泡文字色（收发两侧共用）：按所选聊天气泡样式返回。 */
+/** 聊天气泡文字色（按所选聊天气泡样式返回）：用户与助手两侧可各自独立配置。 */
 @Composable
-internal fun chatBubbleTextColor(): Color {
-    return when (LocalChatBubbleStyle.current) {
+internal fun chatBubbleTextColor(role: ChatBubbleRole): Color {
+    val style = when (role) {
+        ChatBubbleRole.USER -> LocalUserBubbleStyle.current
+        ChatBubbleRole.ASSISTANT -> LocalAssistantBubbleStyle.current
+    }
+    return when (style) {
         ChatBubbleStyle.DARK_MODE -> Color.White
         ChatBubbleStyle.FRESH_GREEN -> Color(0xFF1B1B1B)
         ChatBubbleStyle.ORIGINAL -> MaterialTheme.colorScheme.onPrimary
@@ -115,10 +125,14 @@ internal fun chatBubbleTextColor(): Color {
     }
 }
 
-/** 聊天气泡描边（收发两侧共用）：仅白描边/漫画/心动有边，其余无。 */
+/** 聊天气泡描边（按所选聊天气泡样式返回）：仅白描边/漫画/心动有边，其余无。 */
 @Composable
-internal fun chatBubbleBorder(): BorderStroke? {
-    return when (LocalChatBubbleStyle.current) {
+internal fun chatBubbleBorder(role: ChatBubbleRole): BorderStroke? {
+    val style = when (role) {
+        ChatBubbleRole.USER -> LocalUserBubbleStyle.current
+        ChatBubbleRole.ASSISTANT -> LocalAssistantBubbleStyle.current
+    }
+    return when (style) {
         ChatBubbleStyle.CLASSIC_OUTLINE -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.onSurface)
         ChatBubbleStyle.COMIC -> BorderStroke(2.dp, Color.Black)
         ChatBubbleStyle.HEARTBEAT -> BorderStroke(1.5.dp, Color(0xFFBDBDBD))
@@ -126,16 +140,26 @@ internal fun chatBubbleBorder(): BorderStroke? {
     }
 }
 
-/** 聊天气泡圆角（收发两侧共用）：清新绿大圆角，其余 10dp。 */
+/** 聊天气泡圆角（按所选聊天气泡样式返回）：清新绿大圆角，其余 10dp。 */
 @Composable
-internal fun chatBubbleShape(): CornerBasedShape =
-    if (LocalChatBubbleStyle.current == ChatBubbleStyle.FRESH_GREEN) RoundedCornerShape(24.dp)
+internal fun chatBubbleShape(role: ChatBubbleRole): CornerBasedShape {
+    val style = when (role) {
+        ChatBubbleRole.USER -> LocalUserBubbleStyle.current
+        ChatBubbleRole.ASSISTANT -> LocalAssistantBubbleStyle.current
+    }
+    return if (style == ChatBubbleStyle.FRESH_GREEN) RoundedCornerShape(24.dp)
     else RoundedCornerShape(10.dp)
+}
 
-/** 聊天气泡阴影（收发两侧共用）：柔和投影有阴影，其余无。 */
+/** 聊天气泡阴影（按所选聊天气泡样式返回）：柔和投影有阴影，其余无。 */
 @Composable
-internal fun chatBubbleShadowElevation(): Dp =
-    if (LocalChatBubbleStyle.current == ChatBubbleStyle.SOFT_SHADOW) 4.dp else 0.dp
+internal fun chatBubbleShadowElevation(role: ChatBubbleRole): Dp {
+    val style = when (role) {
+        ChatBubbleRole.USER -> LocalUserBubbleStyle.current
+        ChatBubbleRole.ASSISTANT -> LocalAssistantBubbleStyle.current
+    }
+    return if (style == ChatBubbleStyle.SOFT_SHADOW) 4.dp else 0.dp
+}
 
 /** 1px 细线：扁平风格里唯一的分组手段。 */
 @Composable
