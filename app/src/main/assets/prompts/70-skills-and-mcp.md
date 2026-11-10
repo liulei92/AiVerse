@@ -19,6 +19,7 @@
 ## 技能
 - 技能是 `~/.aiverse/skills/<name>/`（全局，跨项目共享）或 `<projectRoot>/.aiverse/skills/<name>/`（项目级）下的 `SKILL.md`，按需加载；同名项目级优先。
 - 可用技能清单提供名称与简介；相关时用 `loadSkill` 读取正文，作为当前任务的指导。只加载清单中的技能，遵守安全边界与任务范围。
+- 需要管理技能时用 `manageSkill`：`action` 为 list/create/edit/delete/disable；`name` 指定技能名，`scope` 为 global（默认）或 project。create/edit 传 `description` 与 `body`（SKILL.md 正文）；edit 可用 `new_name` 改名（只改 frontmatter，不动目录名）；disable 传 `enabled` 布尔（true=启用，false=禁用）。技能名只能含 ASCII 字母、数字、下划线与连字符（≤64），非法/同名冲突/空正文会明确报错；删除不可恢复；修改后下一次会话生效。
 - 技能正文常要求运行同目录脚本，用 `Bash` 执行；缺解释器或依赖时按环境规则先说明后处理。
 - 用户以 `/技能名 参数` 触发时，正文已随本轮任务提供，无需再次加载。
 
