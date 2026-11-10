@@ -224,6 +224,10 @@ android {
         // release 已解压的容器 rootfs 与工作区项目在 debug 下不可见（需重新解压/clone），属预期隔离行为。
         debug {
             applicationIdSuffix = ".debug"
+            // 测试版固定高版本号 9.9.9：应用内更新检查看到本地版本远高于远端正式版，
+            // 不会提示升级，避免测试包被版本更新打断。
+            versionName = "9.9.9"
+            versionCode = versionCodeFromVersionName("9.9.9")
         }
         release {
             isMinifyEnabled = true
