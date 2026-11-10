@@ -89,9 +89,9 @@ internal object ChatStyle {
     val rowIconSize = 16.dp
 }
 
-/** 用户消息底色：按所选聊天气泡样式返回。 */
+/** 聊天气泡底色（收发两侧共用）：按所选聊天气泡样式返回。 */
 @Composable
-internal fun chatUserBubbleColor(): Color {
+internal fun chatBubbleColor(): Color {
     return when (LocalChatBubbleStyle.current) {
         ChatBubbleStyle.CLASSIC_OUTLINE,
         ChatBubbleStyle.SOFT_SHADOW,
@@ -104,9 +104,9 @@ internal fun chatUserBubbleColor(): Color {
     }
 }
 
-/** 用户消息文字：按所选聊天气泡样式返回。 */
+/** 聊天气泡文字色（收发两侧共用）：按所选聊天气泡样式返回。 */
 @Composable
-internal fun chatUserBubbleTextColor(): Color {
+internal fun chatBubbleTextColor(): Color {
     return when (LocalChatBubbleStyle.current) {
         ChatBubbleStyle.DARK_MODE -> Color.White
         ChatBubbleStyle.FRESH_GREEN -> Color(0xFF1B1B1B)
@@ -115,9 +115,9 @@ internal fun chatUserBubbleTextColor(): Color {
     }
 }
 
-/** 用户气泡描边：仅白描边/漫画/心动有边，其余无。 */
+/** 聊天气泡描边（收发两侧共用）：仅白描边/漫画/心动有边，其余无。 */
 @Composable
-internal fun chatUserBubbleBorder(): BorderStroke? {
+internal fun chatBubbleBorder(): BorderStroke? {
     return when (LocalChatBubbleStyle.current) {
         ChatBubbleStyle.CLASSIC_OUTLINE -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.onSurface)
         ChatBubbleStyle.COMIC -> BorderStroke(2.dp, Color.Black)
@@ -126,15 +126,15 @@ internal fun chatUserBubbleBorder(): BorderStroke? {
     }
 }
 
-/** 用户气泡圆角：清新绿大圆角，其余 10dp。 */
+/** 聊天气泡圆角（收发两侧共用）：清新绿大圆角，其余 10dp。 */
 @Composable
-internal fun chatUserBubbleShape(): CornerBasedShape =
+internal fun chatBubbleShape(): CornerBasedShape =
     if (LocalChatBubbleStyle.current == ChatBubbleStyle.FRESH_GREEN) RoundedCornerShape(24.dp)
     else RoundedCornerShape(10.dp)
 
-/** 用户气泡阴影：柔和投影有阴影，其余无。 */
+/** 聊天气泡阴影（收发两侧共用）：柔和投影有阴影，其余无。 */
 @Composable
-internal fun chatUserBubbleShadowElevation(): Dp =
+internal fun chatBubbleShadowElevation(): Dp =
     if (LocalChatBubbleStyle.current == ChatBubbleStyle.SOFT_SHADOW) 4.dp else 0.dp
 
 /** 1px 细线：扁平风格里唯一的分组手段。 */

@@ -422,6 +422,7 @@
     <string name="bubble_fresh_green">Fresh Green</string>
     <string name="bubble_heartbeat">Heartbeat</string>
     <string name="bubble_original">Original</string>
+    <string name="bubble_preview_text">Hi</string>
     <string name="settings_background_image">Background image</string>
     <string name="settings_background_image_none">None</string>
     <string name="settings_background_image_alpha">Opacity</string>

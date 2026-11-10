@@ -3,7 +3,7 @@ package com.aiverse.core.theme
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.aiverse.R
 
-/** 聊天气泡样式（用户消息气泡）。在设置页「聊天气泡」中可选，共 8 种。 */
+/** 聊天气泡样式（作用于收发两侧消息气泡）。在设置页「聊天气泡」中可选，共 8 种。 */
 enum class ChatBubbleStyle(val id: String, @androidx.annotation.StringRes val labelRes: Int) {
     CLASSIC_OUTLINE("classic_outline", R.string.bubble_classic_outline),
     SOFT_SHADOW("soft_shadow", R.string.bubble_soft_shadow),

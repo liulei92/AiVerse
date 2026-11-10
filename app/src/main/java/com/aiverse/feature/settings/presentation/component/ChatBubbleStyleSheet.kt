@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,7 +86,7 @@ internal fun ChatBubbleStyleSheet(
     }
 }
 
-/** 迷你预览气泡：按样式渲染，文字即该样式名称。 */
+/** 迷你预览气泡：按样式渲染，气泡内用固定示例文案（右侧才是样式名），固定宽度保证各行标签对齐。 */
 @Composable
 private fun ChatBubblePreview(style: ChatBubbleStyle) {
     val color = when (style) {
@@ -108,23 +109,33 @@ private fun ChatBubblePreview(style: ChatBubbleStyle) {
         ChatBubbleStyle.CLASSIC_OUTLINE -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.onSurface)
         ChatBubbleStyle.COMIC -> BorderStroke(2.dp, Color.Black)
         ChatBubbleStyle.HEARTBEAT -> BorderStroke(1.5.dp, Color(0xFFBDBDBD))
+        // 极简纯白：白底在白弹窗上看不出，预览加浅灰描边保证可见（真实聊天区背景非纯白，故真实气泡不加）。
+        ChatBubbleStyle.MINIMAL_WHITE -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         else -> null
     }
     val shape = if (style == ChatBubbleStyle.FRESH_GREEN) RoundedCornerShape(24.dp) else RoundedCornerShape(10.dp)
     val elevation = if (style == ChatBubbleStyle.SOFT_SHADOW) 4.dp else 0.dp
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    // 预览区固定宽度：气泡 + 漫画箭头都在固定区内，右侧样式名起始位置每行对齐。
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.width(104.dp)
+    ) {
         Surface(
             shape = shape,
             color = color,
             border = border,
-            shadowElevation = elevation
+            shadowElevation = elevation,
+            modifier = Modifier.width(88.dp)
         ) {
             Text(
-                text = stringResource(style.labelRes),
+                text = stringResource(R.string.bubble_preview_text),
                 color = textColor,
                 fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             )
         }
         if (style == ChatBubbleStyle.COMIC) {

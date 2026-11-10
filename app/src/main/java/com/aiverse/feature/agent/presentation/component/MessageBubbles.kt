@@ -372,10 +372,10 @@ internal fun AgentMessageItem(
                                 modifier = Modifier.widthIn(max = maxUserBubbleWidth)
                             ) {
                                 Surface(
-                                    shape = chatUserBubbleShape(),
-                                    color = chatUserBubbleColor(),
-                                    border = chatUserBubbleBorder(),
-                                    shadowElevation = chatUserBubbleShadowElevation(),
+                                    shape = chatBubbleShape(),
+                                    color = chatBubbleColor(),
+                                    border = chatBubbleBorder(),
+                                    shadowElevation = chatBubbleShadowElevation(),
                                     modifier = Modifier.weight(1f, fill = false)
                                 ) {
                                     SelectionContainer {
@@ -387,7 +387,7 @@ internal fun AgentMessageItem(
                                         ) {
                                             Text(
                                                 text = message.content,
-                                                color = chatUserBubbleTextColor(),
+                                                color = chatBubbleTextColor(),
                                                 style = MaterialTheme.typography.bodyMedium.copy(
                                                     fontSize = chatFontSizeSp.sp,
                                                     lineHeight = (chatFontSizeSp + 4).sp
@@ -414,34 +414,44 @@ internal fun AgentMessageItem(
                                 }
                             }
                         } else {
-                            // 助手正文：不套容器，直接铺在页面底色上（文档流）。分块之间只留一个段落间距，
-                            // 整条消息看起来仍是连续的一段正文。
+                            // 助手正文：套与用户同款的气泡容器，聊天气泡样式同时作用于收发两侧。
+                            // 内部仍是 Markdown 文档流：代码/差异等「内容块」自带自己的卡，在气泡内呈卡中卡；
+                            // 分块之间只留一个段落间距，整条消息看起来仍是连续的一段正文。
                             val chatFontSizeSp = LocalChatFontSizeSp.current
-                            SelectionContainer {
-                                CompositionLocalProvider(
-                                    LocalTextSelectionColors provides TextSelectionColors(
-                                        handleColor = MaterialTheme.colorScheme.primary,
-                                        backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
-                                    )
-                                ) {
-                                    MarkdownContent(
-                                        text = contentSlice ?: message.content,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .then(
-                                                if (isThisSpeaking) Modifier
-                                                    .clip(RoundedCornerShape(12.dp))
-                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                                                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-                                                    .padding(horizontal = Spacing.sm, vertical = Spacing.xs)
-                                                else Modifier
-                                            ),
-                                        cache = markdownCache,
-                                        fontSizeSp = chatFontSizeSp,
-                                        readProgress = readProgressState
-                                            ?.takeIf { it.messageId == message.id && isThisSpeaking }?.ratio
-                                    )
+                            Surface(
+                                shape = chatBubbleShape(),
+                                color = chatBubbleColor(),
+                                border = chatBubbleBorder(),
+                                shadowElevation = chatBubbleShadowElevation(),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                SelectionContainer {
+                                    CompositionLocalProvider(
+                                        LocalTextSelectionColors provides TextSelectionColors(
+                                            handleColor = MaterialTheme.colorScheme.primary,
+                                            backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
+                                        )
+                                    ) {
+                                        MarkdownContent(
+                                            text = contentSlice ?: message.content,
+                                            color = chatBubbleTextColor(),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = Spacing.md, vertical = Spacing.sm)
+                                                .then(
+                                                    if (isThisSpeaking) Modifier
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                                                        .padding(horizontal = Spacing.sm, vertical = Spacing.xs)
+                                                    else Modifier
+                                                ),
+                                            cache = markdownCache,
+                                            fontSizeSp = chatFontSizeSp,
+                                            readProgress = readProgressState
+                                                ?.takeIf { it.messageId == message.id && isThisSpeaking }?.ratio
+                                        )
+                                    }
                                 }
                             }
                         }
