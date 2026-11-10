@@ -65,6 +65,7 @@ import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.theme.ChatBubbleRole
 import com.aiverse.core.theme.ChatBubbleStyle
+import com.aiverse.core.theme.LocalAssistantBubbleStyle
 import com.aiverse.core.theme.LocalUserBubbleStyle
 import com.aiverse.core.theme.LocalChatFontSizeSp
 import com.aiverse.core.tts.LocalTtsController
@@ -415,17 +416,11 @@ internal fun AgentMessageItem(
                                 }
                             }
                         } else {
-                            // 助手正文：套与用户同款的气泡容器，聊天气泡样式同时作用于收发两侧。
-                            // 内部仍是 Markdown 文档流：代码/差异等「内容块」自带自己的卡，在气泡内呈卡中卡；
-                            // 分块之间只留一个段落间距，整条消息看起来仍是连续的一段正文。
+                            // 助手正文：无气泡样式（NO_BUBBLE）下去掉包裹，正文直接铺在页面底色上（扁平文档流）；
+                            // 其余样式套与用户同款的气泡容器。内部仍是 Markdown 文档流。
+                            val assistantBubbleStyle = LocalAssistantBubbleStyle.current
                             val chatFontSizeSp = LocalChatFontSizeSp.current
-                            Surface(
-                                shape = chatBubbleShape(ChatBubbleRole.ASSISTANT),
-                                color = chatBubbleColor(ChatBubbleRole.ASSISTANT),
-                                border = chatBubbleBorder(ChatBubbleRole.ASSISTANT),
-                                shadowElevation = chatBubbleShadowElevation(ChatBubbleRole.ASSISTANT),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
+                            val assistantBody: @Composable () -> Unit = {
                                 SelectionContainer {
                                     CompositionLocalProvider(
                                         LocalTextSelectionColors provides TextSelectionColors(
@@ -453,6 +448,22 @@ internal fun AgentMessageItem(
                                                 ?.takeIf { it.messageId == message.id && isThisSpeaking }?.ratio
                                         )
                                     }
+                                }
+                            }
+                            if (assistantBubbleStyle == ChatBubbleStyle.NO_BUBBLE) {
+                                // 无气泡：AI 正文直接铺在页面，不套任何容器（仅保留选中与朗读高亮）。
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    assistantBody()
+                                }
+                            } else {
+                                Surface(
+                                    shape = chatBubbleShape(ChatBubbleRole.ASSISTANT),
+                                    color = chatBubbleColor(ChatBubbleRole.ASSISTANT),
+                                    border = chatBubbleBorder(ChatBubbleRole.ASSISTANT),
+                                    shadowElevation = chatBubbleShadowElevation(ChatBubbleRole.ASSISTANT),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    assistantBody()
                                 }
                             }
                         }

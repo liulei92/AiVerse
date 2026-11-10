@@ -423,6 +423,7 @@
     <string name="bubble_comic">漫画风格</string>
     <string name="bubble_fresh_green">清新绿</string>
     <string name="bubble_heartbeat">心动时刻</string>
+    <string name="bubble_no_bubble">无气泡</string>
     <string name="bubble_original">原版</string>
     <string name="bubble_user">我发出的气泡</string>
     <string name="bubble_assistant">AI 回复气泡</string>

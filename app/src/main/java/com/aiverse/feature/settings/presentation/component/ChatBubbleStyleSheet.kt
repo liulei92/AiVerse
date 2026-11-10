@@ -35,7 +35,7 @@ import com.aiverse.core.ui.AdaptiveModalBottomSheet
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Check
 
-/** 聊天气泡样式选择弹窗：列出 8 种，每种带模式名预览气泡。 */
+/** 聊天气泡样式选择弹窗：列出 9 种，每种带模式名预览气泡。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ChatBubbleStyleSheet(
@@ -99,6 +99,7 @@ private fun ChatBubblePreview(style: ChatBubbleStyle) {
         ChatBubbleStyle.FRESH_GREEN -> Color(0xFF4CAF50)
         ChatBubbleStyle.HEARTBEAT -> Color(0xFFF2F2F2)
         ChatBubbleStyle.ORIGINAL -> MaterialTheme.colorScheme.primary
+        ChatBubbleStyle.NO_BUBBLE -> MaterialTheme.colorScheme.surface
     }
     val textColor = when (style) {
         ChatBubbleStyle.DARK_MODE -> Color.White
@@ -112,6 +113,8 @@ private fun ChatBubblePreview(style: ChatBubbleStyle) {
         ChatBubbleStyle.HEARTBEAT -> BorderStroke(1.5.dp, Color(0xFFBDBDBD))
         // 极简纯白：白底在白弹窗上看不出，预览加浅灰描边保证可见（真实聊天区背景非纯白，故真实气泡不加）。
         ChatBubbleStyle.MINIMAL_WHITE -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        // 无气泡：真实聊天区不套容器（正文直接铺底色），预览用淡描边示意，避免在白弹窗上完全看不出。
+        ChatBubbleStyle.NO_BUBBLE -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         else -> null
     }
     val shape = if (style == ChatBubbleStyle.FRESH_GREEN) RoundedCornerShape(24.dp) else RoundedCornerShape(10.dp)
