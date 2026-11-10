@@ -1,0 +1,51 @@
+name: Nightly Build
+
+# 每天北京时间 0:00 / 6:00 / 12:00 / 18:00 自动构建最新 main 的 APK 并上传到 Actions artifact。
+# 目的：测试的人随时能拿到最新构建，且能尽早发现编译挂了。只传 artifact，不发 GitHub Release。
+on:
+  schedule:
+    - cron: '0 4,10,16,22 * * *'  # UTC，对应北京时间 0/6/12/18（与 sync-to-gitcode 一致）
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 迁移对账
+        run: python3 scripts/check_migrations.py
+
+      - name: 构建 debug APK（universal，无需 release 签名）
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleUniversalDebug
+
+      - name: 输出构建信息到运行摘要
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          echo "## Nightly 构建" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- commit: \`$SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 构建: debug（包名 com.aiverse.debug，与正式版独立共存）" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 下载: 下方 artifact（aiverse-universal-debug）" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 上传 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiverse-universal-debug
+          path: app/build/outputs/apk/universal/debug/app-universal-debug.apk
+          if-no-files-found: error
+          retention-days: 14
