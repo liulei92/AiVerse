@@ -126,6 +126,56 @@ interface AgentMessageDao {
     )
     suspend fun searchInWorkspace(workspacePath: String, escapedQuery: String, limit: Int): List<ChatSearchMatch>
 
+    /**
+     * 单会话内搜索聊天记录：命中用户 / 助手正文，排除已压缩与内部摘要行。
+     * [escapedQuery] 已由调用方转义 LIKE 通配符（`!` `%` `_`），配合 SQL 里的 ESCAPE '!'。
+     */
+    @Query(
+        """
+        SELECT m.id AS messageId,
+               m.sessionId AS sessionId,
+               s.title AS sessionTitle,
+               m.role AS role,
+               m.content AS content,
+               m.timestamp AS timestamp
+        FROM agent_messages m
+        JOIN chat_sessions s ON s.id = m.sessionId
+        WHERE m.sessionId = :sessionId
+          AND m.isCompacted = 0
+          AND m.isContextSummary = 0
+          AND m.isCompactionMarker = 0
+          AND m.role IN ('USER', 'ASSISTANT')
+          AND m.content LIKE '%' || :escapedQuery || '%' ESCAPE '!'
+        ORDER BY m.timestamp DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun searchInSession(sessionId: String, escapedQuery: String, limit: Int): List<ChatSearchMatch>
+
+    /** 删除某工作区下全部会话的消息（配合 [ChatSessionDao.deleteByWorkspace] 删除所有对话）。 */
+    @Query("DELETE FROM agent_messages WHERE sessionId IN (SELECT id FROM chat_sessions WHERE workspacePath = :workspacePath)")
+    suspend fun deleteByWorkspace(workspacePath: String)
+
+    /**
+     * 当前工作区的根会话（含各会话消息数），按最后更新时间倒序，供历史记录页展示。
+     * 一条查询同时带回消息数（COUNT），避免逐会话 N+1；LEFT JOIN + GROUP BY 让无消息会话也保留。
+     */
+    @Query(
+        """
+        SELECT s.id AS sessionId,
+               s.title AS title,
+               s.updatedAt AS updatedAt,
+               COUNT(m.id) AS messageCount
+        FROM chat_sessions s
+        LEFT JOIN agent_messages m ON m.sessionId = s.id
+        WHERE s.workspacePath = :workspacePath
+          AND s.parentId IS NULL
+        GROUP BY s.id
+        ORDER BY s.updatedAt DESC
+        """
+    )
+    fun getRootSessionsWithCountByWorkspace(workspacePath: String): Flow<List<SessionHistoryRow>>
+
     /** 指定会话中时间戳不早于 [timestamp] 的消息条数（含并列时间戳），供定位时确定所需分页上限。 */
     @Query("SELECT COUNT(*) FROM agent_messages WHERE sessionId = :sessionId AND timestamp >= :timestamp")
     suspend fun countMessagesFromTimestamp(sessionId: String, timestamp: Long): Int
@@ -178,6 +228,14 @@ data class ChatSearchMatch(
     val role: String,
     val content: String,
     val timestamp: Long
+)
+
+/** 历史记录页的会话行投影：会话标题 + 最后更新时间 + 该会话消息数。 */
+data class SessionHistoryRow(
+    val sessionId: String,
+    val title: String,
+    val updatedAt: Long,
+    val messageCount: Int
 )
 
 /** 单个会话的消息占用估算（[AgentMessageDao.sessionStorageUsage] 的投影）。 */

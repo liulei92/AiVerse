@@ -120,6 +120,7 @@ import compose.icons.feathericons.ChevronDown
 import compose.icons.feathericons.ChevronRight
 import compose.icons.feathericons.CheckSquare
 import compose.icons.feathericons.Clipboard
+import compose.icons.feathericons.Clock
 import compose.icons.feathericons.Copy
 import compose.icons.feathericons.Download
 import compose.icons.feathericons.Edit2
@@ -195,6 +196,7 @@ fun ChatDrawerContent(
     onClearBatchCut: () -> Unit,
     onNavigateToBrowser: (() -> Unit)? = null,
     onOpenFavorites: (() -> Unit)? = null,
+    onOpenHistory: (() -> Unit)? = null,
     onNavigateToSettings: () -> Unit,
     searchQuery: String,
     searchState: ChatSearchState,
@@ -398,6 +400,14 @@ fun ChatDrawerContent(
         }
 
         SettingsGroup {
+            if (onOpenHistory != null) {
+                SettingsRow(
+                    icon = FeatherIcons.Clock,
+                    title = stringResource(R.string.history_title),
+                    onClick = onOpenHistory
+                )
+                SettingsDivider()
+            }
             if (onOpenFavorites != null) {
                 SettingsRow(
                     icon = FeatherIcons.Bookmark,
@@ -746,7 +756,7 @@ private fun SessionListContent(
 
 /** Tab0 底部搜索框：复用设置页的胶囊搜索框，非空时带清除按钮。 */
 @Composable
-private fun ChatSearchField(
+internal fun ChatSearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     onClear: () -> Unit
@@ -773,7 +783,7 @@ private fun ChatSearchField(
 
 /** 搜索结果区：加载中 / 无结果 / 命中列表三态。 */
 @Composable
-private fun ChatSearchResults(
+internal fun ChatSearchResults(
     state: ChatSearchState,
     onOpenHit: (ChatSearchHit) -> Unit
 ) {
@@ -814,7 +824,7 @@ private fun ChatSearchResults(
 
 /** 单条搜索结果行：会话标题 + 命中片段（关键词高亮），点击跳转并定位。 */
 @Composable
-private fun ChatSearchResultRow(
+internal fun ChatSearchResultRow(
     hit: ChatSearchHit,
     query: String,
     onClick: () -> Unit

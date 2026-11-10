@@ -273,7 +273,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        // 悬浮球：App 启动时若开关已开启且已授予悬浮窗权限则自动恢复（重启后不丢失）。
+        // 悬浮球：App 启动时若开关已开启、已授予悬浮窗权限则自动恢复。
         lifecycleScope.launch {
             val enabled = toolSafetySettings.overlayBallEnabledFlow.first()
             if (enabled && android.provider.Settings.canDrawOverlays(this@MainActivity)) {
@@ -789,6 +789,12 @@ fun AppNavigation(
                 }
                 navController.navigate("favorites")
             },
+            onOpenHistory = {
+                if (!permanentDrawer) {
+                    scope.launch { drawerState.snapTo(DrawerValue.Closed) }
+                }
+                navController.navigate("history")
+            },
             onNavigateToSettings = {
                 navController.navigate("settings")
                 if (!permanentDrawer) scope.launch { drawerState.snapTo(DrawerValue.Closed) }
@@ -962,6 +968,28 @@ fun AppNavigation(
                     viewModel = favoriteViewModel,
                     onNavigateBack = { navController.popBackStack() },
                     onOpenDetail = { id -> navController.navigate("favorites/$id") }
+                )
+            }
+            composable("history") {
+                com.aiverse.feature.agent.presentation.HistoryScreen(
+                    viewModel = agentViewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onOpenSession = { sessionId ->
+                        agentViewModel.selectSession(sessionId)
+                        navController.popBackStack()
+                    },
+                    onOpenSearch = { navController.navigate("chatSearch") }
+                )
+            }
+            composable("chatSearch") {
+                com.aiverse.feature.agent.presentation.ChatSearchScreen(
+                    viewModel = agentViewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onOpenHit = { hit ->
+                        agentViewModel.openChatSearchHit(hit)
+                        // 命中后直接回到聊天页查看定位高亮（搜索页由历史记录页进入，栈为 chat/history/chatSearch）。
+                        navController.popBackStack(route = "chat", inclusive = false)
+                    }
                 )
             }
             composable(
