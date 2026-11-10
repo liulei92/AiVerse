@@ -253,15 +253,15 @@ internal fun ChatInputBar(
             inputFieldValue = TextFieldValue(value, TextRange(value.length))
         }
     }
-    val showSlashMenu = !isBusy && slashCommands.isNotEmpty() &&
+    val showSlashMenu = slashCommands.isNotEmpty() &&
         value.startsWith("/") && !value.contains("\n")
     val filteredCommands = if (showSlashMenu) {
         if (value == "/") slashCommands
         else slashCommands.filter { "/${it.name}".startsWith(value) }
     } else emptyList()
 
-    // `@` 文件引用：`/` 菜单优先，忙碌时不弹；查询词从文本末尾提取。
-    val mentionQuery = if (!isBusy && !showSlashMenu) fileMentionQuery(value) else null
+    // `@` 文件引用：`/` 菜单优先；查询词从文本末尾提取。忙碌排队时同样可用（队列消息支持引用）。
+    val mentionQuery = if (!showSlashMenu) fileMentionQuery(value) else null
     val mentionFiles = remember(mentionQuery, fileMentionState) {
         if (mentionQuery != null && fileMentionState is FileMentionState.Ready) {
             matchFileMentions(mentionQuery)
@@ -903,7 +903,7 @@ internal fun ChatInputBar(
                         }
                     }
                     UploadIconButton(
-                        enabled = !isBusy,
+                        enabled = true,
                         icon = FeatherIcons.Plus,
                         contentDescription = stringResource(R.string.chat_add_attachment),
                         onClick = { showAttachmentSheet = true }
@@ -917,8 +917,8 @@ internal fun ChatInputBar(
 
     if (showAttachmentSheet) {
         AttachmentSheet(
-            canUploadFiles = canUploadFiles && !isBusy,
-            canUploadImages = canUploadImages && !isBusy,
+            canUploadFiles = canUploadFiles,
+            canUploadImages = canUploadImages,
             onUploadFile = {
                 showAttachmentSheet = false
                 onUploadFile()
