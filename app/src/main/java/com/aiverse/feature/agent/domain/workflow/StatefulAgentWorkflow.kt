@@ -1413,7 +1413,7 @@ class StatefulAgentWorkflow @Inject constructor(
         // 高危宿主系统操作（Shizuku）与不可逆删除仍拦截，避免无人确认的越权执行。
         if (isSub && eval.verdict == ToolPermissionPolicyEngine.Verdict.ASK) {
             if (tool.name == ToolPermissionPolicyEngine.SHIZUKU_TOOL ||
-                tool.name == ToolPermissionPolicyEngine.SHIZUKU_CONTROL_TOOL
+                tool.name == ToolPermissionPolicyEngine.PHONE_CONTROL_TOOL
             ) {
                 return PermissionCheckResult(false, "子代理不允许执行宿主系统操作（Shizuku）", "SYSTEM_DENIED")
             }

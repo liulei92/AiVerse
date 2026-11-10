@@ -8,6 +8,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import com.aiverse.core.theme.Radius
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -691,6 +696,7 @@ fun AIChatPanel(
     val messagesState by viewModel.messagesState.collectAsStateWithLifecycle()
     val messages = messagesState.messages
     val pendingScroll by viewModel.pendingScrollMessage.collectAsStateWithLifecycle()
+    val highlightedMessageId by viewModel.highlightedMessageId.collectAsStateWithLifecycle()
     // 子代理卡片：状态与动作经 CompositionLocal 下发给 task 工具行，避免逐层透传。
     val subAgentCards by viewModel.subAgentCards.collectAsStateWithLifecycle()
 
@@ -726,7 +732,7 @@ fun AIChatPanel(
     val thinkingLabel = activeToolName?.let { stringResource(toolRunningLabelRes(it)) }
         ?: stringResource(R.string.chat_status_thinking)
     val allPendingPermission by viewModel.pendingToolPermission.collectAsStateWithLifecycle()
-    // ShizukuControl 同时由悬浮确认窗和前台面板处理：resolve 幂等，谁先点都生效。
+    // PhoneControl 同时由悬浮确认窗和前台面板处理：resolve 幂等，谁先点都生效。
     val pendingPermission = allPendingPermission
     val pendingPermissionSessionTitle by viewModel.pendingToolPermissionSessionTitle.collectAsStateWithLifecycle()
     val pendingQuestion by viewModel.pendingUserQuestion.collectAsStateWithLifecycle()
@@ -1450,6 +1456,14 @@ fun AIChatPanel(
         }
     }
 
+    // 高亮消息短暂展示后自动清除（定位跳转后方便确认）。
+    LaunchedEffect(highlightedMessageId) {
+        if (highlightedMessageId != null) {
+            delay(2600)
+            viewModel.clearHighlightedMessage()
+        }
+    }
+
     // 切换会话 / 打开搜索命中：优先定位到目标消息，否则贴底并恢复跟随。
     LaunchedEffect(currentSessionId, messagesReady, pendingScroll, chatItems) {
         if (!messagesReady) return@LaunchedEffect
@@ -1571,6 +1585,22 @@ fun AIChatPanel(
             else -> {
                 val message = item.message
                 val live = runningTool.firstOrNull { it.messageId == message.id }?.text
+                // 定位跳转后的短暂高亮：命中消息背景渐变淡出，方便确认位置。
+                val highlighted = message.id == highlightedMessageId
+                val highlightColor by animateColorAsState(
+                    targetValue = if (highlighted) {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.30f)
+                    } else {
+                        Color.Transparent
+                    },
+                    animationSpec = tween(durationMillis = 300),
+                    label = "message-highlight"
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(highlightColor, RoundedCornerShape(Radius.md))
+                ) {
                 CompositionLocalProvider(LocalTtsController provides viewModel.ttsController) {
                 AgentMessageItem(
                     message = message,
@@ -1599,6 +1629,7 @@ fun AIChatPanel(
                     turnUsage = turnUsages[message.id],
                     entryDelayMs = messageEntryDelays[message.id]
                 )
+                }
                 }
             }
         }

@@ -28,13 +28,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
- * Shizuku 控制手机（ShizukuControl）的超高危险确认悬浮窗。
+ * 手机控制（PhoneControl）的超高危险确认悬浮窗。
  *
  * 普通工具的授权由聊天输入框上方的授权面板（前台）与后台审批通知兜底；本服务专责
- * ShizukuControl——无论应用在前台还是用户停留在其他页面，都以系统悬浮窗的形式弹出
+ * PhoneControl——无论应用在前台还是用户停留在其他页面，都以系统悬浮窗的形式弹出
  * 「拒绝 / 允许」确认，避免高风险指令在无人看管时被静默放行。
  *
- * 常驻于应用进程（应用启动时由 AIEditorApp 拉起），仅在有 ShizukuControl 待决请求时
+ * 常驻于应用进程（应用启动时由 AIEditorApp 拉起），仅在有 PhoneControl 待决请求时
  * 展示窗口，其余时间不占用任何屏幕资源。依赖悬浮窗权限；未授予时直接停止（权限引擎
  * 会先于请求评估拒绝该调用并提示原因）。
  */
@@ -60,7 +60,7 @@ class OverlayApprovalService : Service() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         scope.launch {
             toolPermissionManager.pendingRequest.collect { request ->
-                if (request?.toolName == ToolPermissionPolicyEngine.SHIZUKU_CONTROL_TOOL) {
+                if (request?.toolName == ToolPermissionPolicyEngine.PHONE_CONTROL_TOOL) {
                     showWindow(request)
                 } else {
                     hideWindow()

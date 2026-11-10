@@ -97,6 +97,11 @@ import com.aiverse.feature.settings.domain.model.AIProviderConfig
 import com.aiverse.feature.settings.domain.model.ModelMetadata
 import com.aiverse.feature.settings.presentation.SettingsViewModel
 import com.aiverse.feature.settings.presentation.ShizukuViewModel
+import com.aiverse.feature.phonecontrol.presentation.AccessibilityGrantScreen
+import com.aiverse.feature.phonecontrol.presentation.AppRulesScreen
+import com.aiverse.feature.phonecontrol.presentation.PhoneControlScreen
+import com.aiverse.feature.phonecontrol.presentation.PhoneControlViewModel
+import com.aiverse.feature.phonecontrol.presentation.UnlockScreen
 import com.aiverse.feature.settings.presentation.SkillImportState
 import com.aiverse.feature.settings.presentation.SkillUiEntry
 import com.aiverse.feature.agent.domain.skill.SkillImportError
@@ -193,7 +198,11 @@ internal enum class SettingsSection(@param:StringRes val titleRes: Int) {
     Tts(R.string.settings_tts),
     PluginRepo(R.string.plugins_repo_title),
     SearchProvider(R.string.settings_search_provider),
-    SearchProviderDetail(R.string.settings_search_provider)
+    SearchProviderDetail(R.string.settings_search_provider),
+    PhoneControl(R.string.phone_control_title),
+    PhoneControlAccessibilityGrant(R.string.a11y_grant_title),
+    PhoneControlUnlock(R.string.phone_unlock),
+    PhoneControlAppRules(R.string.phone_app_rules),
 }
 
 /**
@@ -218,6 +227,10 @@ private fun SettingsSection.depth(): Int = when (this) {
     SettingsSection.PluginRepo,
     SettingsSection.SearchProvider -> 2
     SettingsSection.SearchProviderDetail -> 3
+    SettingsSection.PhoneControl -> 2
+    SettingsSection.PhoneControlAccessibilityGrant,
+    SettingsSection.PhoneControlUnlock,
+    SettingsSection.PhoneControlAppRules -> 3
     else -> 1
 }
 
@@ -336,17 +349,18 @@ fun SettingsScreen(
             ?: stringResource(R.string.language_follow_system)
     }
 
-
     var section by remember {
         mutableStateOf(
             when (initialSection) {
                 "providers" -> SettingsSection.Providers
                 "mcp" -> SettingsSection.Mcp
+                "phoneControl" -> SettingsSection.PhoneControl
                 else -> SettingsSection.Menu
             }
         )
     }
     var logReturnSection by remember { mutableStateOf(SettingsSection.Menu) }
+    var phoneControlGrantReturn by remember { mutableStateOf(SettingsSection.PhoneControl) }
     // 各列表页的多选状态：顶栏「多选」开关在本页 Scaffold 里，所以状态必须提到这里统一持有。
     // 用普通 map（非 snapshot）新建容器，避免在组合期写快照状态；Compose 状态在 ListSelectionState 内部。
     val listSelections = remember { mutableMapOf<SettingsSection, ListSelectionState>() }
@@ -479,6 +493,10 @@ fun SettingsScreen(
         SettingsSection.ContainerDownloads -> SettingsSection.Container
         SettingsSection.PluginRepo -> SettingsSection.Plugins
         SettingsSection.SearchProviderDetail -> SettingsSection.SearchProvider
+        SettingsSection.PhoneControl -> SettingsSection.General
+        SettingsSection.PhoneControlAccessibilityGrant -> phoneControlGrantReturn
+        SettingsSection.PhoneControlUnlock -> SettingsSection.PhoneControl
+        SettingsSection.PhoneControlAppRules -> SettingsSection.PhoneControl
         else -> if (expanded) null else SettingsSection.Menu
     }
 
@@ -1270,7 +1288,48 @@ fun SettingsScreen(
                         onOpenShizuku = { shizukuViewModel.openShizukuApp() },
                         onRefreshShizuku = { shizukuViewModel.refresh() },
                         overlayBallEnabled = overlayBallEnabled,
-                        onToggleOverlayBall = { viewModel.setOverlayBallEnabled(it) }
+                        onToggleOverlayBall = { viewModel.setOverlayBallEnabled(it) },
+                        onOpenPhoneControlAccessibility = {
+                            phoneControlGrantReturn = SettingsSection.AppPermissions
+                            section = SettingsSection.PhoneControlAccessibilityGrant
+                        }
+                    )
+                }
+                SettingsSection.PhoneControl -> {
+                    val phoneControlViewModel: PhoneControlViewModel =
+                        androidx.hilt.navigation.compose.hiltViewModel()
+                    PhoneControlScreen(
+                        viewModel = phoneControlViewModel,
+                        onOpenAccessibilityGrant = {
+                            phoneControlGrantReturn = SettingsSection.PhoneControl
+                            section = SettingsSection.PhoneControlAccessibilityGrant
+                        },
+                        onOpenUnlock = { section = SettingsSection.PhoneControlUnlock },
+                        onOpenAppRules = { section = SettingsSection.PhoneControlAppRules }
+                    )
+                }
+                SettingsSection.PhoneControlAccessibilityGrant -> {
+                    val phoneControlViewModel: PhoneControlViewModel =
+                        androidx.hilt.navigation.compose.hiltViewModel()
+                    AccessibilityGrantScreen(
+                        viewModel = phoneControlViewModel,
+                        onBack = { section = phoneControlGrantReturn }
+                    )
+                }
+                SettingsSection.PhoneControlUnlock -> {
+                    val phoneControlViewModel: PhoneControlViewModel =
+                        androidx.hilt.navigation.compose.hiltViewModel()
+                    UnlockScreen(
+                        viewModel = phoneControlViewModel,
+                        onBack = { section = SettingsSection.PhoneControl }
+                    )
+                }
+                SettingsSection.PhoneControlAppRules -> {
+                    val phoneControlViewModel: PhoneControlViewModel =
+                        androidx.hilt.navigation.compose.hiltViewModel()
+                    AppRulesScreen(
+                        viewModel = phoneControlViewModel,
+                        onBack = { section = SettingsSection.PhoneControl }
                     )
                 }
                 SettingsSection.BackgroundRun -> BackgroundRunSection(
@@ -1964,6 +2023,13 @@ internal fun SettingsMenu(
                 icon = FeatherIcons.RefreshCw,
                 title = stringResource(SettingsSection.BackgroundRun.titleRes),
                 onClick = { onOpen(SettingsSection.BackgroundRun) }
+            )
+            SettingsDivider()
+            SettingsRow(
+                icon = FeatherIcons.Zap,
+                title = stringResource(R.string.phone_control_title),
+                subtitle = stringResource(R.string.phone_control_enabled_desc),
+                onClick = { onOpen(SettingsSection.PhoneControl) }
             )
         }
 

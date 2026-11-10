@@ -49,9 +49,10 @@ import com.aiverse.feature.agent.domain.tool.remote.SshTailTool
 import com.aiverse.feature.agent.domain.tool.remote.SshUploadTool
 import com.aiverse.feature.agent.domain.tool.review.ReviewPrTool
 import com.aiverse.feature.agent.domain.tool.review.ReviewTool
+import com.aiverse.feature.agent.domain.tool.shizuku.PhoneControlTool
 import com.aiverse.feature.agent.domain.tool.shizuku.ShizukuTool
-import com.aiverse.feature.agent.domain.tool.shizuku.ShizukuControlTool
 import com.aiverse.feature.agent.domain.tool.skill.LoadSkillTool
+import com.aiverse.feature.agent.domain.tool.skill.ManageSkillTool
 import com.aiverse.feature.agent.domain.tool.question.AskUserQuestionTool
 import com.aiverse.feature.agent.domain.tool.todo.TodoTool
 import com.aiverse.feature.agent.domain.tool.subagent.TaskTool
@@ -374,7 +375,7 @@ object AgentModule {
         generateImageTool: GenerateImageTool,
         executeCommandTool: ExecuteCommandTool,
         shizukuTool: ShizukuTool,
-        shizukuControlTool: ShizukuControlTool,
+        phoneControlTool: PhoneControlTool,
         terminalSessionTool: TerminalSessionTool,
         listFilesTool: ListFilesTool,
         searchCodeTool: SearchCodeTool,
@@ -387,6 +388,7 @@ object AgentModule {
         sshTailTool: SshTailTool,
         sshUploadTool: SshUploadTool,
         loadSkillTool: LoadSkillTool,
+        manageSkillTool: ManageSkillTool,
         askUserQuestionTool: AskUserQuestionTool,
         manageMcpTool: ManageMcpTool,
         webSearchTool: WebSearchTool,
@@ -411,7 +413,7 @@ object AgentModule {
             register("generateImage", generateImageTool)
             register("Bash", executeCommandTool)
             register("Shizuku", shizukuTool)
-            register("ShizukuControl", shizukuControlTool)
+            register("PhoneControl", phoneControlTool)
             register("terminal", terminalSessionTool)
             register("list", listFilesTool)
             register("search", searchCodeTool)
@@ -424,6 +426,7 @@ object AgentModule {
             register("sshTail", sshTailTool)
             register("sshUpload", sshUploadTool)
             register("loadSkill", loadSkillTool)
+            register("manageSkill", manageSkillTool)
             register("askUserQuestion", askUserQuestionTool)
             register("manageMcp", manageMcpTool)
             register("websearch", webSearchTool)

@@ -42,8 +42,8 @@ class ToolPermissionPolicyEngine @Inject constructor(
         /** Shizuku 工具：以 adb shell 身份直接操作宿主 Android 系统，按高危处理（一律弹窗、不可记忆）。 */
         const val SHIZUKU_TOOL = "Shizuku"
 
-        /** Shizuku 控制手机工具：打开应用/截屏/模拟点击，属超高危险指令，无论任何免授权开关一律强制逐次确认。 */
-        const val SHIZUKU_CONTROL_TOOL = "ShizukuControl"
+        /** 手机控制工具：读屏/点击/打开应用（无障碍），属超高危险指令，无论任何免授权开关一律强制逐次确认。 */
+        const val PHONE_CONTROL_TOOL = "PhoneControl"
 
         /**
          * 合并后的终端会话工具：其 `start` 动作承载 shell 命令，需走指令级前缀匹配；
@@ -143,14 +143,14 @@ class ToolPermissionPolicyEngine @Inject constructor(
 
         // 「一键允许所有工具」（全局）开启后默认放行，不再逐次索要确认。
         // 安全底线仍保留：灾难性 rm（根目录/系统目录删除）与 Shizuku 宿主系统操作仍拦截。
-        // Shizuku 控制手机属超高危险指令：即使开启一键允许/禁用安全拦截，仍强制逐次确认且不可记忆。
+        // 手机控制属超高危险指令：即使开启一键允许/禁用安全拦截，仍强制逐次确认且不可记忆。
         // 确认走悬浮窗口（其他页面也可确认），故需悬浮窗权限；未授予时无法确认，直接拒绝并说明原因。
-        if (toolName == SHIZUKU_CONTROL_TOOL) {
+        if (toolName == PHONE_CONTROL_TOOL) {
             if (!Settings.canDrawOverlays(appContext)) {
                 return EvalResult(
                     Verdict.DENY,
                     emptyList(),
-                    denyReason = appContext.getString(R.string.tool_shizuku_overlay_permission_reason)
+                    denyReason = appContext.getString(R.string.tool_phone_control_overlay_permission_reason)
                 )
             }
             return EvalResult(

@@ -42,6 +42,7 @@ import compose.icons.feathericons.Activity
 import compose.icons.feathericons.Bell
 import compose.icons.feathericons.Circle
 import compose.icons.feathericons.Download
+import compose.icons.feathericons.Eye
 import compose.icons.feathericons.Folder
 import compose.icons.feathericons.Power
 import compose.icons.feathericons.RefreshCw
@@ -65,7 +66,8 @@ internal fun AppPermissionsSection(
     onOpenShizuku: () -> Unit,
     onRefreshShizuku: () -> Unit,
     overlayBallEnabled: Boolean,
-    onToggleOverlayBall: (Boolean) -> Unit
+    onToggleOverlayBall: (Boolean) -> Unit,
+    onOpenPhoneControlAccessibility: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -196,6 +198,13 @@ internal fun AppPermissionsSection(
                         onCheckedChange = onToggleOverlayBall
                     )
                 }
+            )
+            SettingsDivider()
+            SettingsRow(
+                icon = FeatherIcons.Eye,
+                title = stringResource(R.string.phone_a11y),
+                subtitle = stringResource(R.string.phone_a11y_ai_control),
+                onClick = onOpenPhoneControlAccessibility
             )
         }
     }

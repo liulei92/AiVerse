@@ -269,6 +269,7 @@ class AIAgentViewModel @Inject constructor(
         _agentStates.value = _agentStates.value + (sessionId to state)
     }
 
+
     /**
      * 失败文案：服务端给了类型码（如拒答/上下文超限）时用本地化说明，
      * 并附上服务端的具体理由（如果有）；无类型码时直接展示原错误文本。
@@ -402,6 +403,9 @@ class AIAgentViewModel @Inject constructor(
         _chatSearchQuery.value = ""
     }
 
+    /** 当前工作区路径（供历史记录页按工作区取数据）。 */
+    val currentWorkspace: StateFlow<String> = _currentWorkspace.asStateFlow()
+
     val sessions: StateFlow<List<ChatSession>> = _currentWorkspace
         .flatMapLatest { path ->
             if (path.isBlank()) flowOf(emptyList())
@@ -433,22 +437,22 @@ class AIAgentViewModel @Inject constructor(
     val pendingScrollMessage: StateFlow<Pair<String, String>?> = _pendingScrollMessage.asStateFlow()
 
     /**
-     * 搜索状态：工作区与关键词变化时防抖后查询，命中映射为带片段的 UI 模型。
+     * 搜索状态：当前会话与关键词变化时防抖后查询，命中映射为带片段的 UI 模型。
      * 查询走 IO 调度器，避免 LIKE 全表扫描卡住主线程。
      */
     val chatSearchState: StateFlow<ChatSearchState> =
-        combine(_currentWorkspace, _chatSearchQuery) { ws, q -> ws to q }
+        combine(_currentSessionId, _chatSearchQuery) { sid, q -> sid to q }
             .debounce(chatSearchDebounceMs)
-            .flatMapLatest { (workspace, query) ->
+            .flatMapLatest { (sessionId, query) ->
                 val keyword = query.trim()
-                if (workspace.isBlank() || keyword.isEmpty()) {
+                if (sessionId == null || keyword.isEmpty()) {
                     flowOf(ChatSearchState(query = query))
                 } else {
                     flow {
                         emit(ChatSearchState(query = query, loading = true))
                         val hits = withContext(Dispatchers.IO) {
-                            agentMessageDao.searchInWorkspace(
-                                workspace,
+                            agentMessageDao.searchInSession(
+                                sessionId,
                                 escapeLike(keyword),
                                 chatSearchLimit
                             ).map { m ->
@@ -476,31 +480,78 @@ class AIAgentViewModel @Inject constructor(
         _pendingScrollMessage.value = null
     }
 
+    /** 待高亮的消息 id（定位成功后短暂高亮，方便确认）；null 表示无高亮。 */
+    private val _highlightedMessageId = MutableStateFlow<String?>(null)
+    val highlightedMessageId: StateFlow<String?> = _highlightedMessageId.asStateFlow()
+
+    /** 清除消息高亮（由聊天流在短暂展示后调用）。 */
+    fun clearHighlightedMessage() {
+        _highlightedMessageId.value = null
+    }
+
     /**
-     * 打开一条搜索命中：切到对应会话，把该会话分页上限抬到足够包含目标消息，并登记待定位消息。
-     * 实际滚动由聊天页在消息就绪后完成。搜索词与结果保留，重开侧边栏仍停在结果列表。
+     * 定位到指定会话的某条消息：切到该会话，把该会话分页上限抬到足够包含目标消息，登记待定位消息并高亮。
+     * 实际滚动由聊天页在消息就绪后完成。
      */
-    fun openChatSearchHit(hit: ChatSearchHit) {
-        selectSession(hit.sessionId)
+    fun locateMessage(sessionId: String, messageId: String) {
+        selectSession(sessionId)
         viewModelScope.launch {
             val timestamp = withContext(Dispatchers.IO) {
-                agentMessageDao.getMessageById(hit.messageId)?.timestamp
+                agentMessageDao.getMessageById(messageId)?.timestamp
             }
             if (timestamp != null) {
                 val needed = withContext(Dispatchers.IO) {
-                    agentMessageDao.countMessagesFromTimestamp(hit.sessionId, timestamp)
+                    agentMessageDao.countMessagesFromTimestamp(sessionId, timestamp)
                 } + messageLimitMargin
-                val current = _messageLimit.value[hit.sessionId] ?: defaultLimit
+                val current = _messageLimit.value[sessionId] ?: defaultLimit
                 if (needed > current) {
-                    _messageLimit.value = _messageLimit.value + (hit.sessionId to needed)
+                    _messageLimit.value = _messageLimit.value + (sessionId to needed)
                 }
             }
-            _pendingScrollMessage.value = hit.sessionId to hit.messageId
+            _pendingScrollMessage.value = sessionId to messageId
+            _highlightedMessageId.value = messageId
         }
+    }
+
+    /**
+     * 打开一条搜索命中：定位并高亮对应消息。搜索词与结果保留，重开侧边栏仍停在结果列表。
+     */
+    fun openChatSearchHit(hit: ChatSearchHit) {
+        locateMessage(hit.sessionId, hit.messageId)
     }
 
     fun consumePendingScroll() {
         _pendingScrollMessage.value = null
+    }
+
+    /**
+     * 当前工作区的根会话（含消息数，按最后更新时间倒序），供历史记录页展示。
+     */
+    val historySessions: StateFlow<List<HistorySessionItem>> = _currentWorkspace
+        .flatMapLatest { path ->
+            if (path.isBlank()) flowOf(emptyList())
+            else agentMessageDao.getRootSessionsWithCountByWorkspace(path)
+                .map { list ->
+                    list.map { r ->
+                        HistorySessionItem(
+                            sessionId = r.sessionId,
+                            title = r.title,
+                            messageCount = r.messageCount,
+                            updatedAt = r.updatedAt
+                        )
+                    }
+                }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** 删除当前工作区全部对话（会话与其消息），供历史记录页「删除所有」二次确认后调用。 */
+    fun deleteAllHistory() = viewModelScope.launch {
+        val workspace = _currentWorkspace.value
+        if (workspace.isBlank()) return@launch
+        withContext(Dispatchers.IO) {
+            agentMessageDao.deleteByWorkspace(workspace)
+            chatSessionDao.deleteByWorkspace(workspace)
+        }
     }
 
     /** 转义 LIKE 通配符，配合 SQL 里的 ESCAPE '!'（转义字符本身需最先处理）。 */
@@ -1602,12 +1653,12 @@ class AIAgentViewModel @Inject constructor(
                 planApprovalManager.pendingApproval,
                 toolPermissionManager.pendingRequest
             ) { awaiting, question, plan, permission ->
-                // Shizuku 控制手机由悬浮确认窗（OverlayApprovalService）处理，不进后台审批通知。
-                val shizukuControlSessionId = permission
-                    ?.takeIf { it.toolName == ToolPermissionPolicyEngine.SHIZUKU_CONTROL_TOOL }
+                // 手机控制由悬浮确认窗（OverlayApprovalService）处理，不进后台审批通知。
+                val phoneControlSessionId = permission
+                    ?.takeIf { it.toolName == ToolPermissionPolicyEngine.PHONE_CONTROL_TOOL }
                     ?.sessionId
                 val labels = LinkedHashMap<String, Triple<Int, ApprovalKind, String?>>()
-                awaiting.filter { it != shizukuControlSessionId }.forEach {
+                awaiting.filter { it != phoneControlSessionId }.forEach {
                     labels[it] = Triple(R.string.notification_approval_label_permission, ApprovalKind.PERMISSION,
                         permission?.takeIf { request -> request.sessionId == it }?.id)
                 }

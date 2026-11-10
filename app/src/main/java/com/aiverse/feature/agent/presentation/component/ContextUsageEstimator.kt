@@ -58,9 +58,9 @@ object ContextUsageEstimator {
      */
     private val FILE_TOOLS = setOf(
         "readFile", "list", "search", "sendFile", "writeFile", "editFile",
-        "generateImage", "viewImage", "Bash", "terminal", "Shizuku", "ShizukuControl",
+        "generateImage", "viewImage", "Bash", "terminal", "Shizuku", "PhoneControl",
         "sshList", "sshRead", "sshExec", "sshRm", "sshMv", "sshDownload", "sshTail", "sshUpload",
-        "loadSkill", "askUserQuestion", "manageMcp", "planMode", "goalStatus", "todo", "memory",
+        "loadSkill", "askUserQuestion", "manageMcp", "manageSkill", "planMode", "goalStatus", "todo", "memory",
         "task", "browser", "review"
     )
 
