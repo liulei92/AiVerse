@@ -9,10 +9,19 @@ import com.aiverse.feature.agent.domain.model.AgentImage
 import com.aiverse.feature.agent.presentation.AgentAttachment
 import com.aiverse.feature.workspace.domain.FileAccessProvider
 import com.aiverse.feature.workspace.domain.WorkspacePathMapper
+import androidx.compose.runtime.staticCompositionLocalOf
 import java.io.File
 import java.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+/**
+ * 聊天区当前生效的文件访问后端：附件系统打开/上传时按容器路径读写（远程 SSH 模式会 SFTP 拉回）。
+ * 由聊天面板注入，与 `LocalImageViewer` 同一层级提供。
+ */
+val LocalChatFileAccess = staticCompositionLocalOf<FileAccessProvider> {
+    error("LocalChatFileAccess 未提供：聊天附件打开/上传不可用")
+}
 
 internal data class UploadedWorkspaceFile(
     val fileName: String,
@@ -34,6 +43,14 @@ internal data class PendingUploadAttachment(
 
 internal val PendingUploadAttachment.isImage: Boolean
     get() = image != null
+
+/** 是否为 Markdown / HTML 文档（用于决定 md/html 附件走哪种打开方式）。 */
+internal fun isChatPreviewableDocument(fileName: String, mimeType: String = ""): Boolean {
+    val ext = fileName.substringAfterLast('.', "").lowercase()
+    return ext in setOf("md", "markdown", "html", "htm") ||
+        mimeType.equals("text/html", ignoreCase = true) ||
+        mimeType.equals("text/markdown", ignoreCase = true)
+}
 
 private fun List<PendingUploadAttachment>.toAttachmentText(context: Context): String {
     if (isEmpty()) return ""
@@ -99,7 +116,7 @@ internal fun AgentAttachment.toPendingAttachment(): PendingUploadAttachment {
     )
 }
 
-private fun PendingUploadAttachment.toAgentAttachment(): AgentAttachment =
+internal fun PendingUploadAttachment.toAgentAttachment(): AgentAttachment =
     AgentAttachment(
         fileName = fileName,
         containerPath = containerPath,

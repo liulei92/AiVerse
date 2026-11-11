@@ -716,10 +716,6 @@
     <string name="chat_open_file_no_app">No app available to open this file</string>
     <string name="chat_open_apk_permission">Installing apps requires permission. Allow installs from this source in the settings that just opened</string>
     <string name="chat_attachment_preview">Preview %1$s</string>
-    <string name="chat_document_preview_fullscreen">Show fullscreen</string>
-    <string name="chat_document_preview_exit_fullscreen">Exit fullscreen</string>
-    <string name="chat_document_preview_too_large">File is too large to preview in chat</string>
-    <string name="chat_document_preview_failed">Unable to read this file</string>
     <string name="chat_attachment_open">Open %1$s</string>
     <string name="chat_no_model_selected">No model selected</string>
     <string name="chat_header_more">More</string>

@@ -68,10 +68,8 @@ import com.aiverse.R
 import com.aiverse.core.theme.Radius
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.ui.LocalImageViewer
-import com.aiverse.feature.agent.presentation.component.LocalChatDocumentPreviewer
 import com.aiverse.feature.agent.presentation.component.LocalChatFileAccess
 import com.aiverse.feature.agent.presentation.component.isChatPreviewableDocument
-import com.aiverse.feature.agent.presentation.component.readChatDocumentPreviewDoc
 import com.aiverse.core.ui.THUMBNAIL_MAX_EDGE
 import com.aiverse.core.ui.decodeSampledBitmap
 import com.aiverse.feature.agent.presentation.QueuedRequest
@@ -311,7 +309,6 @@ private fun PendingAttachmentPreviewItem(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val fileAccess = LocalChatFileAccess.current
-    val documentPreviewer = LocalChatDocumentPreviewer.current
     Surface(
         shape = RoundedCornerShape(Radius.md),
         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
@@ -331,17 +328,15 @@ private fun PendingAttachmentPreviewItem(
                         }
                 )
             } else if (isChatPreviewableDocument(attachment.fileName, attachment.mimeType)) {
-                // 待发送的 md/html：点击即进聊天页内预览，和已发送附件一致
-                val previewLabel = stringResource(R.string.chat_attachment_preview, attachment.fileName)
+                // 待发送的 md/html：与其它非图片附件一致，用系统 app 打开
+                val openLabel = stringResource(R.string.chat_attachment_open, attachment.fileName)
                 FileAttachmentPreview(
                     attachment = attachment,
                     modifier = Modifier
                         .fillMaxSize()
-                        .clickable(onClickLabel = previewLabel) {
+                        .clickable(onClickLabel = openLabel) {
                             scope.launch {
-                                val doc = readChatDocumentPreviewDoc(context, attachment, fileAccess)
-                                    ?: return@launch
-                                documentPreviewer.show(doc)
+                                openSentAttachment(context, attachment.toAgentAttachment(), fileAccess)
                             }
                         }
                 )

@@ -103,8 +103,6 @@ import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.tts.LocalTtsController
 import com.aiverse.core.ui.ImageViewerHost
 import com.aiverse.core.ui.LocalImageViewer
-import com.aiverse.feature.editor.presentation.MarkdownPreviewViewModel
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.aiverse.core.ui.AdaptiveModalBottomSheet
 import com.aiverse.core.ui.AppTextField
 import com.aiverse.core.ui.appTextFieldColors
@@ -119,10 +117,7 @@ import com.aiverse.feature.agent.presentation.AIAgentViewModel
 import com.aiverse.feature.agent.presentation.MessageRole
 import com.aiverse.feature.agent.presentation.QueuedRequest
 import com.aiverse.feature.agent.presentation.hasVisibleContent
-import com.aiverse.feature.agent.presentation.component.ChatDocumentPreviewHost
-import com.aiverse.feature.agent.presentation.component.LocalChatDocumentPreviewer
 import com.aiverse.feature.agent.presentation.component.LocalChatFileAccess
-import com.aiverse.feature.agent.presentation.component.rememberChatDocumentPreviewState
 import com.aiverse.feature.onboarding.domain.OnboardingStep
 import com.aiverse.feature.onboarding.presentation.onboardingTarget
 import com.aiverse.feature.settings.presentation.SettingsViewModel
@@ -1591,9 +1586,6 @@ fun AIChatPanel(
         MarkdownImageTransformer(viewModel.fileAccess)
     }
     val imageViewerState = rememberImageViewerState()
-    val chatDocumentPreviewState = rememberChatDocumentPreviewState()
-    // 会话附件 md/html 预览的后端（组装渲染 HTML、提供相对路径图片资源），与编辑器预览共用同一套。
-    val markdownPreviewViewModel: MarkdownPreviewViewModel = hiltViewModel()
     val viewerDecodeSpec = rememberViewerDecodeSpec()
     val chatImageLoad = remember(viewModel.fileAccess, viewerDecodeSpec) {
         chatImageLoader(viewModel.fileAccess, viewerDecodeSpec.maxEdge, viewerDecodeSpec.maxPixels)
@@ -1705,7 +1697,6 @@ fun AIChatPanel(
     CompositionLocalProvider(
         LocalMarkdownImageTransformer provides markdownImageTransformer,
         LocalImageViewer provides imageViewerState,
-        LocalChatDocumentPreviewer provides chatDocumentPreviewState,
         LocalChatFileAccess provides viewModel.fileAccess,
         LocalAttachmentOpener provides attachmentOpener,
         LocalSubAgentCardHost provides SubAgentCardHost(
@@ -2183,11 +2174,6 @@ fun AIChatPanel(
             )
         }
         ImageViewerHost(state = imageViewerState, load = chatImageLoad)
-        // md/html 附件预览宿主：内联底部弹层 + 放大全屏 Dialog（与 ImageViewer 同为独立 window）
-        ChatDocumentPreviewHost(
-            state = chatDocumentPreviewState,
-            viewModel = markdownPreviewViewModel
-        )
     }
 }
 
