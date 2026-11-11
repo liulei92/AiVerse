@@ -191,10 +191,9 @@ private fun DetailRow(label: String, value: Int, total: Int, color: androidx.com
     }
 }
 
-/** 百分比数字：≥0.1% 保留一位小数，更小保留四位（避免科学计数法/超长小数）。 */
+/** 百分比数字：统一保留两位小数（极小占比显示 0.00%，避免出现 0.0000%）。 */
 private fun percentNumber(pct: Float): String =
-    if (pct >= 0.1f) String.format(java.util.Locale.US, "%.1f", pct)
-    else String.format(java.util.Locale.US, "%.4f", pct)
+    String.format(java.util.Locale.US, "%.2f", pct)
 
 /** 百分比标签：数字 + %，文案走 stringResource。 */
 @Composable

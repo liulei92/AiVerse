@@ -47,6 +47,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -55,7 +57,6 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -67,6 +68,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.aiverse.core.theme.LocalHyperOSStyle
 import java.util.Locale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import com.aiverse.R
 import com.aiverse.core.theme.Radius
@@ -407,17 +409,26 @@ private fun HeaderContextUsageButton(
     onCompact: () -> Unit
 ) {
     var bubbleExpanded by remember { mutableStateOf(false) }
-    Box {
+    // 圆环中心相对根窗口的 X 坐标（px），用于把浮窗水平居中到屏幕。
+    var ringCenterX by remember { mutableStateOf(0f) }
+    val density = LocalDensity.current
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val screenCenterX = with(density) { (screenWidthDp / 2f).dp.roundToPx() }
+    Box(
+        modifier = Modifier.onGloballyPositioned { coords ->
+            ringCenterX = coords.positionInRoot().x + coords.size.width / 2f
+        }
+    ) {
         ContextUsageRing(
             progress = progress,
             tokenEstimated = tokenEstimated,
             onToggle = { if (detail != null) bubbleExpanded = !bubbleExpanded }
         )
         if (bubbleExpanded && detail != null) {
-            val dropOffset = with(LocalDensity.current) { 40.dp.roundToPx() }
+            val dropOffset = with(density) { 40.dp.roundToPx() }
             Popup(
-                alignment = Alignment.TopEnd,
-                offset = IntOffset(0, dropOffset),
+                alignment = Alignment.TopCenter,
+                offset = IntOffset(screenCenterX - ringCenterX.roundToInt(), dropOffset),
                 onDismissRequest = { bubbleExpanded = false },
                 properties = PopupProperties(focusable = true)
             ) {
@@ -433,8 +444,7 @@ private fun HeaderContextUsageButton(
 }
 
 /**
- * 漫画风对话气泡：圆环作为「说话人头像」，气泡带指向圆环的小三角 tail；
- * 内容为上下文用量明细卡（复用 ContextUsageDetailCard）。
+ * 上下文用量浮窗：承载用量明细卡（复用 ContextUsageDetailCard），带阴影、单层边框。
  */
 @Composable
 private fun ComicUsageBubble(
@@ -443,38 +453,18 @@ private fun ComicUsageBubble(
     onClose: () -> Unit,
     thresholdPercent: Int
 ) {
-    Column(
-        modifier = Modifier.widthIn(max = 340.dp)
+    Surface(
+        modifier = Modifier.widthIn(max = 340.dp),
+        shape = RoundedCornerShape(Radius.lg),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 6.dp
     ) {
-        // 指向圆环的小三角 tail（气泡顶部，尖点朝上指向圆环）。
-        // Popup 以 TopEnd 对齐到 36dp 圆环，浮窗右缘与圆环右缘齐平，故圆环中心在浮窗右侧内缩 18dp 处；
-        // tail 宽 16dp，右侧再留 10dp 内边距后其中心恰好落在 18dp，对准圆环中心。
-        // 注意：Canvas 的 draw lambda 不是 @Composable 上下文，MaterialTheme 需在 Canvas 外取值。
-        val tailColor = MaterialTheme.colorScheme.surface
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopEnd) {
-            Canvas(modifier = Modifier.padding(end = 10.dp).size(16.dp, 8.dp)) {
-                val path = Path().apply {
-                    moveTo(0f, size.height)
-                    lineTo(size.width, size.height)
-                    lineTo(size.width * 0.5f, 0f)
-                    close()
-                }
-                drawPath(path, color = tailColor)
-            }
-        }
-        Surface(
-            shape = RoundedCornerShape(Radius.md),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            shadowElevation = 6.dp
-        ) {
-            ContextUsageDetailCard(
-                detail = detail,
-                onCompact = onCompact,
-                onClose = onClose,
-                thresholdPercent = thresholdPercent
-            )
-        }
+        ContextUsageDetailCard(
+            detail = detail,
+            onCompact = onCompact,
+            onClose = onClose,
+            thresholdPercent = thresholdPercent
+        )
     }
 }
 
