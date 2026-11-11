@@ -2,6 +2,7 @@ package com.aiverse.feature.settings.presentation.component
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -303,6 +304,7 @@ fun SettingsScreen(
     val chatFontSizeSp by viewModel.chatFontSizeSp.collectAsStateWithLifecycle()
     val inputFontSizeSp by viewModel.inputFontSizeSp.collectAsStateWithLifecycle()
     val uiFontScale by viewModel.uiFontScale.collectAsStateWithLifecycle()
+    val uiDensity by viewModel.uiDensity.collectAsStateWithLifecycle()
     val inputBarPrefs by viewModel.inputBarPrefs.collectAsStateWithLifecycle()
     val defaultSkillInstallScope by viewModel.defaultSkillInstallScope.collectAsStateWithLifecycle()
     val languageTag by viewModel.languageTag.collectAsStateWithLifecycle()
@@ -477,8 +479,29 @@ fun SettingsScreen(
     var showLanguageSheet by remember { mutableStateOf(false) }
     var showResetTokenStats by remember { mutableStateOf(false) }
 
+    // 主题包导出：exportRequest 计数器作触发器，exportedThemeJson 存导出结果（null = 未触发 / 失败）。
+    var exportRequest by remember { mutableStateOf(0) }
+    var exportedThemeJson by remember { mutableStateOf<String?>(null) }
+
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
     val expanded = maxWidth >= SettingsTwoPaneMinWidth
+
+    // 主题包导出：exportRequest 计数器变化（且 >0）时触发一次导出，把 JSON 写入
+    // exportedThemeJson 传给外观页分享；失败置 null（外观页不分享，这里 Toast 提示）。
+    LaunchedEffect(exportRequest) {
+        if (exportRequest <= 0) return@LaunchedEffect
+        viewModel.exportThemePackage { json ->
+            if (json == null) {
+                Toast.makeText(
+                    context,
+                    R.string.settings_appearance_theme_package_export_failed,
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                exportedThemeJson = json
+            }
+        }
+    }
 
     // 返回目标：null 表示没有上一层，返回动作交还上层导航（退出设置页）。
     // 大屏左菜单常驻，一级分区页没有「上一层」——回菜单只会得到一个空占位。
@@ -1039,6 +1062,7 @@ fun SettingsScreen(
                     chatFontSizeSp = chatFontSizeSp,
                     inputFontSizeSp = inputFontSizeSp,
                     uiFontScale = uiFontScale,
+                    uiDensity = uiDensity,
                     onOpenThemeSheet = { showThemeSheet = true },
                     onOpenBackgroundSheet = { showBackgroundSheet = true },
                     onOpenUserBubbleStyleSheet = { showUserBubbleStyleSheet = true },
@@ -1046,7 +1070,20 @@ fun SettingsScreen(
                     onSetChatFontSizeSp = { viewModel.setChatFontSizeSp(it) },
                     onSetInputFontSizeSp = { viewModel.setInputFontSizeSp(it) },
                     onSetUiFontScale = { viewModel.setUiFontScale(it) },
+                    onSetUiDensity = { viewModel.setUiDensity(it) },
                     onRestoreDefaults = { viewModel.restoreAppearanceDefaults() },
+                    onExportRequest = { exportRequest++ },
+                    exportedThemeJson = exportedThemeJson,
+                    onImportThemePackage = { json ->
+                        viewModel.importThemePackage(json) { success ->
+                            val message = if (success) {
+                                R.string.settings_appearance_theme_package_applied
+                            } else {
+                                R.string.settings_appearance_theme_package_parse_failed
+                            }
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                        }
+                    },
                     inputBarPrefs = inputBarPrefs,
                     onInputBarPrefsChange = { viewModel.updateInputBarPrefs(it) }
                 )

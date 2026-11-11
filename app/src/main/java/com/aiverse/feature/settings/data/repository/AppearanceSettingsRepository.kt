@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.aiverse.core.datastore.preferencesCorruptionHandler
+import com.aiverse.core.theme.UIDensity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -42,6 +44,11 @@ class AppearanceSettingsRepository @Inject constructor(
         (prefs[UI_FONT_SCALE_KEY] ?: DEFAULT_UI_FONT_SCALE).coerceIn(MIN_UI_FONT_SCALE, MAX_UI_FONT_SCALE)
     }
 
+    /** 界面密度档（紧凑/标准/舒适），作用于间距、圆角、组件高度（dp）缩放。默认标准档。 */
+    val uiDensityFlow: Flow<UIDensity> = context.appearanceDataStore.data.map { prefs ->
+        UIDensity.fromId(prefs[UI_DENSITY_KEY])
+    }
+
     suspend fun setChatFontSizeSp(sizeSp: Int) {
         context.appearanceDataStore.edit { it[CHAT_FONT_SIZE_KEY] = sizeSp.coerceIn(MIN_CHAT_FONT_SIZE_SP, MAX_CHAT_FONT_SIZE_SP) }
     }
@@ -54,6 +61,11 @@ class AppearanceSettingsRepository @Inject constructor(
         context.appearanceDataStore.edit { it[UI_FONT_SCALE_KEY] = scale.coerceIn(MIN_UI_FONT_SCALE, MAX_UI_FONT_SCALE) }
     }
 
+    /** 设置界面密度档。 */
+    suspend fun setUiDensity(density: UIDensity) {
+        context.appearanceDataStore.edit { it[UI_DENSITY_KEY] = density.id }
+    }
+
     /** 备份快照：当前聊天字号（sp）。 */
     suspend fun chatFontSizeSnapshot(): Int = chatFontSizeSpFlow.first()
 
@@ -63,12 +75,16 @@ class AppearanceSettingsRepository @Inject constructor(
     /** 备份快照：当前界面缩放系数。 */
     suspend fun uiFontScaleSnapshot(): Float = uiFontScaleFlow.first()
 
-    /** 从备份还原三档字号；任一传 null 时清除该键回退默认。 */
-    suspend fun restoreFontSizes(chatSp: Int?, inputSp: Int?, uiScale: Float?) {
+    /** 备份快照：当前界面密度档 id（未设置时回退标准档）。 */
+    suspend fun uiDensitySnapshot(): String = uiDensityFlow.first().id
+
+    /** 从备份还原三档字号与密度档；任一传 null 时清除该键回退默认。 */
+    suspend fun restoreFontSizes(chatSp: Int?, inputSp: Int?, uiScale: Float?, uiDensity: String? = null) {
         context.appearanceDataStore.edit {
             if (chatSp == null) it.remove(CHAT_FONT_SIZE_KEY) else it[CHAT_FONT_SIZE_KEY] = chatSp.coerceIn(MIN_CHAT_FONT_SIZE_SP, MAX_CHAT_FONT_SIZE_SP)
             if (inputSp == null) it.remove(INPUT_FONT_SIZE_KEY) else it[INPUT_FONT_SIZE_KEY] = inputSp.coerceIn(MIN_INPUT_FONT_SIZE_SP, MAX_INPUT_FONT_SIZE_SP)
             if (uiScale == null) it.remove(UI_FONT_SCALE_KEY) else it[UI_FONT_SCALE_KEY] = uiScale.coerceIn(MIN_UI_FONT_SCALE, MAX_UI_FONT_SCALE)
+            if (uiDensity == null) it.remove(UI_DENSITY_KEY) else it[UI_DENSITY_KEY] = uiDensity
         }
     }
 
@@ -76,6 +92,7 @@ class AppearanceSettingsRepository @Inject constructor(
         private val CHAT_FONT_SIZE_KEY = intPreferencesKey("chat_font_size_sp")
         private val INPUT_FONT_SIZE_KEY = intPreferencesKey("input_font_size_sp")
         private val UI_FONT_SCALE_KEY = floatPreferencesKey("ui_font_scale")
+        private val UI_DENSITY_KEY = stringPreferencesKey("ui_density")
 
         const val MIN_CHAT_FONT_SIZE_SP = 12
         const val MAX_CHAT_FONT_SIZE_SP = 22

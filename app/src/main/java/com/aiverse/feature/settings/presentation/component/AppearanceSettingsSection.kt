@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,12 +20,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.text.AnnotatedString
 import com.aiverse.R
 import com.aiverse.core.theme.AppThemePreset
 import com.aiverse.core.theme.ChatBubbleStyle
 import com.aiverse.core.theme.Spacing
+import com.aiverse.core.theme.UIDensity
+import com.aiverse.core.ui.SegmentedTabs
 import com.aiverse.core.theme.isDynamicColorSupported
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.ui.AppSwitch
@@ -37,12 +48,14 @@ import compose.icons.FeatherIcons
 import compose.icons.feathericons.Box
 import compose.icons.feathericons.ChevronUp
 import compose.icons.feathericons.Cpu
+import compose.icons.feathericons.Download
 import compose.icons.feathericons.Folder
 import compose.icons.feathericons.Globe
 import compose.icons.feathericons.Image
 import compose.icons.feathericons.MessageSquare
 import compose.icons.feathericons.Moon
 import compose.icons.feathericons.RotateCcw
+import compose.icons.feathericons.Share
 import compose.icons.feathericons.Trash
 import compose.icons.feathericons.Zap
 import kotlin.math.roundToInt
@@ -63,6 +76,7 @@ internal fun AppearanceSettingsSection(
     chatFontSizeSp: Int,
     inputFontSizeSp: Int,
     uiFontScale: Float,
+    uiDensity: UIDensity,
     onOpenThemeSheet: () -> Unit,
     onOpenBackgroundSheet: () -> Unit,
     onOpenUserBubbleStyleSheet: () -> Unit,
@@ -70,10 +84,61 @@ internal fun AppearanceSettingsSection(
     onSetChatFontSizeSp: (Int) -> Unit,
     onSetInputFontSizeSp: (Int) -> Unit,
     onSetUiFontScale: (Float) -> Unit,
+    onSetUiDensity: (UIDensity) -> Unit,
     onRestoreDefaults: () -> Unit,
+    onExportRequest: () -> Unit,
+    onImportThemePackage: (String) -> Unit,
+    exportedThemeJson: String?,
     inputBarPrefs: InputBarPrefs,
     onInputBarPrefsChange: (InputBarPrefs) -> Unit
 ) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+
+    // 导出：拿到 JSON 后弹分享；没有能接手的应用时回退到复制剪贴板。
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { _ -> }
+
+    // 导入：从文件选择器读 JSON 文本后交给上层套用。
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val text = runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull()
+        if (text.isNullOrBlank()) {
+            Toast.makeText(
+                context,
+                context.getString(R.string.settings_appearance_theme_package_parse_failed),
+                Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            onImportThemePackage(text)
+        }
+    }
+
+    // 监听导出结果：exportedThemeJson 仅在导出成功且非空时被上层更新（失败由上层 Toast）。
+    // 拿到非空 JSON 后弹系统分享；没有任何应用接手时回退到复制剪贴板。
+    LaunchedEffect(exportedThemeJson) {
+        val json = exportedThemeJson ?: return@LaunchedEffect
+        val clipLabel = context.getString(R.string.settings_appearance_theme_package)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, json)
+        }
+        val share = Intent.createChooser(send, clipLabel)
+        val launchedOk = runCatching { exportLauncher.launch(share) }.isSuccess
+        if (!launchedOk) {
+            clipboard.setText(AnnotatedString(json))
+            Toast.makeText(
+                context,
+                context.getString(R.string.settings_appearance_theme_package_copied),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -157,6 +222,11 @@ internal fun AppearanceSettingsSection(
                 value = uiFontScale,
                 onSet = onSetUiFontScale
             )
+            SettingsDivider()
+            DensityRow(
+                selected = uiDensity,
+                onSelect = onSetUiDensity
+            )
         }
 
         SettingsGroupHeader(text = stringResource(R.string.settings_appearance_input_bar))
@@ -171,6 +241,23 @@ internal fun AppearanceSettingsSection(
                 )
                 if (index < DEFAULT_QUICK_ACTION_ORDER.lastIndex) SettingsDivider()
             }
+        }
+
+        SettingsGroupHeader(text = stringResource(R.string.settings_appearance_theme_package))
+        SettingsGroup {
+            SettingsRow(
+                icon = FeatherIcons.Share,
+                title = stringResource(R.string.settings_appearance_theme_package_export),
+                subtitle = stringResource(R.string.settings_appearance_theme_package_export_desc),
+                onClick = { onExportRequest() }
+            )
+            SettingsDivider()
+            SettingsRow(
+                icon = FeatherIcons.Download,
+                title = stringResource(R.string.settings_appearance_theme_package_import),
+                subtitle = stringResource(R.string.settings_appearance_theme_package_import_desc),
+                onClick = { importLauncher.launch("*/*") }
+            )
         }
 
         SettingsGroup {
@@ -223,6 +310,36 @@ private fun FontSizeSliderRow(
             onValueChangeFinished = { onSet(local) },
             valueRange = min.toFloat()..max.toFloat(),
             steps = (max - min - 1)
+        )
+    }
+}
+
+/** 界面密度三档选择行：复用 iOS 风分段控件，实时持久化。 */
+@Composable
+private fun DensityRow(
+    selected: UIDensity,
+    onSelect: (UIDensity) -> Unit
+) {
+    val options = UIDensity.entries
+    val labels = listOf(
+        stringResource(R.string.density_compact),
+        stringResource(R.string.density_standard),
+        stringResource(R.string.density_comfortable)
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm)
+    ) {
+        Text(
+            text = stringResource(R.string.settings_appearance_density),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(bottom = Spacing.sm)
+        )
+        SegmentedTabs(
+            selected = options.indexOf(selected).coerceAtLeast(0),
+            labels = labels,
+            onSelect = { index -> onSelect(options[index]) }
         )
     }
 }

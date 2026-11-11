@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.aiverse.core.theme.LocalHyperOSStyle
+import com.aiverse.core.theme.LocalUIDensityTokens
 
 /**
  * 全局统一的精致紧凑型开关组件：
@@ -45,6 +46,7 @@ fun AppSwitch(
 ) {
     val isLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
     val hyperOS = LocalHyperOSStyle.current
+    val t = LocalUIDensityTokens.current
 
     // 轨道颜色
     val targetTrackColor = when {
@@ -89,7 +91,7 @@ fun AppSwitch(
             .alpha(if (enabled) 1f else 0.4f)
             .then(toggleModifier)
             .size(width = if (hyperOS) 50.dp else 42.dp, height = if (hyperOS) 30.dp else 24.dp)
-            .clip(RoundedCornerShape(if (hyperOS) 15.dp else 12.dp))
+            .clip(RoundedCornerShape(if (hyperOS) t.buttonCorner * 1.5f else t.rMdLarge))
             .background(animatedTrackColor),
         contentAlignment = Alignment.CenterStart
     ) {

@@ -86,6 +86,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.aiverse.core.theme.AIEditorTheme
 import com.aiverse.core.theme.AppThemePreset
+import com.aiverse.core.theme.UIDensity
 import com.aiverse.core.ui.BetaWatermark
 import com.aiverse.core.ui.ImageSource
 import com.aiverse.core.ui.ImageViewerHost
@@ -321,6 +322,7 @@ class MainActivity : ComponentActivity() {
             val chatFontSizeSp by appearanceSettings.chatFontSizeSpFlow.collectAsStateWithLifecycle(initialValue = AppearanceSettingsRepository.DEFAULT_CHAT_FONT_SIZE_SP)
             val inputFontSizeSp by appearanceSettings.inputFontSizeSpFlow.collectAsStateWithLifecycle(initialValue = AppearanceSettingsRepository.DEFAULT_INPUT_FONT_SIZE_SP)
             val uiFontScale by appearanceSettings.uiFontScaleFlow.collectAsStateWithLifecycle(initialValue = AppearanceSettingsRepository.DEFAULT_UI_FONT_SCALE)
+            val uiDensity by appearanceSettings.uiDensityFlow.collectAsStateWithLifecycle(initialValue = UIDensity.STANDARD)
             val systemDarkTheme = isSystemInDarkTheme()
             val darkTheme = when (themeMode) {
                 AppThemeMode.AUTO -> systemDarkTheme
@@ -347,7 +349,8 @@ class MainActivity : ComponentActivity() {
                 assistantBubbleStyle = assistantBubbleStyle,
                 chatFontSizeSp = chatFontSizeSp,
                 inputFontSizeSp = inputFontSizeSp,
-                uiFontScale = uiFontScale
+                uiFontScale = uiFontScale,
+                uiDensity = uiDensity
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),

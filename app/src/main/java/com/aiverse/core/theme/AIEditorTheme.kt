@@ -402,6 +402,7 @@ fun AIEditorTheme(
     chatFontSizeSp: Int = 16,
     inputFontSizeSp: Int = 16,
     uiFontScale: Float = 1f,
+    uiDensity: UIDensity = UIDensity.STANDARD,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
@@ -428,7 +429,8 @@ fun AIEditorTheme(
         LocalUserBubbleStyle provides userBubbleStyle,
         LocalAssistantBubbleStyle provides assistantBubbleStyle,
         LocalChatFontSizeSp provides chatFontSizeSp,
-        LocalInputFontSizeSp provides inputFontSizeSp
+        LocalInputFontSizeSp provides inputFontSizeSp,
+        LocalUIDensityTokens provides remember(uiDensity) { UIDensityTokens.forDensity(uiDensity) }
     ) {
         val baseDensity = LocalDensity.current
         CompositionLocalProvider(

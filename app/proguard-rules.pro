@@ -46,6 +46,12 @@
 # 字段名一旦被混淆成 a/b/c，Gson 反射序列化发出的 JSON key 就全是乱码 → 服务端 400。
 # 故直接 keep 整个 remote 包下所有 DTO 类及其字段。
 -keep class com.aiverse.feature.agent.data.remote.** { *; }
+# Git 模块的 GitHub REST API DTO 同理：GitHubIssuesRepository 用 Gson + TypeToken 反射解析
+# GitHubIssue/GitHubComment 等，其 title/number/body/labels/assignees 等字段未标 @SerializedName，
+# 若被 R8 混淆成 a/b/c，Gson 反射映射不到 → Unsafe 绕过构造器造出字段全 null 的对象 →
+# 首页 Issues tab 渲染 Text(issue.title) 在 measure 期 NPE 崩溃（debug 正常、release 崩）。
+# 故 keep 整个 git model 包，与上面 agent remote 包保持一致。
+-keep class com.aiverse.feature.git.domain.model.** { *; }
 # 任何带 @SerializedName 的字段
 -keepclassmembers class * {
     @com.google.gson.annotations.SerializedName <fields>;

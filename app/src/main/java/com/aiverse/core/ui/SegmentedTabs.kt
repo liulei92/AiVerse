@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.theme.LocalHyperOSStyle
+import com.aiverse.core.theme.LocalUIDensityTokens
 
 /**
  * iOS 风分段控件：中性灰轨道 + 白色（深色下为抬起灰）滑块，选中时滑块弹性滑到对应一段。
@@ -52,6 +53,9 @@ fun SegmentedTabs(
 ) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val hyperOS = LocalHyperOSStyle.current
+    val t = LocalUIDensityTokens.current
+    val trackRadius = if (hyperOS) t.rLg * 1.43f else t.rMdLarge
+    val thumbRadius = if (hyperOS) t.rLg * 1.21f else t.buttonCorner
     val trackColor = MaterialTheme.semanticColors.mutedSurface
     val thumbColor = if (dark) MaterialTheme.semanticColors.capsuleSurface else MaterialTheme.semanticColors.cardSurface
 
@@ -59,7 +63,7 @@ fun SegmentedTabs(
         modifier = modifier
             .fillMaxWidth()
             .height(if (hyperOS) 40.dp else 42.dp)
-            .clip(RoundedCornerShape(if (hyperOS) 20.dp else 12.dp))
+            .clip(RoundedCornerShape(trackRadius))
             .background(trackColor)
             .padding(3.dp)
             .alpha(if (enabled) 1f else 0.55f)
@@ -76,7 +80,7 @@ fun SegmentedTabs(
                 .offset(x = thumbOffset)
                 .width(thumbWidth)
                 .fillMaxHeight(),
-            shape = RoundedCornerShape(if (hyperOS) 17.dp else 9.dp),
+            shape = RoundedCornerShape(thumbRadius),
             color = thumbColor,
             shadowElevation = 2.dp,
             content = {}
@@ -88,7 +92,7 @@ fun SegmentedTabs(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(if (hyperOS) 17.dp else 9.dp))
+                        .clip(RoundedCornerShape(thumbRadius))
                         // 禁用点击波纹：选中滑块位移已是反馈，ripple 残留的深色阴影反而扎眼。
                         // 锁定时完全去掉 clickable（含无障碍点击语义），再叠整体置灰。
                         .then(

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aiverse.R
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
 import compose.icons.FeatherIcons
@@ -110,6 +111,7 @@ fun SwipeToDeleteRow(
         }
         return
     }
+    val t = LocalUIDensityTokens.current
     val density = LocalDensity.current
     val revealPx = remember(density) { with(density) { -112.dp.toPx() } }
     val offsetX = remember { Animatable(0f) }
@@ -138,9 +140,9 @@ fun SwipeToDeleteRow(
                         scaleX = (0.4f + 0.6f * progress).coerceIn(0f, 1f)
                         scaleY = (0.7f + 0.3f * progress).coerceIn(0f, 1f)
                     }
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(t.buttonCorner))
                     .background(buttonBg)
-                    .border(1.dp, buttonBorder, RoundedCornerShape(10.dp))
+                    .border(1.dp, buttonBorder, RoundedCornerShape(t.buttonCorner))
                     .clickable(enabled = deleteEnabled) {
                         coroutineScope.launch {
                             offsetX.animateTo(0f)

@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.Spacing
 
 /**
@@ -96,6 +97,7 @@ fun AdaptiveModalBottomSheet(
     dialogMaxWidth: Dp = 560.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val t = LocalUIDensityTokens.current
     if (isCompactWidth()) {
         val flingFix = rememberSheetFlingFix(sheetState)
         ModalBottomSheet(
@@ -131,7 +133,7 @@ fun AdaptiveModalBottomSheet(
                     .fillMaxWidth()
                     .padding(horizontal = Spacing.lg, vertical = Spacing.xl)
                     .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.85f).dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(t.rXl),
                 color = containerColor,
                 contentColor = contentColor,
                 tonalElevation = tonalElevation

@@ -9,6 +9,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aiverse.core.net.AppProxy
 import com.aiverse.core.theme.ChatBubbleStyle
+import com.aiverse.core.theme.ThemePackage
+import com.aiverse.core.theme.UIDensity
 import com.aiverse.core.ui.overlay.OverlayBallService
 import com.aiverse.core.util.ApkInstaller
 import com.aiverse.core.util.FileLogger
@@ -96,6 +98,7 @@ import com.aiverse.feature.settings.data.repository.ProxyConfig
 import com.aiverse.feature.settings.data.repository.ProxySettingsRepository
 import com.aiverse.feature.settings.data.repository.ScreenOnSettingsRepository
 import com.aiverse.feature.settings.data.repository.StartupSessionMode
+import com.aiverse.feature.settings.data.repository.ThemePackageManager
 import com.aiverse.feature.settings.data.repository.ThemeSettingsRepository
 import com.aiverse.feature.settings.data.repository.ToolSafetySettingsRepository
 import com.aiverse.feature.settings.data.repository.BackgroundSettingsRepository
@@ -134,6 +137,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.ByteArrayInputStream
@@ -380,6 +385,7 @@ class SettingsViewModel @Inject constructor(
     private val modelMetadataService: ModelMetadataService,
     private val logSettingsRepository: LogSettingsRepository,
     private val themeSettingsRepository: ThemeSettingsRepository,
+    private val themePackageManager: ThemePackageManager,
     private val backgroundSettingsRepository: BackgroundSettingsRepository,
     private val appearanceSettingsRepository: AppearanceSettingsRepository,
     private val skillInstallSettingsRepository: SkillInstallSettingsRepository,
@@ -431,6 +437,9 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
     private companion object {
         const val MAX_LOG_LINES = 1200
+
+        /** 主题包 JSON 编解码：忽略未知字段，便于向前兼容。 */
+        val themeJson = Json { ignoreUnknownKeys = true }
 
         /** 正式包的 applicationId：只有它能应用内覆盖安装 GitHub Releases 里的包。 */
         const val RELEASE_APPLICATION_ID = "com.aiverse"
@@ -699,6 +708,10 @@ class SettingsViewModel @Inject constructor(
 
     private val _uiFontScale = MutableStateFlow(AppearanceSettingsRepository.DEFAULT_UI_FONT_SCALE)
     val uiFontScale: StateFlow<Float> = _uiFontScale.asStateFlow()
+
+    /** 界面密度档（紧凑/标准/舒适），作用于间距/圆角/组件高度（dp）。默认标准档。 */
+    private val _uiDensity = MutableStateFlow(UIDensity.STANDARD)
+    val uiDensity: StateFlow<UIDensity> = _uiDensity.asStateFlow()
 
     /** 三档字号落盘的节流 job（滑块拖动防积压），见 [setChatFontSizeSp] 等。 */
     private var fontWriteJob: Job? = null
@@ -1187,6 +1200,12 @@ class SettingsViewModel @Inject constructor(
             launch {
                 appearanceSettingsRepository.uiFontScaleFlow.collectLatest {
                     _uiFontScale.value = it
+                }
+            }
+
+            launch {
+                appearanceSettingsRepository.uiDensityFlow.collectLatest {
+                    _uiDensity.value = it
                 }
             }
 
@@ -2484,10 +2503,38 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /** 恢复外观为默认值（清空三档字号，回到仓库默认）。 */
+    /** 设置界面密度档（间距/圆角/组件高度随档缩放）。 */
+    fun setUiDensity(density: UIDensity) {
+        viewModelScope.launch {
+            appearanceSettingsRepository.setUiDensity(density)
+        }
+    }
+
+    /** 恢复外观为默认值（清空三档字号与密度档，回到仓库默认）。 */
     fun restoreAppearanceDefaults() {
         viewModelScope.launch {
-            appearanceSettingsRepository.restoreFontSizes(null, null, null)
+            appearanceSettingsRepository.restoreFontSizes(null, null, null, null)
+        }
+    }
+
+    /** 导出当前外观为一份主题包 JSON（供 UI 层分享 / 复制）；失败回 null。 */
+    fun exportThemePackage(onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            onResult(runCatching {
+                themeJson.encodeToString(themePackageManager.currentPackage())
+            }.getOrNull())
+        }
+    }
+
+    /** 导入并整体套用一份主题包 JSON；成功 / 失败通过回调回传，异常内部吞掉不崩溃。 */
+    fun importThemePackage(json: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val pkg = runCatching { themeJson.decodeFromString<ThemePackage>(json) }.getOrNull()
+            if (pkg == null) {
+                onResult(false)
+                return@launch
+            }
+            onResult(runCatching { themePackageManager.applyPackage(pkg) }.isSuccess)
         }
     }
 

@@ -106,6 +106,16 @@
     <string name="settings_appearance_input_font">Input Font Size</string>
     <string name="settings_appearance_ui_scale">UI Scale</string>
     <string name="settings_appearance_reset">Restore Defaults</string>
+    <string name="settings_appearance_theme_package">Theme Package</string>
+    <string name="settings_appearance_theme_package_export">Export Theme Package</string>
+    <string name="settings_appearance_theme_package_export_desc">Pack current appearance settings into JSON to share or back up</string>
+    <string name="settings_appearance_theme_package_import">Import Theme Package</string>
+    <string name="settings_appearance_theme_package_import_desc">Read JSON from a file and apply it in one tap</string>
+    <string name="settings_appearance_theme_package_applied">Theme package applied</string>
+    <string name="settings_appearance_theme_package_apply_failed">Failed to apply; the theme package may be invalid</string>
+    <string name="settings_appearance_theme_package_parse_failed">Parse failed; not a valid theme package</string>
+    <string name="settings_appearance_theme_package_export_failed">Export failed</string>
+    <string name="settings_appearance_theme_package_copied">Copied to clipboard</string>
     <string name="settings_appearance_input_bar">Input Bar Shortcuts</string>
     <string name="settings_inputbar_mcp">MCP Quick Button</string>
     <string name="settings_inputbar_thinking">Thinking Effort Quick Button</string>

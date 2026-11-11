@@ -56,7 +56,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.aiverse.core.theme.Radius
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.theme.LocalHyperOSStyle
@@ -87,6 +87,7 @@ fun FloatingTabBar(
     val coroutineScope = rememberCoroutineScope()
     val isLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
     val hyperOS = LocalHyperOSStyle.current
+    val t = LocalUIDensityTokens.current
 
     val contentAlpha by animateFloatAsState(
         targetValue = if (isScrolling) 0.35f else 1f,
@@ -203,7 +204,7 @@ fun FloatingTabBar(
                 .graphicsLayer { alpha = contentAlpha }
                 .shadow(
                     elevation = if (hyperOS) 3.dp else 8.dp,
-                    shape = RoundedCornerShape(Radius.pill),
+                    shape = RoundedCornerShape(t.rPill),
                     ambientColor = if (hyperOS) {
                         if (isLight) Color.Black.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.30f)
                     } else {
@@ -215,9 +216,9 @@ fun FloatingTabBar(
                         if (isLight) Color.Black.copy(alpha = 0.14f) else Color(0xFF040A14).copy(alpha = 0.50f)
                     }
                 )
-                .clip(RoundedCornerShape(Radius.pill))
+                .clip(RoundedCornerShape(t.rPill))
                 .background(glassBackgroundBrush)
-                .border(1.dp, glassBorderBrush, RoundedCornerShape(Radius.pill))
+                .border(1.dp, glassBorderBrush, RoundedCornerShape(t.rPill))
                 .padding(horizontal = 6.dp, vertical = 3.dp)
                 .pointerInput(items) {
                     detectDragGesturesAfterLongPress(
@@ -297,14 +298,14 @@ fun FloatingTabBar(
                         .width(indicatorWidthDp)
                         .height(44.dp)
                         .shadow(
-                            elevation = 2.dp,
-                            shape = RoundedCornerShape(Radius.pill),
+                            elevation = t.xs / 2,
+                            shape = RoundedCornerShape(t.rPill),
                             ambientColor = Color.Black.copy(alpha = 0.06f),
                             spotColor = Color.Black.copy(alpha = 0.08f)
                         )
-                        .clip(RoundedCornerShape(Radius.pill))
+                        .clip(RoundedCornerShape(t.rPill))
                         .background(indicatorBrush)
-                        .border(1.dp, indicatorBorderBrush, RoundedCornerShape(Radius.pill))
+                        .border(1.dp, indicatorBorderBrush, RoundedCornerShape(t.rPill))
                 )
             }
 
@@ -344,7 +345,7 @@ fun FloatingTabBar(
                                 scaleX = tabScale
                                 scaleY = tabScale
                             }
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(t.rXl))
                             .clickable(
                                 interactionSource = interactionSource,
                                 indication = null,
@@ -408,6 +409,7 @@ fun FloatingTabBar(
 
     val isLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
     val hyperOS = LocalHyperOSStyle.current
+    val t = LocalUIDensityTokens.current
     val colorScheme = MaterialTheme.colorScheme
     val surfaceColor = colorScheme.surface
     val surfaceVariantColor = colorScheme.surfaceVariant
@@ -517,7 +519,7 @@ fun FloatingTabBar(
                 .graphicsLayer { alpha = contentAlpha }
                 .shadow(
                     elevation = if (hyperOS) 3.dp else 8.dp,
-                    shape = RoundedCornerShape(Radius.pill),
+                    shape = RoundedCornerShape(t.rPill),
                     ambientColor = if (hyperOS) {
                         if (isLight) Color.Black.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.30f)
                     } else {
@@ -529,9 +531,9 @@ fun FloatingTabBar(
                         if (isLight) Color.Black.copy(alpha = 0.14f) else Color(0xFF040A14).copy(alpha = 0.50f)
                     }
                 )
-                .clip(RoundedCornerShape(Radius.pill))
+                .clip(RoundedCornerShape(t.rPill))
                 .background(glassBackgroundBrush)
-                .border(1.dp, glassBorderBrush, RoundedCornerShape(Radius.pill))
+                .border(1.dp, glassBorderBrush, RoundedCornerShape(t.rPill))
                 .padding(horizontal = 6.dp, vertical = 3.dp)
                 .pointerInput(items) {
                     detectDragGesturesAfterLongPress(
@@ -592,14 +594,14 @@ fun FloatingTabBar(
                         .width(indicatorWidthDp)
                         .height(44.dp)
                         .shadow(
-                            elevation = 2.dp,
-                            shape = RoundedCornerShape(Radius.pill),
+                            elevation = t.xs / 2,
+                            shape = RoundedCornerShape(t.rPill),
                             ambientColor = Color.Black.copy(alpha = 0.06f),
                             spotColor = Color.Black.copy(alpha = 0.08f)
                         )
-                        .clip(RoundedCornerShape(Radius.pill))
+                        .clip(RoundedCornerShape(t.rPill))
                         .background(indicatorBrush)
-                        .border(1.dp, indicatorBorderBrush, RoundedCornerShape(Radius.pill))
+                        .border(1.dp, indicatorBorderBrush, RoundedCornerShape(t.rPill))
                 )
             }
 
@@ -639,7 +641,7 @@ fun FloatingTabBar(
                                 scaleX = tabScale
                                 scaleY = tabScale
                             }
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(t.rXl))
                             .clickable(
                                 interactionSource = interactionSource,
                                 indication = null,

@@ -2,7 +2,6 @@ package com.aiverse.core.ui
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
@@ -19,7 +18,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.aiverse.core.theme.Radius
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.semanticColors
 
 /**
@@ -92,10 +91,12 @@ fun AppTextField(
     readOnly: Boolean = false,
     enabled: Boolean = true,
     textStyle: TextStyle = MaterialTheme.typography.bodyMedium,
-    shape: Shape = RoundedCornerShape(Radius.mdLarge),
+    shape: Shape? = null,
     colors: TextFieldColors = appTextFieldColors(),
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
 ) {
+    val t = LocalUIDensityTokens.current
+    val resolvedShape = shape ?: t.fieldShape
     val actualLabel: (@Composable () -> Unit)? = labelComposable ?: label?.let { { Text(it) } }
     val actualPlaceholder: (@Composable () -> Unit)? = placeholderComposable ?: placeholder?.let { { Text(it) } }
 
@@ -119,7 +120,7 @@ fun AppTextField(
         maxLines = maxLines,
         minLines = minLines,
         interactionSource = interactionSource,
-        shape = shape,
+        shape = resolvedShape,
         colors = colors
     )
 }

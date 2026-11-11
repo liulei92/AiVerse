@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -202,7 +204,11 @@ fun ImageViewerHost(
                     bitmap = loaded.bitmap,
                     contentDescription = request.title.ifBlank { stringResource(R.string.common_image_preview) },
                     onTap = state::dismiss,
-                    modifier = Modifier.fillMaxSize()
+                    // 背板仍铺满全屏（外层 Box），但图片内容缩进安全区：否则 decorFitsSystemWindows = false
+                    // 会让长图/Fit 后顶到屏幕顶的图片钻进状态栏与刘海后面，顶部内容被遮（issue #48）。
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
                 )
             }
 
