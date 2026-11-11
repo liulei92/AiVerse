@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -53,7 +52,10 @@ import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -113,6 +115,7 @@ import com.aiverse.feature.agent.presentation.AgentUIState
 import com.aiverse.feature.agent.presentation.ChatSearchHit
 import com.aiverse.feature.agent.presentation.ChatSearchState
 import com.aiverse.feature.agent.presentation.BrowseClipboard
+import com.aiverse.feature.agent.presentation.BrowseSortMode
 import com.aiverse.feature.agent.presentation.FileBrowseState
 import com.aiverse.feature.agent.presentation.FileTreeNode
 import com.aiverse.feature.agent.presentation.FileTreeRoot
@@ -129,13 +132,16 @@ import compose.icons.feathericons.Clipboard
 import compose.icons.feathericons.Copy
 import compose.icons.feathericons.Download
 import compose.icons.feathericons.Edit2
+import compose.icons.feathericons.Eye
 import compose.icons.feathericons.FilePlus
 import compose.icons.feathericons.Folder
 import compose.icons.feathericons.FolderPlus
 import compose.icons.feathericons.Globe
 import compose.icons.feathericons.HardDrive
+import compose.icons.feathericons.MoreHorizontal
 import compose.icons.feathericons.RefreshCw
 import compose.icons.feathericons.Server
+import compose.icons.feathericons.Search
 import compose.icons.feathericons.Settings
 import compose.icons.feathericons.Trash2
 import compose.icons.feathericons.X
@@ -173,6 +179,10 @@ fun ChatDrawerContent(
     subSessionsByParent: Map<String, List<ChatSession>> = emptyMap(),
     browseState: FileBrowseState,
     fileTreePrefs: FileTreeDisplayPrefs = FileTreeDisplayPrefs.Default,
+    browseSort: BrowseSortMode = BrowseSortMode.NAME,
+    onBrowseSortChange: (BrowseSortMode) -> Unit = {},
+    onCollapseToPath: (String) -> Unit = {},
+    onToggleShowHiddenFiles: (Boolean) -> Unit = {},
     expandedPaths: Set<String>,
     expandingPath: String? = null,
     fileOpPaths: Set<String> = emptySet(),
@@ -377,6 +387,10 @@ fun ChatDrawerContent(
                 1 -> FileBrowserTab(
                     state = browseState,
                     fileTreePrefs = fileTreePrefs,
+                    browseSort = browseSort,
+                    onBrowseSortChange = onBrowseSortChange,
+                    onCollapseToPath = onCollapseToPath,
+                    onToggleShowHiddenFiles = onToggleShowHiddenFiles,
                     expandedPaths = expandedPaths,
                     expandingPath = expandingPath,
                     fileOpPaths = fileOpPaths,
@@ -903,6 +917,10 @@ private fun SubAgentExpandToggle(
 private fun FileBrowserTab(
     state: FileBrowseState,
     fileTreePrefs: FileTreeDisplayPrefs,
+    browseSort: BrowseSortMode,
+    onBrowseSortChange: (BrowseSortMode) -> Unit,
+    onCollapseToPath: (String) -> Unit,
+    onToggleShowHiddenFiles: (Boolean) -> Unit,
     expandedPaths: Set<String>,
     expandingPath: String?,
     fileOpPaths: Set<String>,
@@ -931,8 +949,6 @@ private fun FileBrowserTab(
     // 编辑模式：点击编辑按钮进入，行前置复选框可勾选；选中后可批量分享/导出/移动/删除
     var editMode by remember { mutableStateOf(false) }
     var selectedPaths by remember { mutableStateOf<Set<String>>(emptySet()) }
-    // 批量粘贴按钮的目标：工作区根目录路径（从树根节点取）
-    val batchRootPath = (state as? FileBrowseState.Success)?.nodes?.firstOrNull { it.root != null }?.path
     // 用户手动取消的后代（从选中文件夹的整体选中中排除），用于文件夹半选态
     var unselectedFromFolders by remember { mutableStateOf<Set<String>>(emptySet()) }
     val inSelectionMode = editMode
@@ -940,6 +956,13 @@ private fun FileBrowserTab(
     var exportPendingPaths by remember { mutableStateOf<Set<String>>(emptySet()) }
     // 导入目标目录：工作区根
     val workspaceRoot = (state as? FileBrowseState.Success)?.nodes?.firstOrNull()?.path ?: "~/workspace"
+    // 根行 ⋯ 菜单可见性
+    var showRootMenu by remember { mutableStateOf(false) }
+    // 搜索：⋯ 菜单打开后按文件名过滤当前可见节点
+    var searchActive by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    // 面包屑焦点目录：默认工作区根，展开工作区目录时跟随，点上级折回
+    var focusPath by remember { mutableStateOf(workspaceRoot) }
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
@@ -1003,8 +1026,225 @@ private fun FileBrowserTab(
             }
         }
     }
+    // 搜索过滤后的可见节点（仅按名称过滤；隐藏文件由显示偏好在后端过滤）
+    val visibleNodes = browseNodes.filter { node ->
+        searchQuery.isBlank() || node.displayName.contains(searchQuery, ignoreCase = true)
+    }
+    // 多选「全选/取消全选」：对当前可见的所有文件（非目录）切换选择
+    fun toggleSelectAll() {
+        val filePaths = visibleNodes.filter { !it.entry.isDirectory }.map { it.path }.toSet()
+        val allSelected = filePaths.isNotEmpty() && filePaths.all { isSelected(it) }
+        selectedPaths = if (allSelected) emptySet() else filePaths
+        unselectedFromFolders = emptySet()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // 顶部操作栏：面包屑（当前路径 + 点上级返回）+ 剪贴板/操作中指示 + ⋯ 菜单。
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FileTreeBreadcrumb(
+                    focusPath = focusPath,
+                    workspaceRoot = workspaceRoot,
+                    onNavigate = { path ->
+                        focusPath = path
+                        onCollapseToPath(path)
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                clipboard?.let { clip ->
+                    ClipboardIndicator(
+                        clipboard = clip,
+                        onClear = onClearClipboard
+                    )
+                }
+                if (fileOpPaths.isNotEmpty()) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.padding(horizontal = Spacing.xs).size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (editMode) {
+                    TextButton(
+                        onClick = {
+                            editMode = false
+                            selectedPaths = emptySet()
+                            unselectedFromFolders = emptySet()
+                        },
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = 0.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text(stringResource(R.string.common_done))
+                    }
+                }
+                // 根行工具收进 ⋯ 菜单：新建/导入/搜索/显示隐藏/编辑/刷新 + 排序方式。
+                Box {
+                    IconButton(
+                        onClick = { showRootMenu = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = FeatherIcons.MoreHorizontal,
+                            contentDescription = stringResource(R.string.common_more),
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showRootMenu,
+                        onDismissRequest = { showRootMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.file_browser_new_file)) },
+                            leadingIcon = { Icon(FeatherIcons.FilePlus, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                            onClick = {
+                                showRootMenu = false
+                                creating = CreateTarget(workspaceRoot, CreateKind.FILE)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.file_browser_new_folder)) },
+                            leadingIcon = { Icon(FeatherIcons.FolderPlus, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                            onClick = {
+                                showRootMenu = false
+                                creating = CreateTarget(workspaceRoot, CreateKind.FOLDER)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.file_browser_import)) },
+                            leadingIcon = { Icon(FeatherIcons.Upload, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                            onClick = {
+                                showRootMenu = false
+                                importLauncher.launch(arrayOf("*/*"))
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.file_browser_search)) },
+                            leadingIcon = { Icon(FeatherIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                            onClick = {
+                                showRootMenu = false
+                                searchActive = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.file_browser_show_hidden)) },
+                            leadingIcon = { Icon(FeatherIcons.Eye, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                            trailingIcon = {
+                                if (fileTreePrefs.showHiddenFiles) {
+                                    Icon(
+                                        FeatherIcons.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            },
+                            onClick = {
+                                showRootMenu = false
+                                onToggleShowHiddenFiles(!fileTreePrefs.showHiddenFiles)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.file_browser_edit_mode)) },
+                            leadingIcon = { Icon(FeatherIcons.Edit2, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                            trailingIcon = {
+                                if (editMode) {
+                                    Icon(
+                                        FeatherIcons.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            },
+                            onClick = {
+                                showRootMenu = false
+                                editMode = !editMode
+                                if (editMode) selectedPaths = emptySet()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.file_browser_refresh)) },
+                            leadingIcon = { Icon(FeatherIcons.RefreshCw, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                            onClick = {
+                                showRootMenu = false
+                                onRefresh()
+                            }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = Spacing.xs))
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.file_browser_sort_name)) },
+                            trailingIcon = {
+                                if (browseSort == BrowseSortMode.NAME) {
+                                    Icon(FeatherIcons.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
+                            },
+                            onClick = {
+                                showRootMenu = false
+                                onBrowseSortChange(BrowseSortMode.NAME)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.file_browser_sort_size)) },
+                            trailingIcon = {
+                                if (browseSort == BrowseSortMode.SIZE) {
+                                    Icon(FeatherIcons.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
+                            },
+                            onClick = {
+                                showRootMenu = false
+                                onBrowseSortChange(BrowseSortMode.SIZE)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.file_browser_sort_modified)) },
+                            trailingIcon = {
+                                if (browseSort == BrowseSortMode.MODIFIED) {
+                                    Icon(FeatherIcons.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
+                            },
+                            onClick = {
+                                showRootMenu = false
+                                onBrowseSortChange(BrowseSortMode.MODIFIED)
+                            }
+                        )
+                    }
+                }
+            }
+            // 搜索输入：按文件名过滤当前可见节点。
+            if (searchActive) {
+                ModelSearchField(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    placeholder = stringResource(R.string.file_browser_search_hint),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.md),
+                    trailing = {
+                        IconButton(
+                            onClick = {
+                                searchActive = false
+                                searchQuery = ""
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = FeatherIcons.X,
+                                contentDescription = stringResource(R.string.file_browser_cancel_selection),
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                )
+            }
+            // 文件树主体
+            Box(modifier = Modifier.weight(1f)) {
         when (state) {
             is FileBrowseState.Loading -> Box(
                 modifier = Modifier.fillMaxSize(),
@@ -1037,9 +1277,9 @@ private fun FileBrowserTab(
                 // 以实现整棵树统一横向平移（而非每行各自滚动）。
                 // 逐个 measure 在大目录下会在组合期同步跑上千次文本测量；先按「缩进 + 字符宽度权重」
                 // 挑出最宽的那一行，只对它做一次真实测量。估算不精确，但这里只用来给横向滚动留够宽度。
-                val maxContentPx = remember(state.nodes, textStyle, indentWidth) {
+                val maxContentPx = remember(visibleNodes, textStyle, indentWidth) {
                     with(density) {
-                        val widest = state.nodes.maxByOrNull { node ->
+                        val widest = visibleNodes.maxByOrNull { node ->
                             node.depth * 4 + node.displayName.sumOf { ch -> if (ch.code > 0x2E80) 2 else 1 }
                         } ?: return@with 0
                         val textW = textMeasurer.measure(widest.displayName, textStyle).size.width
@@ -1055,7 +1295,7 @@ private fun FileBrowserTab(
                             .fillMaxHeight()
                             .horizontalScroll(hScroll)
                     ) {
-                        items(state.nodes, key = { it.path }) { node ->
+                        items(visibleNodes, key = { it.path }) { node ->
                             val selState = selectionStateOf(node)
                             FileTreeRow(
                                 node = node,
@@ -1071,7 +1311,11 @@ private fun FileBrowserTab(
                                         // 编辑模式：文件夹→进入查看，文件→勾选
                                         inSelectionMode && node.entry.isDirectory -> onToggleExpand(node.path)
                                         inSelectionMode -> toggleSelect(node)
-                                        node.entry.isDirectory -> onToggleExpand(node.path)
+                                        node.entry.isDirectory -> {
+                                            onToggleExpand(node.path)
+                                            // 展开工作区目录时，面包屑跟随到该目录
+                                            if (node.path.startsWith(workspaceRoot)) focusPath = node.path
+                                        }
                                         else -> onOpenFile(node.path)
                                     }
                                 },
@@ -1097,69 +1341,24 @@ private fun FileBrowserTab(
                 }
             }
         }
-
-        // 右上角操作排：剪贴板指示器（有背景、有边框，与无背景的刷新图标区分）+ 刷新按钮。
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(Spacing.xs),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            clipboard?.let { clip ->
-                ClipboardIndicator(
-                    clipboard = clip,
-                    onClear = onClearClipboard,
-                    modifier = Modifier.padding(end = Spacing.xs)
-                )
-            }
-            if (fileOpPaths.isNotEmpty()) {
-                CircularProgressIndicator(
-                    modifier = Modifier.padding(end = Spacing.xs).size(16.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            IconButton(
-                onClick = { importLauncher.launch(arrayOf("*/*")) },
-                modifier = Modifier.size(32.dp)
+        if (state is FileBrowseState.Success && searchActive && searchQuery.isNotBlank() && visibleNodes.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = FeatherIcons.Upload,
-                    contentDescription = stringResource(R.string.file_browser_import),
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(
-                onClick = {
-                    editMode = !editMode
-                    if (editMode) selectedPaths = emptySet()
-                },
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = FeatherIcons.Edit2,
-                    contentDescription = stringResource(R.string.file_browser_edit_mode),
-                    modifier = Modifier.size(16.dp),
-                    tint = if (editMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(
-                onClick = onRefresh,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = FeatherIcons.RefreshCw,
-                    contentDescription = stringResource(R.string.file_browser_refresh),
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                Text(
+                    text = stringResource(R.string.file_browser_search_no_match),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
-        // 多选批量操作栏：编辑模式且选中后底部显示分享/导出/复制/移动/粘贴/删除/取消。
-        // FlowRow 自动换行：窄屏下 7 个动作全部可见，不再横向滚动；容器圆角与其他浮层保持一致。
+            }
+        }
+        // 多选批量操作栏：编辑模式且选中后底部单行显示分享/复制/移动/删除/更多/取消；
+        // 低频的导出/全选收进「更多」；容器圆角与其他浮层保持一致。
         if (inSelectionMode && selectedPaths.isNotEmpty()) {
-            val pasteEnabled = batchCut.isNotEmpty()
+            var showSelectionMore by remember { mutableStateOf(false) }
             Surface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -1169,29 +1368,22 @@ private fun FileBrowserTab(
                 shadowElevation = 8.dp,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
-                FlowRow(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
                         .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
                 ) {
                     Text(
                         text = stringResource(R.string.file_browser_selected_count, selectedPaths.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .align(Alignment.CenterVertically)
-                            .padding(horizontal = Spacing.xs)
+                        modifier = Modifier.padding(horizontal = Spacing.xs)
                     )
                     IconButton(onClick = { onShareEntries(selectedPaths) }, modifier = Modifier.size(36.dp)) {
                         Icon(FeatherIcons.Share2, contentDescription = stringResource(R.string.file_browser_share), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
-                    }
-                    IconButton(onClick = {
-                        exportPendingPaths = selectedPaths
-                        exportLauncher.launch("export_${System.currentTimeMillis()}.zip")
-                    }, modifier = Modifier.size(36.dp)) {
-                        Icon(FeatherIcons.Download, contentDescription = stringResource(R.string.file_browser_export), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
                     }
                     IconButton(onClick = {
                         onCopyEntries(selectedPaths)
@@ -1207,24 +1399,34 @@ private fun FileBrowserTab(
                     }, modifier = Modifier.size(36.dp)) {
                         Icon(FeatherIcons.CornerUpRight, contentDescription = stringResource(R.string.file_browser_move), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
                     }
-                    // 粘贴：把批量剪切板内容粘贴到工作区根；复制/剪切后点任意子目录也能粘贴到那里。
-                    // 无批量剪切板内容时置灰（enabled=false），与 App 其他批量操作栏的置灰行为一致。
-                    IconButton(
-                        onClick = { batchRootPath?.let { onPasteEntries(it) } },
-                        enabled = pasteEnabled,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            FeatherIcons.Clipboard,
-                            contentDescription = stringResource(R.string.file_browser_paste_here),
-                            tint = if (pasteEnabled) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
                     // 删除：先弹二次确认，与技能/子代理/MCP/提供商/提示词页的批量删除确认保持一致。
                     IconButton(onClick = { showBatchDeleteConfirm = true }, modifier = Modifier.size(36.dp)) {
                         Icon(FeatherIcons.Trash2, contentDescription = stringResource(R.string.common_delete), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                    }
+                    // 更多：导出/全选等低频动作收进这里。
+                    Box {
+                        IconButton(onClick = { showSelectionMore = true }, modifier = Modifier.size(36.dp)) {
+                            Icon(FeatherIcons.MoreHorizontal, contentDescription = stringResource(R.string.common_more), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
+                        }
+                        DropdownMenu(expanded = showSelectionMore, onDismissRequest = { showSelectionMore = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.file_browser_export)) },
+                                leadingIcon = { Icon(FeatherIcons.Download, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                onClick = {
+                                    showSelectionMore = false
+                                    exportPendingPaths = selectedPaths
+                                    exportLauncher.launch("export_${System.currentTimeMillis()}.zip")
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.file_browser_select_all)) },
+                                leadingIcon = { Icon(FeatherIcons.CheckSquare, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                onClick = {
+                                    showSelectionMore = false
+                                    toggleSelectAll()
+                                }
+                            )
+                        }
                     }
                     IconButton(onClick = { selectedPaths = emptySet(); unselectedFromFolders = emptySet(); editMode = false }, modifier = Modifier.size(36.dp)) {
                         Icon(FeatherIcons.X, contentDescription = stringResource(R.string.file_browser_cancel_selection), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
@@ -1441,6 +1643,64 @@ private fun ClipboardIndicator(
             tint = MaterialTheme.colorScheme.primary
         )
     }
+}
+
+/** 文件树顶部面包屑：显示焦点目录的相对路径段，点非末段「返回上级」（折叠更深层）。 */
+@Composable
+private fun FileTreeBreadcrumb(
+    focusPath: String,
+    workspaceRoot: String,
+    onNavigate: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val segments = buildBreadcrumbSegments(focusPath, workspaceRoot)
+    Row(
+        modifier = modifier.horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        segments.forEachIndexed { index, (label, path) ->
+            if (index > 0) {
+                Icon(
+                    imageVector = FeatherIcons.ChevronRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+            val isLast = index == segments.lastIndex
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(enabled = !isLast) { onNavigate(path) }
+                    .padding(horizontal = Spacing.xs, vertical = 2.dp)
+            )
+        }
+    }
+}
+
+/** 把焦点目录拆成面包屑段：根段用「workspace」，其余为逐级目录名，携带累积路径供返回。 */
+private fun buildBreadcrumbSegments(focusPath: String, workspaceRoot: String): List<Pair<String, String>> {
+    val base = workspaceRoot.trimEnd('/')
+    if (!focusPath.startsWith(base)) {
+        // 非工作区根（如容器根）：仅显示末段名，不可导航。
+        val label = focusPath.trim('/').substringAfterLast('/').ifEmpty { focusPath }
+        return listOf(label to focusPath)
+    }
+    val rel = focusPath.removePrefix(base).trim('/')
+    val parts = if (rel.isEmpty()) emptyList() else rel.split("/")
+    val segments = mutableListOf<Pair<String, String>>()
+    var acc = base
+    segments += "workspace" to base
+    for (p in parts) {
+        acc = "$acc/$p"
+        segments += p to acc
+    }
+    return segments
 }
 
 /** 文件树节点长按弹出的功能菜单：目录（含工作区根）可新建，非根节点可复制/剪切/重命名/删除，
@@ -1665,7 +1925,7 @@ private fun FileTreeRow(
             // 文件名显示偏好：单行横向滚动（历史默认）/ 最多两行换行 / 单行省略号。
             maxLines = if (fileNameDisplay == FileNameDisplay.TWO_LINES) 2 else 1,
             softWrap = fileNameDisplay == FileNameDisplay.TWO_LINES,
-            overflow = if (fileNameDisplay == FileNameDisplay.SINGLE_LINE_ELLIPSIS) TextOverflow.Ellipsis else null
+            overflow = if (fileNameDisplay == FileNameDisplay.SINGLE_LINE_ELLIPSIS) TextOverflow.Ellipsis else TextOverflow.Clip
         )
     }
 }

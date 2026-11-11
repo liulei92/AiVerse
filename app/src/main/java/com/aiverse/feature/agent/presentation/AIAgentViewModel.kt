@@ -625,6 +625,15 @@ class AIAgentViewModel @Inject constructor(
     /** 侧边栏「文件」Tab 已展开的目录集合（容器路径）。含工作区根：根也可折叠，默认展开；按工作区持久化。 */
     private val _expandedPaths = MutableStateFlow(setOf(WorkspacePathMapper.CONTAINER_ROOT))
 
+    /** 文件树同级排序方式（内存态，重启回默认按名称）。 */
+    private val _browseSortMode = MutableStateFlow(BrowseSortMode.NAME)
+    val browseSortMode: StateFlow<BrowseSortMode> = _browseSortMode.asStateFlow()
+
+    /** 设置文件树同级排序方式。 */
+    fun setBrowseSortMode(mode: BrowseSortMode) {
+        _browseSortMode.value = mode
+    }
+
     /** 文件树展开状态按工作区持久化（重启保留）；key 为工作区路径，值为已展开的容器路径集合。 */
     private val expansionPrefs = context.getSharedPreferences("file_tree_expansion", Context.MODE_PRIVATE)
 
@@ -671,9 +680,9 @@ class AIAgentViewModel @Inject constructor(
      * 只监听展开中的目录、不递归整棵树，避免大仓库开出大量 inotify 句柄。
      */
     val browseState: StateFlow<FileBrowseState> = combine(
-        _expandedPaths, containerRootNode, appearanceSettingsRepository.fileTreeDisplayPrefsFlow
-    ) { expanded, root, prefs -> Triple(expanded, root, prefs) }
-        .flatMapLatest { (expanded, root, prefs) ->
+        _expandedPaths, containerRootNode, appearanceSettingsRepository.fileTreeDisplayPrefsFlow, _browseSortMode
+    ) { expanded, root, prefs, sort -> BrowseTreeBuild(expanded, root, prefs, sort) }
+        .flatMapLatest { (expanded, root, prefs, sort) ->
             val watched = expanded + WorkspacePathMapper.CONTAINER_ROOT
             val triggers = merge(
                 watched.map { fileChangeHub.watchWorkspace(it).asDirtySignal() }.merge().debounce(BROWSE_DEBOUNCE_MS),
@@ -683,8 +692,8 @@ class AIAgentViewModel @Inject constructor(
             flow {
                 // 首次产出前由 stateIn 初值 Loading 占位；后续展开/折叠/刷新不再回到 Loading，
                 // StateFlow 保留上一份 Success 直到新树就绪，避免闪加载动画与滚动位置丢失。
-                emit(buildBrowseTree(expanded, root, prefs))
-                triggers.collect { emit(buildBrowseTree(expanded, root, prefs)) }
+                emit(buildBrowseTree(expanded, root, prefs, sort))
+                triggers.collect { emit(buildBrowseTree(expanded, root, prefs, sort)) }
             }.flowOn(Dispatchers.IO)
         }
         // 新树已就绪：清掉展开等待态（无论成功/出错都清，避免转圈卡死）。
@@ -692,7 +701,7 @@ class AIAgentViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FileBrowseState.Loading)
 
     /** 读取工作区根与当前容器根，按 [expanded] 递归展开，产出扁平的可见节点列表；工作区根读取失败则整体报错。 */
-    private fun buildBrowseTree(expanded: Set<String>, containerRoot: FileTreeRoot.Container, prefs: FileTreeDisplayPrefs): FileBrowseState {
+    private fun buildBrowseTree(expanded: Set<String>, containerRoot: FileTreeRoot.Container, prefs: FileTreeDisplayPrefs, sortMode: BrowseSortMode): FileBrowseState {
         val workspaceRoot = WorkspacePathMapper.CONTAINER_ROOT
         val workspaceEntries = runCatching { fileAccess.listFiles(workspaceRoot) }.getOrElse { e ->
             FileLogger.w(TAG, "列目录失败: $workspaceRoot", e)
@@ -703,7 +712,7 @@ class AIAgentViewModel @Inject constructor(
         if (workspaceRoot in expanded) {
             appendBrowseChildren(
                 workspaceRoot, workspaceEntries, depth = 1, expanded = expanded,
-                ignorePatterns = loadRootGitignore(workspaceRoot), relParts = emptyList(), prefs = prefs, out = nodes
+                ignorePatterns = loadRootGitignore(workspaceRoot), relParts = emptyList(), prefs = prefs, sortMode = sortMode, out = nodes
             )
         }
         // 当前容器根：读不到（容器未安装、远程未连接）时只把该行标红，不影响工作区那棵。
@@ -717,7 +726,7 @@ class AIAgentViewModel @Inject constructor(
         if (containerEntries != null) {
             appendBrowseChildren(
                 CONTAINER_FS_ROOT, containerEntries, depth = 1, expanded = expanded,
-                ignorePatterns = emptyList(), relParts = emptyList(), prefs = prefs, out = nodes
+                ignorePatterns = emptyList(), relParts = emptyList(), prefs = prefs, sortMode = sortMode, out = nodes
             )
         }
         return FileBrowseState.Success(nodes)
@@ -752,11 +761,12 @@ class AIAgentViewModel @Inject constructor(
         ignorePatterns: List<String>,
         relParts: List<String>,
         prefs: FileTreeDisplayPrefs,
+        sortMode: BrowseSortMode,
         out: MutableList<FileTreeNode>
     ) {
         // 按名字去重：文件系统的 readdir 在 FUSE 存储（外部工作区/模拟存储）上可能重复返回同一条目，
         // AOSP 的 ReaddirHelper 亦做同样处理。同名条目会产生重复的节点 path，撞坏 LazyColumn 的 key。
-        for (entry in entries.distinctBy { it.name }.sortedWith(BROWSE_ORDER)) {
+        for (entry in entries.distinctBy { it.name }.sortedWith(browseComparator(sortMode))) {
             // 隐藏文件偏好：关闭时跳过 .gitignore、dotfile 等以点开头的条目（含目录，其子项不再展开）。
             if (!prefs.showHiddenFiles && entry.name.startsWith(".")) continue
             val path = childPathPrefix(parent) + entry.name
@@ -770,8 +780,27 @@ class AIAgentViewModel @Inject constructor(
             }
             val children = runCatching { fileAccess.listFiles(path) }.getOrNull()
             out += FileTreeNode(entry, path, depth, isExpanded = true, hasError = children == null, ignored = ignored)
-            if (children != null) appendBrowseChildren(path, children, depth + 1, expanded, ignorePatterns, parts, prefs, out)
+            if (children != null) appendBrowseChildren(path, children, depth + 1, expanded, ignorePatterns, parts, prefs, sortMode, out)
         }
+    }
+
+    /** 文件树构建入参（展开集 + 容器根 + 显示偏好 + 排序方式），供 combine 四元组用。 */
+    private data class BrowseTreeBuild(
+        val expanded: Set<String>,
+        val root: FileTreeRoot.Container,
+        val prefs: FileTreeDisplayPrefs,
+        val sort: BrowseSortMode
+    )
+
+    /** 树内同级排序比较器：目录始终在前，同类按所选排序方式排（名称不区分大小写，大小/时间降序）。 */
+    private fun browseComparator(mode: BrowseSortMode): Comparator<FileEntry> = when (mode) {
+        BrowseSortMode.NAME -> BROWSE_ORDER
+        BrowseSortMode.SIZE -> compareByDescending<FileEntry> { it.isDirectory }
+            .thenByDescending { it.size }
+            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+        BrowseSortMode.MODIFIED -> compareByDescending<FileEntry> { it.isDirectory }
+            .thenByDescending { it.lastModified }
+            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
     }
 
     fun refreshBrowse() {
@@ -789,6 +818,15 @@ class AIAgentViewModel @Inject constructor(
             _expandingPath.value = path
             current + path
         }
+        _expandedPaths.value = updated
+        saveExpansion(_currentWorkspace.value, updated)
+    }
+
+    /** 面包屑「返回上级」：把文件树折叠到指定目录（保留根到该目录的祖先与它自身展开，折叠更深层）。 */
+    fun collapseBrowseTo(path: String) {
+        val current = _expandedPaths.value
+        val keep = current.filterNot { it != path && it.startsWith(childPathPrefix(path)) }.toSet()
+        val updated = if (path in keep) keep else keep + path
         _expandedPaths.value = updated
         saveExpansion(_currentWorkspace.value, updated)
     }

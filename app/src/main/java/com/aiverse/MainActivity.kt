@@ -368,7 +368,8 @@ class MainActivity : ComponentActivity() {
                                 onboardingRepository = onboardingRepository,
                                 agreementAccepted = agreementAccepted,
                                 isContainerReady = isContainerReady,
-                                webMessageBridge = this@MainActivity.webMessageBridge
+                                webMessageBridge = this@MainActivity.webMessageBridge,
+                                fileTreeDisplayPrefs = fileTreeDisplayPrefs
                             )
                             if (agreementAccepted) {
                                 // 全局凭据弹窗：覆盖所有页面，命令行 git 缺凭据在任意页面都能弹。
@@ -455,7 +456,8 @@ fun AppNavigation(
     onboardingRepository: com.aiverse.feature.onboarding.data.OnboardingRepository,
     agreementAccepted: Boolean,
     isContainerReady: () -> Boolean,
-    webMessageBridge: com.aiverse.feature.web.WebMessageBridge
+    webMessageBridge: com.aiverse.feature.web.WebMessageBridge,
+    fileTreeDisplayPrefs: FileTreeDisplayPrefs
 ) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -551,6 +553,7 @@ fun AppNavigation(
     val expandingPath by agentViewModel.expandingPath.collectAsStateWithLifecycle()
     val fileOpPaths by agentViewModel.fileOpPaths.collectAsStateWithLifecycle()
     val browseState by agentViewModel.browseState.collectAsStateWithLifecycle()
+    val browseSortMode by agentViewModel.browseSortMode.collectAsStateWithLifecycle()
     val browseClipboard by agentViewModel.browseClipboard.collectAsStateWithLifecycle()
     val pasteConflict by agentViewModel.pasteConflict.collectAsStateWithLifecycle()
     val chatSearchQuery by agentViewModel.chatSearchQuery.collectAsStateWithLifecycle()
@@ -703,6 +706,10 @@ fun AppNavigation(
             subSessionsByParent = subSessionsByParent,
             browseState = browseState,
             fileTreePrefs = fileTreeDisplayPrefs,
+            browseSort = browseSortMode,
+            onBrowseSortChange = { agentViewModel.setBrowseSortMode(it) },
+            onCollapseToPath = { agentViewModel.collapseBrowseTo(it) },
+            onToggleShowHiddenFiles = { settingsViewModel.setShowHiddenFiles(it) },
             expandedPaths = expandedPaths,
             expandingPath = expandingPath,
             fileOpPaths = fileOpPaths,

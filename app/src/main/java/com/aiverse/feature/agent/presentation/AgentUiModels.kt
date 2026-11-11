@@ -78,6 +78,9 @@ sealed class AgentUIState {
     data class Error(val message: String) : AgentUIState()
 }
 
+/** 文件树同级目录条目的排序方式（树内同级排序，目录始终在前）。 */
+enum class BrowseSortMode { NAME, SIZE, MODIFIED }
+
 /** 侧边栏「文件」Tab 的文件树读取状态。远程模式走 SFTP/exec，读取可能失败或较慢，故区分三态。 */
 sealed interface FileBrowseState {
     data object Loading : FileBrowseState

@@ -1002,6 +1002,13 @@
     <string name="file_browser_copy_hint">已复制 %1$d 项，点击目标目录粘贴</string>
     <string name="file_browser_copy_success">已复制 %1$d 项</string>
     <string name="file_browser_edit_mode">编辑</string>
+    <string name="file_browser_search">搜索</string>
+    <string name="file_browser_search_hint">搜索文件名</string>
+    <string name="file_browser_show_hidden">显示隐藏文件</string>
+    <string name="file_browser_sort_name">按名称</string>
+    <string name="file_browser_sort_size">按大小</string>
+    <string name="file_browser_sort_modified">按修改时间</string>
+    <string name="file_browser_search_no_match">无匹配文件</string>
     <string name="editor_undo">撤销</string>
     <string name="editor_redo">重做</string>
     <string name="editor_save_success">已保存</string>
