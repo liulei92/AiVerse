@@ -1,15 +1,7 @@
 package com.aiverse.feature.agent.presentation.component
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,10 +26,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -49,15 +37,13 @@ import com.aiverse.core.theme.Radius
 import com.aiverse.core.theme.Spacing
 import com.aiverse.R
 import compose.icons.FeatherIcons
-import compose.icons.feathericons.ChevronDown
-import compose.icons.feathericons.ChevronUp
 import compose.icons.feathericons.X
 
 /**
- * 上下文用量明细面板（可折叠，内嵌在输入框上方、占满横向）：
- * 展开态顶部「已用 tokens / 上下文上限（当前模型）/ 占用比例」+ 右侧倒三角，进度条上标出自动压缩
+ * 上下文用量明细面板（内嵌在用量浮窗里）：
+ * 顶部「已用 tokens / 上下文上限（当前模型）/ 占用比例」+ 右侧 × 关闭，进度条上标出自动压缩
  * 阈值界限（如 85%），下方「达到阈值时自动压缩」说明与「立即压缩」按钮，再下为文件/MCP/思考分类明细。
- * 点右侧倒三角折叠成一行（左边进度条 + 右边展开按钮），点行/按钮重新展开完整信息。
+ * 关闭走右上角 × 或再点圆环，不再单独提供「收起」入口。
  */
 @Composable
 internal fun ContextUsageDetailCard(
@@ -70,7 +56,6 @@ internal fun ContextUsageDetailCard(
     thresholdPercent: Int = 85,
     modifier: Modifier = Modifier
 ) {
-    var collapsed by remember { mutableStateOf(false) }
     val usedRatio = detail.usedRatio.coerceIn(0f, 1f)
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -78,146 +63,100 @@ internal fun ContextUsageDetailCard(
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        AnimatedContent(
-            targetState = collapsed,
-            transitionSpec = {
-                (fadeIn(tween(200)) + expandVertically(tween(200))) togetherWith
-                    (fadeOut(tween(200)) + shrinkVertically(tween(200)))
-            },
-            label = "usageCardCollapse"
-        ) { isCollapsed ->
-        if (isCollapsed) {
-            // 折叠态：一行，左边进度条 + 右边可点展开
+        // 浮窗内不再放「收起」入口：点 × 或再点圆环即可关闭，避免多一个把卡片缩成一行飘在半空的出口。
+        Column(modifier = Modifier.padding(Spacing.sm)) {
+            // 已用 tokens / 上下文上限（当前模型）/ 占用比例 + 右侧 × 关闭
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { collapsed = false }
-                    .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Text(
+                    text = stringResource(
+                        R.string.chat_context_used_over_budget,
+                        formatTokenCount(detail.usedTokens),
+                        formatTokenCount(detail.budgetTokens)
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(Spacing.sm))
+                Text(
+                    text = percentLabel(usedRatio * 100),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = contextRingColor(usedRatio)
+                )
+                Spacer(Modifier.width(Spacing.xs))
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        FeatherIcons.X,
+                        contentDescription = stringResource(R.string.common_close),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(Spacing.xs))
+
+            // 进度条 + 阈值界限标记（如 85% 处竖线，提示到达自动压缩线，非强制）
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val thresholdX = maxWidth * (thresholdPercent.coerceIn(0, 100) / 100f)
                 LinearProgressIndicator(
                     progress = { usedRatio },
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .height(6.dp),
                     color = contextRingColor(usedRatio),
                     trackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
-                Spacer(Modifier.width(Spacing.sm))
-                Icon(
-                    FeatherIcons.ChevronDown,
-                    contentDescription = stringResource(R.string.common_expand),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .height(6.dp)
+                        .offset(x = thresholdX - 1.dp)
+                        .background(MaterialTheme.colorScheme.outline)
                 )
             }
-        } else {
-            Column(modifier = Modifier.padding(Spacing.sm)) {
-                // 已用 tokens / 上下文上限（当前模型）/ 占用比例 + 倒三角折叠
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+
+            Spacer(Modifier.height(2.dp))
+
+            // 自动压缩说明 + 立即压缩
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(R.string.chat_context_auto_compact, thresholdPercent),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = onCompact,
+                    enabled = detail.usedTokens > 0,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                 ) {
                     Text(
-                        text = stringResource(
-                            R.string.chat_context_used_over_budget,
-                            formatTokenCount(detail.usedTokens),
-                            formatTokenCount(detail.budgetTokens)
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(Spacing.sm))
-                    Text(
-                        text = percentLabel(usedRatio * 100),
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = contextRingColor(usedRatio)
-                    )
-                    Spacer(Modifier.width(Spacing.xs))
-                    IconButton(
-                        onClick = { collapsed = true },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            FeatherIcons.ChevronUp,
-                            contentDescription = stringResource(R.string.common_collapse),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = onClose,
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            FeatherIcons.X,
-                            contentDescription = stringResource(R.string.common_close),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(Spacing.xs))
-
-                // 进度条 + 阈值界限标记（如 85% 处竖线，提示到达自动压缩线，非强制）
-                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val thresholdX = maxWidth * (thresholdPercent.coerceIn(0, 100) / 100f)
-                    LinearProgressIndicator(
-                        progress = { usedRatio },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp),
-                        color = contextRingColor(usedRatio),
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    Box(
-                        modifier = Modifier
-                            .width(2.dp)
-                            .height(6.dp)
-                            .offset(x = thresholdX - 1.dp)
-                            .background(MaterialTheme.colorScheme.outline)
+                        text = stringResource(R.string.chat_context_compact_now),
+                        style = MaterialTheme.typography.labelSmall
                     )
                 }
-
-                Spacer(Modifier.height(2.dp))
-
-                // 自动压缩说明 + 立即压缩
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = stringResource(R.string.chat_context_auto_compact, thresholdPercent),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    TextButton(
-                        onClick = onCompact,
-                        enabled = detail.usedTokens > 0,
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary
-                        ),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.chat_context_compact_now),
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
-                }
-
-                // 分类明细
-                DetailRow(stringResource(R.string.chat_context_file_tokens), detail.fileTokens, detail.usedTokens, MaterialTheme.colorScheme.primary)
-                DetailRow(stringResource(R.string.chat_context_mcp_tokens), detail.mcpTokens, detail.usedTokens, MaterialTheme.colorScheme.tertiary)
-                DetailRow(stringResource(R.string.chat_context_thinking_tokens), detail.thinkingTokens, detail.usedTokens, MaterialTheme.colorScheme.secondary)
-                DetailRow(stringResource(R.string.chat_context_other_tokens), detail.otherTokens, detail.usedTokens, MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        }
+
+            // 分类明细
+            DetailRow(stringResource(R.string.chat_context_file_tokens), detail.fileTokens, detail.usedTokens, MaterialTheme.colorScheme.primary)
+            DetailRow(stringResource(R.string.chat_context_mcp_tokens), detail.mcpTokens, detail.usedTokens, MaterialTheme.colorScheme.tertiary)
+            DetailRow(stringResource(R.string.chat_context_thinking_tokens), detail.thinkingTokens, detail.usedTokens, MaterialTheme.colorScheme.secondary)
+            DetailRow(stringResource(R.string.chat_context_other_tokens), detail.otherTokens, detail.usedTokens, MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

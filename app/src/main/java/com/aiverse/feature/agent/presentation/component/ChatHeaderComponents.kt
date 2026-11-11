@@ -147,7 +147,8 @@ internal fun ChatHeader(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
             ) {
                 // 大屏常驻侧栏时隐掉汉堡键：侧栏已经摆在左边，再给个开关反而困惑。
                 if (showMenuButton) {
@@ -443,20 +444,23 @@ private fun ComicUsageBubble(
     thresholdPercent: Int
 ) {
     Column(
-        modifier = Modifier.widthIn(max = 340.dp),
-        horizontalAlignment = Alignment.End
+        modifier = Modifier.widthIn(max = 340.dp)
     ) {
         // 指向圆环的小三角 tail（气泡顶部，尖点朝上指向圆环）。
+        // Popup 以 TopEnd 对齐到 36dp 圆环，浮窗右缘与圆环右缘齐平，故圆环中心在浮窗右侧内缩 18dp 处；
+        // tail 宽 16dp，右侧再留 10dp 内边距后其中心恰好落在 18dp，对准圆环中心。
         // 注意：Canvas 的 draw lambda 不是 @Composable 上下文，MaterialTheme 需在 Canvas 外取值。
         val tailColor = MaterialTheme.colorScheme.surface
-        Canvas(modifier = Modifier.size(16.dp, 8.dp)) {
-            val path = Path().apply {
-                moveTo(0f, size.height)
-                lineTo(size.width, size.height)
-                lineTo(size.width * 0.5f, 0f)
-                close()
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopEnd) {
+            Canvas(modifier = Modifier.padding(end = 10.dp).size(16.dp, 8.dp)) {
+                val path = Path().apply {
+                    moveTo(0f, size.height)
+                    lineTo(size.width, size.height)
+                    lineTo(size.width * 0.5f, 0f)
+                    close()
+                }
+                drawPath(path, color = tailColor)
             }
-            drawPath(path, color = tailColor)
         }
         Surface(
             shape = RoundedCornerShape(Radius.md),
