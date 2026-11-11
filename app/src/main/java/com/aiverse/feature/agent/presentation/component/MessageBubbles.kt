@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import com.aiverse.R
 import com.aiverse.core.theme.Brand
 import com.aiverse.core.theme.Spacing
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.theme.ChatBubbleRole
 import com.aiverse.core.theme.ChatBubbleStyle
@@ -279,6 +280,7 @@ internal fun AgentMessageItem(
     // 模型直出的图片走附件落库，纯图消息没有正文与思考，同样要展示（不能提前 return）。
     if (message.role == MessageRole.ASSISTANT && !hasContent && !hasReasoning && !hasAttachments) return
 
+    val t = LocalUIDensityTokens.current
     val isUser = message.role == MessageRole.USER
     // 分块消息：块间只留一个段落间距，视觉上仍是连续的一段正文（DSH 扁平文档流下不再有描边接缝）。
     val chunked = contentSlice != null
@@ -286,7 +288,7 @@ internal fun AgentMessageItem(
     // 用户气泡随文字撑开，最大撑到与 AI 气泡同宽（消息列宽 - 列表两侧 padding）。
     // 大屏下消息列已限宽居中，气泡上限跟着收窄，不能再拿整个屏宽算。
     val maxUserBubbleWidth = remember(screenWidthDp) {
-        minOf(screenWidthDp.dp, ContentWidth.readable) - Spacing.lg * 2
+        minOf(screenWidthDp.dp, ContentWidth.readable) - t.lg * 2
     }
     var copied by remember { mutableStateOf(false) }
     val clipboard = LocalClipboard.current
@@ -327,8 +329,8 @@ internal fun AgentMessageItem(
             // LazyColumn 不再统一 spacedBy：末块（或非分块消息）自带与下一条 item 的间距，
             // 相邻分块之间零间距无缝衔接，整段长回复在外观上仍是连续的一整段。
             // 扁平文档流下正文之间没有气泡边框兜底，紧凑排布分清「轮次」。
-            .padding(bottom = if (isChunkFooter) Spacing.sm else 0.dp),
-        verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+            .padding(bottom = if (isChunkFooter) t.sm else 0.dp),
+        verticalArrangement = Arrangement.spacedBy(t.xs)
     ) {
         if (hasReasoning && isChunkHeader && reasoningVisible) {
             // 思考默认收起：折叠行只占一行（显示思考的第一行），要看全文手动点开
@@ -388,7 +390,7 @@ internal fun AgentMessageItem(
                                                 fontSize = chatFontSizeSp.sp,
                                                 lineHeight = (chatFontSizeSp + 4).sp
                                             ),
-                                            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm)
+                                            modifier = Modifier.padding(horizontal = t.md, vertical = t.sm)
                                         )
                                     }
                                 }
@@ -447,13 +449,13 @@ internal fun AgentMessageItem(
                                             color = chatBubbleTextColor(ChatBubbleRole.ASSISTANT),
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = Spacing.md, vertical = Spacing.sm)
+                                                .padding(horizontal = t.md, vertical = t.sm)
                                                 .then(
                                                     if (isThisSpeaking) Modifier
-                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .clip(RoundedCornerShape(t.rMdLarge))
                                                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                                                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-                                                        .padding(horizontal = Spacing.sm, vertical = Spacing.xs)
+                                                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), RoundedCornerShape(t.rMdLarge))
+                                                        .padding(horizontal = t.sm, vertical = t.xs)
                                                     else Modifier
                                                 ),
                                             cache = markdownCache,
@@ -546,7 +548,7 @@ internal fun AgentMessageItem(
                         }
                         // 用户消息：复制紧跟时间戳，回退按钮在其后（保持原顺序）
                         if (isUser && actionsVisible) {
-                            if (emitted) Spacer(Modifier.width(Spacing.xs))
+                            if (emitted) Spacer(Modifier.width(t.xs))
                             if (hasContent) copyButton()
                             if (onRewindClick != null) {
                                 MessageActionIconButton(
@@ -559,12 +561,12 @@ internal fun AgentMessageItem(
                             emitted = true
                         }
                         if (tokenStats != null) {
-                            if (emitted) Spacer(Modifier.width(Spacing.sm))
+                            if (emitted) Spacer(Modifier.width(t.sm))
                             ChatMetaText(text = tokenStats)
                             emitted = true
                         }
                         if (cacheHitRate != null) {
-                            if (emitted) Spacer(Modifier.width(Spacing.sm))
+                            if (emitted) Spacer(Modifier.width(t.sm))
                             Icon(
                                 FeatherIcons.Database,
                                 contentDescription = stringResource(R.string.chat_cache_hit_rate, cacheHitRate),
@@ -576,7 +578,7 @@ internal fun AgentMessageItem(
                             emitted = true
                         }
                         if (durationText != null) {
-                            if (emitted) Spacer(Modifier.width(Spacing.sm))
+                            if (emitted) Spacer(Modifier.width(t.sm))
                             Icon(
                                 FeatherIcons.Clock,
                                 contentDescription = stringResource(R.string.chat_task_duration, durationText),
@@ -589,14 +591,14 @@ internal fun AgentMessageItem(
                         }
                         // 助手消息的复制按钮排在「更多选项」左边（统计信息之后）
                         if (!isUser && actionsVisible && hasContent) {
-                            if (emitted) Spacer(Modifier.width(Spacing.xs))
+                            if (emitted) Spacer(Modifier.width(t.xs))
                             copyButton()
                             emitted = true
                         }
                         // 「更多选项」排在这一行的**最后**：助手消息里它跟在复制按钮后面（先给信息，
                         // 再给操作入口）；用户消息没有统计项，它自然接着回退按钮，间距与按钮组一致。
                         if (actionsVisible && onMoreClick != null) {
-                            if (emitted) Spacer(Modifier.width(Spacing.xs))
+                            if (emitted) Spacer(Modifier.width(t.xs))
                             MessageActionIconButton(
                                 icon = FeatherIcons.MoreHorizontal,
                                 contentDescription = stringResource(R.string.chat_more_options),
@@ -632,11 +634,12 @@ internal fun TurnCollapseHeader(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val t = LocalUIDensityTokens.current
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = ChatStyle.toolRowMinHeight)
-            .clip(RoundedCornerShape(ChatStyle.panelCorner))
+            .heightIn(min = t.chipHeight)
+            .clip(RoundedCornerShape(t.chipCorner))
             .clickable(
                 onClickLabel = stringResource(
                     if (expanded) R.string.common_collapse_action else R.string.common_expand
@@ -658,7 +661,7 @@ internal fun TurnCollapseHeader(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(Modifier.width(Spacing.xs))
+        Spacer(Modifier.width(t.xs))
         ExpandableChevronIcon(
             expanded = expanded,
             style = ChevronRotationStyle.RIGHT_DOWN,
@@ -715,15 +718,17 @@ private fun BackgroundNotificationBar(message: AgentUIMessage) {
             }
         }
     }
+    // 密度令牌：此 Composable 体内统一从 LocalUIDensityTokens 取当前密度，下面 padding/高度/间距都用它。
+    val t = LocalUIDensityTokens.current
 
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = t.xs)) {
         ChatHairline()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = ChatStyle.toolRowMinHeight),
+                .heightIn(min = t.chipHeight),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+            horizontalArrangement = Arrangement.spacedBy(t.sm)
         ) {
             Box(
                 modifier = Modifier
@@ -749,15 +754,16 @@ private fun BackgroundNotificationBar(message: AgentUIMessage) {
 @Composable
 private fun CompactionSummaryCard(message: AgentUIMessage, markdownCache: MarkdownRenderCache?) {
     var expanded by remember(message.id) { mutableStateOf(false) }
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs)) {
+    val t = LocalUIDensityTokens.current
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = t.xs)) {
         ChatHairline()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(ChatStyle.panelCorner))
+                .clip(RoundedCornerShape(t.chipCorner))
                 .background(chatMutedSurfaceColor())
                 .clickable { expanded = !expanded }
-                .padding(horizontal = Spacing.sm, vertical = Spacing.sm)
+                .padding(horizontal = t.sm, vertical = t.sm)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -766,7 +772,7 @@ private fun CompactionSummaryCard(message: AgentUIMessage, markdownCache: Markdo
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary)
                 )
-                Spacer(Modifier.width(Spacing.sm))
+                Spacer(Modifier.width(t.sm))
                 Text(
                     text = stringResource(R.string.chat_context_compressed),
                     color = MaterialTheme.colorScheme.onSurface,
@@ -782,7 +788,7 @@ private fun CompactionSummaryCard(message: AgentUIMessage, markdownCache: Markdo
                 )
             }
             if (expanded && message.content.hasVisibleContent()) {
-                Spacer(Modifier.height(Spacing.xs))
+                Spacer(Modifier.height(t.xs))
                 MarkdownContent(
                     text = message.content,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -802,15 +808,16 @@ private fun CompactionSummaryCard(message: AgentUIMessage, markdownCache: Markdo
 private fun CompactionFailureCard(message: AgentUIMessage) {
     var expanded by remember(message.id) { mutableStateOf(false) }
     val reason = message.content.ifBlank { stringResource(R.string.chat_compaction_failed) }
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs)) {
+    val t = LocalUIDensityTokens.current
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = t.xs)) {
         ChatHairline()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(ChatStyle.panelCorner))
+                .clip(RoundedCornerShape(t.chipCorner))
                 .background(chatMutedSurfaceColor())
                 .clickable { expanded = !expanded }
-                .padding(horizontal = Spacing.sm, vertical = Spacing.sm)
+                .padding(horizontal = t.sm, vertical = t.sm)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -819,7 +826,7 @@ private fun CompactionFailureCard(message: AgentUIMessage) {
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.error)
                 )
-                Spacer(Modifier.width(Spacing.sm))
+                Spacer(Modifier.width(t.sm))
                 Text(
                     text = stringResource(R.string.chat_compaction_failed),
                     color = MaterialTheme.colorScheme.onSurface,
@@ -827,7 +834,7 @@ private fun CompactionFailureCard(message: AgentUIMessage) {
                     fontWeight = FontWeight.Medium
                 )
                 if (!expanded) {
-                    Spacer(Modifier.width(Spacing.sm))
+                    Spacer(Modifier.width(t.sm))
                     Text(
                         text = reason.replace("\n", " ").trim(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -847,7 +854,7 @@ private fun CompactionFailureCard(message: AgentUIMessage) {
                 )
             }
             if (expanded && reason.isNotBlank()) {
-                Spacer(Modifier.height(Spacing.xs))
+                Spacer(Modifier.height(t.xs))
                 ChatMonoPanel {
                     Text(
                         text = reason,

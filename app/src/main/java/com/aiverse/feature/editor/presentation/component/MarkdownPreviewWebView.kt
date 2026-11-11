@@ -18,13 +18,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.aiverse.R
 import com.aiverse.core.util.FileLogger
 import com.aiverse.feature.editor.presentation.MarkdownPreviewViewModel
 
 /**
- * Markdown 预览页：用 WebView 渲染完整 Markdown（含内嵌 HTML），还原 GitHub 观感。
+ * Markdown / HTML 预览：用 WebView 渲染完整 Markdown（含内嵌 HTML）或原生 HTML，还原 GitHub 观感。
+ *
+ * [html] 为空时按 Markdown 渲染：原文经 [MarkdownPreviewViewModel.buildHtml] 套进内置模板，
+ * 由模板里的 marked + DOMPurify 在页面内解析，故这条路径必须开 JS。
+ * [html] 非空时按原生 HTML 渲染：内容直接 load 进 WebView，**禁用 JS**（附件里的 HTML 不可信，
+ * 禁 JS 可杜绝脚本执行），CSS 与相对路径图片仍经 assetLoader 正常加载。
  *
  * 预览页里的本地文件链接会像浏览器一样就地导航过去（Markdown 目标由 [MarkdownPreviewViewModel] 渲染成新预览页）；
  * 返回键优先回退 WebView 历史、到头再退出预览；外部链接不跳转。
@@ -32,22 +36,25 @@ import com.aiverse.feature.editor.presentation.MarkdownPreviewViewModel
  * 与聊天区的 Compose 渲染是两条独立路径，互不影响。
  */
 @Composable
-internal fun MarkdownPreviewWebView(
+fun MarkdownPreviewWebView(
     text: String,
     path: String,
     onExitPreview: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: MarkdownPreviewViewModel = hiltViewModel()
+    html: String? = null,
+    viewModel: MarkdownPreviewViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 ) {
     val context = LocalContext.current
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val bgColor = if (dark) BG_DARK else BG_LIGHT
     val exitPreview by rememberUpdatedState(onExitPreview)
+    val renderHtml = html != null
 
     val webView = remember {
         val themedContext = ContextThemeWrapper(context, webViewThemeRes(dark))
         WebView(themedContext).apply {
-            settings.javaScriptEnabled = true
+            // 原生 HTML 路径禁 JS：附件 HTML 不可信，禁 JS 杜绝脚本执行（XSS）
+            settings.javaScriptEnabled = !renderHtml
             // 页面只经 assetLoader 取资源，不暴露本地文件系统
             settings.allowFileAccess = false
             settings.allowContentAccess = false
@@ -93,9 +100,13 @@ internal fun MarkdownPreviewWebView(
         onDispose { webView.destroy() }
     }
 
-    LaunchedEffect(text, path, dark) {
-        val html = viewModel.buildHtml(text, dark)
-        webView.loadDataWithBaseURL(viewModel.baseUrl(path), html, "text/html", "utf-8", null)
+    LaunchedEffect(text, html, path, dark) {
+        if (renderHtml) {
+            webView.loadDataWithBaseURL(viewModel.baseUrl(path), html!!, "text/html", "utf-8", null)
+        } else {
+            val rendered = viewModel.buildHtml(text, dark)
+            webView.loadDataWithBaseURL(viewModel.baseUrl(path), rendered, "text/html", "utf-8", null)
+        }
     }
 
     BackHandler {

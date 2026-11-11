@@ -720,6 +720,10 @@
     <string name="chat_open_file_no_app">没有可打开该文件的应用</string>
     <string name="chat_open_apk_permission">安装应用需要授权，请在跳转的设置中允许来自此来源的应用</string>
     <string name="chat_attachment_preview">预览 %1$s</string>
+    <string name="chat_document_preview_fullscreen">全屏显示</string>
+    <string name="chat_document_preview_exit_fullscreen">退出全屏</string>
+    <string name="chat_document_preview_too_large">文件过大，无法在会话内预览</string>
+    <string name="chat_document_preview_failed">无法读取该文件内容</string>
     <string name="chat_attachment_open">打开 %1$s</string>
     <string name="chat_no_model_selected">未选择模型</string>
     <string name="chat_header_more">更多</string>

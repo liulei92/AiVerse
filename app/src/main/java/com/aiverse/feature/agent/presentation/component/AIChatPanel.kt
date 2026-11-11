@@ -103,6 +103,8 @@ import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.tts.LocalTtsController
 import com.aiverse.core.ui.ImageViewerHost
 import com.aiverse.core.ui.LocalImageViewer
+import com.aiverse.feature.editor.presentation.MarkdownPreviewViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aiverse.core.ui.AdaptiveModalBottomSheet
 import com.aiverse.core.ui.AppTextField
 import com.aiverse.core.ui.appTextFieldColors
@@ -117,6 +119,10 @@ import com.aiverse.feature.agent.presentation.AIAgentViewModel
 import com.aiverse.feature.agent.presentation.MessageRole
 import com.aiverse.feature.agent.presentation.QueuedRequest
 import com.aiverse.feature.agent.presentation.hasVisibleContent
+import com.aiverse.feature.agent.presentation.component.ChatDocumentPreviewHost
+import com.aiverse.feature.agent.presentation.component.LocalChatDocumentPreviewer
+import com.aiverse.feature.agent.presentation.component.LocalChatFileAccess
+import com.aiverse.feature.agent.presentation.component.rememberChatDocumentPreviewState
 import com.aiverse.feature.onboarding.domain.OnboardingStep
 import com.aiverse.feature.onboarding.presentation.onboardingTarget
 import com.aiverse.feature.settings.presentation.SettingsViewModel
@@ -769,6 +775,7 @@ fun AIChatPanel(
     val pendingPermission = allPendingPermission
     val pendingPermissionSessionTitle by viewModel.pendingToolPermissionSessionTitle.collectAsStateWithLifecycle()
     val pendingQuestion by viewModel.pendingUserQuestion.collectAsStateWithLifecycle()
+    val planApproval by viewModel.pendingPlanApproval.collectAsStateWithLifecycle()
     val currentTodoItems by viewModel.currentSessionTodoItems.collectAsStateWithLifecycle()
     val queuedRequests by viewModel.queuedRequests.collectAsStateWithLifecycle()
     val targetRewindMessageId by viewModel.targetRewindMessageId.collectAsStateWithLifecycle()
@@ -1584,6 +1591,9 @@ fun AIChatPanel(
         MarkdownImageTransformer(viewModel.fileAccess)
     }
     val imageViewerState = rememberImageViewerState()
+    val chatDocumentPreviewState = rememberChatDocumentPreviewState()
+    // 会话附件 md/html 预览的后端（组装渲染 HTML、提供相对路径图片资源），与编辑器预览共用同一套。
+    val markdownPreviewViewModel: MarkdownPreviewViewModel = hiltViewModel()
     val viewerDecodeSpec = rememberViewerDecodeSpec()
     val chatImageLoad = remember(viewModel.fileAccess, viewerDecodeSpec) {
         chatImageLoader(viewModel.fileAccess, viewerDecodeSpec.maxEdge, viewerDecodeSpec.maxPixels)
@@ -1695,6 +1705,8 @@ fun AIChatPanel(
     CompositionLocalProvider(
         LocalMarkdownImageTransformer provides markdownImageTransformer,
         LocalImageViewer provides imageViewerState,
+        LocalChatDocumentPreviewer provides chatDocumentPreviewState,
+        LocalChatFileAccess provides viewModel.fileAccess,
         LocalAttachmentOpener provides attachmentOpener,
         LocalSubAgentCardHost provides SubAgentCardHost(
             states = subAgentCards,
@@ -1818,6 +1830,69 @@ fun AIChatPanel(
                         itemsIndexed(chatItems, key = { _, item -> item.key }, contentType = { _, item -> item.contentType }) { _, item ->
                             RenderChatItem(item)
                         }
+                        // 阻塞式确认面板内嵌进会话流：权限 / askUserQuestion / 计划审批三类必须等用户确认
+                        // 才能继续的面板，渲染在最后一条消息之后、尾巴 item 之前，作为可滚动内容的一部分。
+                        // 键盘弹起时列表可滚动，面板不再与输入框争固定高度（旧的底部悬浮层会把按钮压瘪）。
+                        // 排序固定为 权限 → 询问 → 计划：权限是工具执行的安全闸门优先级最高，
+                        // askUserQuestion 往往是回答后立刻触发的下一道闸门，计划审批发生在整轮计划完成后、最靠后。
+                        // item 恒久挂载、内容用 AnimatedVisibility 增删：totalItemsCount 不突增突减，
+                        // 不会把 firstVisibleItemIndex 向下 clamp 导致视口上跳（与尾巴 item 同一考虑）。
+                        // 非阻塞展示（StatusBanner / UploadingBanner / 待办 / 数据面板）仍留在底部悬浮层，不动。
+                        item(key = "__permission__", contentType = "blockingPanel") {
+                            val permissionForPanel = rememberLastNonNull(pendingPermission)
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = pendingPermission != null,
+                                enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+                                exit = fadeOut(tween(160)) + shrinkVertically(tween(180))
+                            ) {
+                                permissionForPanel?.let { request ->
+                                    ToolPermissionPanel(
+                                        request = request,
+                                        onChoice = { choice -> viewModel.resolveToolPermission(request.id, choice) },
+                                        sessionTitle = pendingPermissionSessionTitle,
+                                        forceCollapse = dashboardCollapseActive,
+                                        isScrolling = listState.isScrollInProgress
+                                    )
+                                }
+                            }
+                        }
+                        item(key = "__question__", contentType = "blockingPanel") {
+                            val questionForPanel = rememberLastNonNull(pendingQuestion)
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = pendingQuestion != null,
+                                enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+                                exit = fadeOut(tween(160)) + shrinkVertically(tween(180))
+                            ) {
+                                questionForPanel?.let { question ->
+                                    AskUserQuestionPanel(
+                                        question = question,
+                                        onConfirm = { answer -> viewModel.resolveUserQuestion(question.id, answer) },
+                                        onSkip = { viewModel.resolveUserQuestion(question.id, UserQuestionAnswer(emptyList())) },
+                                        forceCollapse = dashboardCollapseActive
+                                    )
+                                }
+                            }
+                        }
+                        item(key = "__plan__", contentType = "blockingPanel") {
+                            val planApprovalSessionTitle by viewModel.pendingPlanApprovalSessionTitle
+                                .collectAsStateWithLifecycle()
+                            val planForPanel = rememberLastNonNull(planApproval)
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = planApproval != null,
+                                enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+                                exit = fadeOut(tween(160)) + shrinkVertically(tween(180))
+                            ) {
+                                planForPanel?.let { state ->
+                                    PlanApprovalPanel(
+                                        state = state,
+                                        onApprove = { viewModel.approvePlanAndBuild(state.id) },
+                                        onRefine = { viewModel.refinePlan(state.id) },
+                                        forceCollapse = dashboardCollapseActive,
+                                        sessionTitle = planApprovalSessionTitle
+                                    )
+                                }
+                            }
+                        }
                         val reasoning = displayStreamingReasoning
                         val showReasoning = reasoning?.hasVisibleContent() == true
                         // 忙碌状态指示器：在没有正文/思考流式输出、未在压缩、未被权限弹窗或询问挂起时展示。
@@ -1925,45 +2000,8 @@ fun AIChatPanel(
                 lastUploadingCount?.let { UploadingBanner(count = it) }
             }
 
-            val questionForPanel = rememberLastNonNull(pendingQuestion)
-            AnimatedVisibility(
-                visible = pendingQuestion != null,
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .graphicsLayer { alpha = floatingPanelAlpha },
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                questionForPanel?.let { question ->
-                    AskUserQuestionPanel(
-                        question = question,
-                        onConfirm = { answer -> viewModel.resolveUserQuestion(question.id, answer) },
-                        onSkip = { viewModel.resolveUserQuestion(question.id, UserQuestionAnswer(emptyList())) },
-                        forceCollapse = dashboardCollapseActive
-                    )
-                }
-            }
-
-            val planApproval by viewModel.pendingPlanApproval.collectAsStateWithLifecycle()
-            val planForPanel = rememberLastNonNull(planApproval)
-            AnimatedVisibility(
-                visible = planApproval != null,
-                modifier = Modifier.graphicsLayer { alpha = floatingPanelAlpha },
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                planForPanel?.let { state ->
-                    val planApprovalSessionTitle by viewModel.pendingPlanApprovalSessionTitle
-                        .collectAsStateWithLifecycle()
-                    PlanApprovalPanel(
-                        state = state,
-                        onApprove = { viewModel.approvePlanAndBuild(state.id) },
-                        onRefine = { viewModel.refinePlan(state.id) },
-                        forceCollapse = dashboardCollapseActive,
-                        sessionTitle = planApprovalSessionTitle
-                    )
-                }
-            }
+            // 阻塞式确认面板（权限 / askUserQuestion / 计划审批）已内嵌进上方会话流末尾，
+            // 不再挤在输入框上方——键盘弹起时它们可随列表滚动，不再被压缩高度。
 
             ChatInputBar(
                 value = inputText,
@@ -2046,46 +2084,17 @@ fun AIChatPanel(
             )
             } // 悬浮层结束
 
-            // 悬浮授权弹窗：独立于底栏排版流，悬浮于输入框上方，避免撑大底栏高度导致消息列表被顶上去。
-            // 用户上下滑动消息列表时跟随透明弱化，不遮挡阅读视线。
-            val permissionForPanel = rememberLastNonNull(pendingPermission)
-            var permissionPanelHeightPx by remember { mutableStateOf(0) }
-            AnimatedVisibility(
-                visible = pendingPermission != null,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(bottom = with(LocalDensity.current) { floatingLayerHeightPx.toDp() } + Spacing.xs)
-                    .onGloballyPositioned { permissionPanelHeightPx = if (pendingPermission != null) it.size.height else 0 },
-                enter = fadeIn(tween(220)) +
-                        slideInVertically(tween(220)) { it / 3 } +
-                        scaleIn(initialScale = 0.96f, animationSpec = tween(220)),
-                exit = fadeOut(tween(160)) +
-                       slideOutVertically(tween(160)) { it / 3 } +
-                       scaleOut(targetScale = 0.96f, animationSpec = tween(160))
-            ) {
-                permissionForPanel?.let { request ->
-                    ToolPermissionPanel(
-                        request = request,
-                        onChoice = { choice -> viewModel.resolveToolPermission(request.id, choice) },
-                        sessionTitle = pendingPermissionSessionTitle,
-                        forceCollapse = dashboardCollapseActive,
-                        isScrolling = listState.isScrollInProgress
-                    )
-                }
-            }
+            // 授权确认面板已内嵌进会话流末尾（见上方 LazyColumn 的 __permission__ item），
+            // 不再单独绝对定位悬浮在输入框上方。
 
-            // 滚动到底部按钮：悬浮在输入框右上角上方（避让底栏及可能悬浮的授权弹窗），离底超过半屏时
+            // 滚动到底部按钮：悬浮在输入框右上角上方（避让底栏），离底超过半屏时
             // 显示，不看滚动方向——往上翻历史后停住恰恰是最需要一键回底的时刻；滚动时跟随输入框淡出。
-            val permissionOffsetPx = with(LocalDensity.current) {
-                if (pendingPermission != null) permissionPanelHeightPx + Spacing.xs.toPx() else 0f
-            }
             androidx.compose.animation.AnimatedVisibility(
                 visible = isFarFromBottom,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = Spacing.lg)
-                    .padding(bottom = with(LocalDensity.current) { (floatingLayerHeightPx + permissionOffsetPx + FLOATING_LAYER_GAP_DP.toPx()).toDp() })
+                    .padding(bottom = with(LocalDensity.current) { (floatingLayerHeightPx + FLOATING_LAYER_GAP_DP.toPx()).toDp() })
                     .graphicsLayer { alpha = if (listState.isScrollInProgress) 0.4f else 1f },
                 enter = fadeIn() + scaleIn(),
                 exit = fadeOut() + scaleOut()
@@ -2174,6 +2183,11 @@ fun AIChatPanel(
             )
         }
         ImageViewerHost(state = imageViewerState, load = chatImageLoad)
+        // md/html 附件预览宿主：内联底部弹层 + 放大全屏 Dialog（与 ImageViewer 同为独立 window）
+        ChatDocumentPreviewHost(
+            state = chatDocumentPreviewState,
+            viewModel = markdownPreviewViewModel
+        )
     }
 }
 

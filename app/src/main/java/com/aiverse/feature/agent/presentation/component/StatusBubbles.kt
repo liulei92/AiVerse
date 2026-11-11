@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import com.aiverse.R
 import com.aiverse.core.theme.Brand
 import com.aiverse.core.theme.Spacing
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.feature.agent.domain.provider.RetryErrorInfo
 import com.aiverse.feature.agent.domain.provider.RetryErrorKind
 import compose.icons.FeatherIcons
@@ -181,11 +182,12 @@ internal fun AgentBusyIndicator(
     dotColor: Color = MaterialTheme.colorScheme.primary,
     dotSize: Dp = 6.dp
 ) {
+    val t = LocalUIDensityTokens.current
     Box(modifier = modifier, contentAlignment = Alignment.CenterStart) {
         Row(
             modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = label },
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+            horizontalArrangement = Arrangement.spacedBy(t.sm)
         ) {
             RippleText(text = label)
             if (showDots) TypingDots(color = dotColor, dotSize = dotSize, announce = false)
@@ -201,11 +203,12 @@ internal fun AgentBusyIndicator(
  */
 @Composable
 internal fun ThinkingBubble(label: String) {
+    val t = LocalUIDensityTokens.current
     AgentBusyIndicator(
         label = label,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = ChatStyle.toolRowMinHeight),
+            .heightIn(min = t.chipHeight),
         showDots = true
     )
 }
@@ -213,11 +216,12 @@ internal fun ThinkingBubble(label: String) {
 /** 上下文压缩期间的临时状态行，不落库。 */
 @Composable
 internal fun CompactionProgressBubble() {
+    val t = LocalUIDensityTokens.current
     AgentBusyIndicator(
         label = stringResource(R.string.chat_compressing_context),
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = ChatStyle.toolRowMinHeight),
+            .heightIn(min = t.chipHeight),
         showDots = true
     )
 }
@@ -225,16 +229,17 @@ internal fun CompactionProgressBubble() {
 /** 网络重试期间的临时状态行，不落库。首行展示触发重试的具体错误（如 429/500/网络断开），次行展示重试进度。 */
 @Composable
 internal fun RetryingBubble(attempt: Int, maxRetries: Int, error: RetryErrorInfo?) {
+    val t = LocalUIDensityTokens.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = Spacing.xs),
-        verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+            .padding(vertical = t.xs),
+        verticalArrangement = Arrangement.spacedBy(t.xs)
     ) {
         if (error != null) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+                horizontalArrangement = Arrangement.spacedBy(t.xs)
             ) {
                 Icon(
                     FeatherIcons.AlertCircle,
@@ -251,7 +256,7 @@ internal fun RetryingBubble(attempt: Int, maxRetries: Int, error: RetryErrorInfo
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+            horizontalArrangement = Arrangement.spacedBy(t.sm)
         ) {
             Text(
                 text = stringResource(R.string.chat_retrying, attempt, maxRetries),
@@ -271,12 +276,13 @@ internal fun RetryingBubble(attempt: Int, maxRetries: Int, error: RetryErrorInfo
  */
 @Composable
 internal fun KeySwitchedBubble(newIndex: Int, total: Int) {
+    val t = LocalUIDensityTokens.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = Spacing.xs),
+            .padding(vertical = t.xs),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+        horizontalArrangement = Arrangement.spacedBy(t.sm)
     ) {
         Icon(
             FeatherIcons.Key,
@@ -607,6 +613,7 @@ internal fun StreamingBubble(
     cache: MarkdownRenderCache? = null
 ) {
     val renderText = text
+    val t = LocalUIDensityTokens.current
     // 与落库助手正文同构：不套容器，直接铺在页面底色上，底部挂「生成中」的点
     Column(modifier = Modifier.fillMaxWidth()) {
         MarkdownContent(
@@ -615,7 +622,7 @@ internal fun StreamingBubble(
             modifier = Modifier.fillMaxWidth(),
             cache = cache
         )
-        Spacer(Modifier.height(Spacing.xs))
+        Spacer(Modifier.height(t.xs))
         TypingDots(color = MaterialTheme.colorScheme.primary, dotSize = 5.dp)
     }
 }

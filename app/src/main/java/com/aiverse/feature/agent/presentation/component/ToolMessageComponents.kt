@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import com.aiverse.core.theme.Brand
 import com.aiverse.core.theme.Radius
 import com.aiverse.core.theme.Spacing
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.feature.agent.domain.session.SessionUseCase
 import com.aiverse.feature.agent.presentation.AgentUIMessage
@@ -203,6 +204,7 @@ internal fun ToolMessageBody(
     // 因此滚出视口、切页返回都不会再丢。
     val effectiveExpanded = expandedOverride == true
 
+    val t = LocalUIDensityTokens.current
     val toolLabel = message.toolName ?: stringResource(R.string.common_tool)
     // 文件相关工具：从结构化 diff 或工具参数里取路径，统一按「工具名 + 路径 + 文件名」展示
     val filePath = if (edit != null) {
@@ -215,7 +217,7 @@ internal fun ToolMessageBody(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = ChatStyle.toolRowMinHeight)
+                .heightIn(min = t.chipHeight)
                 .then(
                     if (expandable) Modifier.clickable {
                         onExpandedChange?.invoke(!effectiveExpanded)
@@ -225,7 +227,7 @@ internal fun ToolMessageBody(
             verticalAlignment = Alignment.CenterVertically
         ) {
             ToolStatusIcon(running = running, isError = message.isError, toolName = message.toolName)
-            Spacer(Modifier.width(Spacing.sm))
+            Spacer(Modifier.width(t.sm))
             Row(
                 modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
@@ -289,12 +291,12 @@ internal fun ToolMessageBody(
                 // 运行中的这条：行尾用统一的涟漪场景文案说明「正在做什么」。工具名在开始执行前
                 // 就已到达（AgentEvent.ToolCallStarted），所以不必停在笼统的「执行中」；
                 // 折叠态也看得见，不必展开才知道它在跑。
-                Spacer(Modifier.width(Spacing.sm))
+                Spacer(Modifier.width(t.sm))
                 RippleText(text = stringResource(toolRunningLabelRes(message.toolName)))
             }
             if (edit != null) {
                 DiffStat(added = edit.added, removed = edit.removed)
-                Spacer(Modifier.width(Spacing.sm))
+                Spacer(Modifier.width(t.sm))
             }
             if (todoData != null && todoData.total > 0) {
                 Text(
@@ -304,7 +306,7 @@ internal fun ToolMessageBody(
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold
                 )
-                Spacer(Modifier.width(Spacing.sm))
+                Spacer(Modifier.width(t.sm))
             }
             if (expandable) {
                 ExpandableChevronIcon(
@@ -331,12 +333,12 @@ internal fun ToolMessageBody(
                 val argsFull = preparedArgs
                 Column {
                     if (!argsFull.isNullOrBlank()) {
-                        Spacer(Modifier.height(Spacing.sm))
+                        Spacer(Modifier.height(t.sm))
                         ToolSection(label = stringResource(R.string.tool_instruction), content = argsFull)
                     }
                     if (hasLiveOutput) {
                         val truncated = remember(liveOutput) { liveOutput.takeLastLines(TOOL_SECTION_LINE_LIMIT) }
-                        Spacer(Modifier.height(Spacing.sm))
+                        Spacer(Modifier.height(t.sm))
                         ToolSection(label = stringResource(R.string.tool_result), content = truncated, live = true)
                     }
                 }
@@ -379,14 +381,14 @@ internal fun ToolMessageBody(
                     }
                 ) {
                 if (todoData != null && todoData.items.isNotEmpty()) {
-                    Spacer(Modifier.height(Spacing.xs))
+                    Spacer(Modifier.height(t.xs))
                     TodoCard(items = todoData.items)
                 } else if (webSearchData != null) {
-                    Spacer(Modifier.height(Spacing.xs))
+                    Spacer(Modifier.height(t.xs))
                     WebSearchResultCard(result = webSearchData)
                 } else if (edit != null && details != null) {
                     // 差异卡：头部给路径与「复制」，页脚给增删统计（DSH 那块白底描边卡）
-                    Spacer(Modifier.height(Spacing.xs))
+                    Spacer(Modifier.height(t.xs))
                     ChatCodeCard(
                         title = edit.path.ifBlank { null },
                         copyText = details?.diffCopyText.orEmpty(),
@@ -399,16 +401,16 @@ internal fun ToolMessageBody(
                     ) {
                         Column {
                             edit.hunks.forEach { h -> DiffView(diff = h.diff, startLine = h.startLine) }
-                            Spacer(Modifier.height(Spacing.xs))
+                            Spacer(Modifier.height(t.xs))
                         }
                     }
                 } else {
                     if (!argsFull.isNullOrBlank()) {
-                        Spacer(Modifier.height(Spacing.sm))
+                        Spacer(Modifier.height(t.sm))
                         ToolSection(label = stringResource(R.string.tool_instruction), content = argsFull)
                     }
                     if (!resultText.isNullOrBlank()) {
-                        Spacer(Modifier.height(Spacing.sm))
+                        Spacer(Modifier.height(t.sm))
                         ToolSection(label = stringResource(R.string.tool_result), content = resultText)
                     }
                 }
@@ -418,11 +420,11 @@ internal fun ToolMessageBody(
         // 子代理派发卡片常显，不跟着「工具行展开」走：这是「谁在做什么、结果如何」的主信息，
         // 藏进折叠里就失去意义。原始参数/结果仍可通过展开工具行查看。
         metadata?.subAgent?.let { dispatch ->
-            Spacer(Modifier.height(Spacing.xs))
+            Spacer(Modifier.height(t.xs))
             SubAgentDispatchCard(dispatch = dispatch)
         }
         if (notifications.isNotEmpty()) {
-            Spacer(Modifier.height(Spacing.sm))
+            Spacer(Modifier.height(t.sm))
             notifications.forEach { ToolNotificationRow(it) }
         }
         // 文件列表：工具结束后常显在消息底部，一行一个文件，点击用系统 app 打开。
@@ -669,11 +671,12 @@ internal fun ToolCallGroupHeader(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val t = LocalUIDensityTokens.current
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = ChatStyle.toolRowMinHeight)
-            .clip(RoundedCornerShape(ChatStyle.panelCorner))
+            .heightIn(min = t.chipHeight)
+            .clip(RoundedCornerShape(t.chipCorner))
             .clickable(
                 // 无障碍：点这一行会展开还是收起，读屏能念出来（展开状态本身由 count 文本表达）
                 onClickLabel = stringResource(
@@ -689,7 +692,7 @@ internal fun ToolCallGroupHeader(
             tint = Brand.IconGray,
             modifier = Modifier.size(ChatStyle.rowIconSize)
         )
-        Spacer(Modifier.width(Spacing.sm))
+        Spacer(Modifier.width(t.sm))
         // 权重挂在外层占位，涟漪画在文字自身的尺寸上：光带只扫「N 次工具调用」这几个字，
         // 不会在整行空白里慢慢爬（见 Modifier.rippleHighlight）。
         Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {

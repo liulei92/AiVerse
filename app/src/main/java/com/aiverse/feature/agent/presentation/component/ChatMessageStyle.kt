@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
 import com.aiverse.R
 import com.aiverse.core.theme.Spacing
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.ChatBubbleRole
 import com.aiverse.core.theme.ChatBubbleStyle
 import com.aiverse.core.theme.LocalAssistantBubbleStyle
@@ -172,15 +173,16 @@ internal fun chatBubbleBorder(role: ChatBubbleRole): BorderStroke? {
     }
 }
 
-/** 聊天气泡圆角（按所选聊天气泡样式返回）：清新绿大圆角，其余 10dp。 */
+/** 聊天气泡圆角（按所选聊天气泡样式返回）：清新绿大圆角，其余按密度令牌 rMd（标准档 10dp）。 */
 @Composable
 internal fun chatBubbleShape(role: ChatBubbleRole): CornerBasedShape {
     val style = when (role) {
         ChatBubbleRole.USER -> LocalUserBubbleStyle.current
         ChatBubbleRole.ASSISTANT -> LocalAssistantBubbleStyle.current
     }
+    val t = LocalUIDensityTokens.current
     return if (style == ChatBubbleStyle.FRESH_GREEN) RoundedCornerShape(24.dp)
-    else RoundedCornerShape(10.dp)
+    else RoundedCornerShape(t.rMd)
 }
 
 /** 聊天气泡阴影（按所选聊天气泡样式返回）：柔和投影有阴影，其余无。 */
@@ -272,7 +274,8 @@ internal fun ChatCodeCard(
     footer: String? = null,
     content: @Composable () -> Unit
 ) {
-    val shape = RoundedCornerShape(ChatStyle.cardCorner)
+    val t = LocalUIDensityTokens.current
+    val shape = RoundedCornerShape(t.rMd)
     Column(
         modifier
             .fillMaxWidth()
@@ -285,7 +288,7 @@ internal fun ChatCodeCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = ChatStyle.codeHeaderHeight)
-                    .padding(start = Spacing.sm, end = Spacing.xs),
+                    .padding(start = t.sm, end = t.xs),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -311,7 +314,7 @@ internal fun ChatCodeCard(
                 text = footer,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs)
+                modifier = Modifier.padding(horizontal = t.sm, vertical = t.xs)
             )
         }
     }
@@ -323,12 +326,13 @@ internal fun ChatMonoPanel(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val t = LocalUIDensityTokens.current
     Box(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(ChatStyle.panelCorner))
+            .clip(RoundedCornerShape(t.chipCorner))
             .background(chatMutedSurfaceColor())
-            .padding(horizontal = Spacing.sm, vertical = Spacing.sm)
+            .padding(horizontal = t.sm, vertical = t.sm)
     ) {
         content()
     }
@@ -391,19 +395,20 @@ internal fun ChatCopyAction(
     var copied by remember(copyText) { mutableStateOf(false) }
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
+    val t = LocalUIDensityTokens.current
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(ChatStyle.panelCorner))
+            .clip(RoundedCornerShape(t.chipCorner))
             .clickable {
                 scope.launch {
                     clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("chat-copy", copyText)))
                     copied = true
                 }
             }
-            .heightIn(min = 32.dp)
-            .padding(horizontal = Spacing.sm),
+            .heightIn(min = t.chipHeight)
+            .padding(horizontal = t.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+        horizontalArrangement = Arrangement.spacedBy(t.xs)
     ) {
         Icon(
             imageVector = if (copied) FeatherIcons.Check else FeatherIcons.Copy,

@@ -22,12 +22,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,6 +49,7 @@ import compose.icons.feathericons.FileText
 import compose.icons.feathericons.Image
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** 附件缩略图边长：一行一个文件时左侧的小图，够看清是截图还是照片即可。 */
@@ -60,7 +63,8 @@ private val AttachmentThumbSize = 44.dp
  * 一行一个才能一眼看清发的是哪几份。
  *
  * 点击语义：图片一律走内置全屏查看器（隐式依赖组合树上层提供 [LocalImageViewer]，聊天区都满足）；
- * 非图片用调用方给的 [onClick] —— 工具卡片传的是「系统 app 打开」，助手气泡不传即不可点。
+ * md/html 走聊天页内预览（[LocalChatDocumentPreviewer]，Markdown 套内置模板、HTML 禁 JS 直渲染）；
+ * 其余非图片用调用方给的 [onClick] —— 工具卡片传的是「系统 app 打开」，助手气泡不传即不可点。
  */
 @Composable
 internal fun MessageAttachmentList(
@@ -84,9 +88,21 @@ private fun MessageAttachmentRow(
     attachment: AgentAttachment,
     onClick: ((AgentAttachment) -> Unit)? = null
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val fileAccess = LocalChatFileAccess.current
+    val documentPreviewer = LocalChatDocumentPreviewer.current
     val viewer = LocalImageViewer.current
     val handler: (() -> Unit)? = if (attachment.isImage) {
         { viewer.show(attachment.toViewerRequest()) }
+    } else if (isChatPreviewableDocument(attachment.fileName, attachment.mimeType)) {
+        // md/html：不走系统 app，用聊天页内预览（Markdown 走内置模板，HTML 禁 JS 直渲染）
+        {
+            scope.launch {
+                val doc = readChatDocumentPreviewDoc(context, attachment, fileAccess) ?: return@launch
+                documentPreviewer.show(doc)
+            }
+        }
     } else if (onClick != null) {
         { onClick(attachment) }
     } else {

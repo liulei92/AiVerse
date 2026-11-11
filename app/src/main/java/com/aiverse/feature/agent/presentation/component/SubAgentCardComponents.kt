@@ -10,9 +10,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -28,6 +34,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -531,7 +538,14 @@ internal fun SubAgentStatusRow(
     modifier: Modifier = Modifier
 ) {
     if (states.isEmpty()) return
-    val runningCount = states.count { it.status == SubAgentCardStatus.RUNNING }
+    // 叉号收起：仅记录「用户想隐藏」的子会话 id，不删除任何数据、不联动侧边栏会话列表。
+    // 切换父会话时 remember 键变化，已收起集合自动重置，新会话重新展示。
+    val dismissedIds = remember(states.firstOrNull()?.parentSessionId) { mutableStateSetOf<String>() }
+    val visibleStates = remember(states, dismissedIds.size) {
+        states.filter { it.subSessionId !in dismissedIds }
+    }
+    if (visibleStates.isEmpty()) return
+    val runningCount = visibleStates.count { it.status == SubAgentCardStatus.RUNNING }
     // 折叠开关：默认展开，用户点过则以选择为准；状态行本身常驻，只有明细可收合。
     var expanded by remember { mutableStateOf(true) }
 
@@ -542,7 +556,12 @@ internal fun SubAgentStatusRow(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
     ) {
         Column(
-            modifier = Modifier.padding(Spacing.sm),
+            // 高度随明细展开/收起平滑过渡；animateContentSize 适合单纯高度变化，避免明细行瞬间弹出/塌陷。
+            modifier = Modifier
+                .padding(Spacing.sm)
+                .animateContentSize(
+                    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing)
+                ),
             verticalArrangement = Arrangement.spacedBy(Spacing.xs)
         ) {
             Row(
@@ -580,6 +599,18 @@ internal fun SubAgentStatusRow(
                     )
                 }
                 Spacer(Modifier.weight(1f))
+                // 叉号：仅收起整条状态横幅（本会话内不再展示），不删除子代理数据，也不影响侧边栏。
+                Icon(
+                    imageVector = FeatherIcons.X,
+                    contentDescription = stringResource(R.string.common_close),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clickable {
+                            visibleStates.forEach { dismissedIds.add(it.subSessionId) }
+                        }
+                )
+                Spacer(Modifier.width(Spacing.xs))
                 Icon(
                     imageVector = if (expanded) FeatherIcons.ChevronUp else FeatherIcons.ChevronDown,
                     contentDescription = stringResource(
@@ -590,8 +621,18 @@ internal fun SubAgentStatusRow(
                 )
             }
             if (expanded) {
-                states.forEach { state ->
-                    SubAgentStatusRowItem(state = state, onOpen = onOpen, onStop = onStop)
+                // 明细列表独立滚动：高度封顶后内部自滑，不把外层聊天 LazyColumn 撑高，
+                // 也不抢走聊天区的滑动手势——两个滑动各自独立。
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 240.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+                ) {
+                    visibleStates.forEach { state ->
+                        SubAgentStatusRowItem(state = state, onOpen = onOpen, onStop = onStop)
+                    }
                 }
             }
         }

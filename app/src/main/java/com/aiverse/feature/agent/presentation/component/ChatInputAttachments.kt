@@ -46,6 +46,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +68,10 @@ import com.aiverse.R
 import com.aiverse.core.theme.Radius
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.ui.LocalImageViewer
+import com.aiverse.feature.agent.presentation.component.LocalChatDocumentPreviewer
+import com.aiverse.feature.agent.presentation.component.LocalChatFileAccess
+import com.aiverse.feature.agent.presentation.component.isChatPreviewableDocument
+import com.aiverse.feature.agent.presentation.component.readChatDocumentPreviewDoc
 import com.aiverse.core.ui.THUMBNAIL_MAX_EDGE
 import com.aiverse.core.ui.decodeSampledBitmap
 import com.aiverse.feature.agent.presentation.QueuedRequest
@@ -82,6 +88,7 @@ import compose.icons.feathericons.X
 import compose.icons.feathericons.Zap
 import java.util.Base64
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -301,6 +308,10 @@ private fun PendingAttachmentPreviewItem(
     attachment: PendingUploadAttachment,
     onRemove: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val fileAccess = LocalChatFileAccess.current
+    val documentPreviewer = LocalChatDocumentPreviewer.current
     Surface(
         shape = RoundedCornerShape(Radius.md),
         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
@@ -317,6 +328,21 @@ private fun PendingAttachmentPreviewItem(
                         .fillMaxSize()
                         .clickable(onClickLabel = previewLabel) {
                             viewer.show(attachment.toViewerRequest())
+                        }
+                )
+            } else if (isChatPreviewableDocument(attachment.fileName, attachment.mimeType)) {
+                // 待发送的 md/html：点击即进聊天页内预览，和已发送附件一致
+                val previewLabel = stringResource(R.string.chat_attachment_preview, attachment.fileName)
+                FileAttachmentPreview(
+                    attachment = attachment,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(onClickLabel = previewLabel) {
+                            scope.launch {
+                                val doc = readChatDocumentPreviewDoc(context, attachment, fileAccess)
+                                    ?: return@launch
+                                documentPreviewer.show(doc)
+                            }
                         }
                 )
             } else {
@@ -392,9 +418,12 @@ private fun ImageThumbnail(
 }
 
 @Composable
-private fun FileAttachmentPreview(attachment: PendingUploadAttachment) {
+private fun FileAttachmentPreview(
+    attachment: PendingUploadAttachment,
+    modifier: Modifier = Modifier
+) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .padding(Spacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
