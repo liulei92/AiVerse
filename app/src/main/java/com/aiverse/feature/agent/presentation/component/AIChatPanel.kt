@@ -712,6 +712,8 @@ fun AIChatPanel(
     onDismissModelSheetInOnboarding: (() -> Unit)? = null,
     /** 长按模型图标 → AI 供应商设置页。 */
     onOpenProviders: () -> Unit = {},
+    /** 长按输入框联网搜索图标时打开搜索提供商设置页。 */
+    onOpenSearchProviders: () -> Unit = {},
     /** MCP 图标 → MCP 服务器设置页。 */
     onOpenMcp: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -801,7 +803,8 @@ fun AIChatPanel(
     LaunchedEffect(inputText) {
         if (inputText == "/") viewModel.refreshSlashCommands()
     }
-    var pendingAttachments by remember { mutableStateOf<List<PendingUploadAttachment>>(emptyList()) }
+    // 待发送附件提到会话级 ViewModel（与草稿同作用域）：切页 / 切会话都在，不再随 composable 销毁。
+    val pendingAttachments by viewModel.pendingAttachments.collectAsStateWithLifecycle()
     var uploadingCount by remember { mutableStateOf(0) }
     var messageForMenu by remember { mutableStateOf<AgentUIMessage?>(null) }
     var editingMessage by remember { mutableStateOf<AgentUIMessage?>(null) }
@@ -1134,10 +1137,6 @@ fun AIChatPanel(
         }
     }
 
-    fun removePendingAttachment(index: Int) {
-        pendingAttachments = pendingAttachments.filterIndexed { i, _ -> i != index }
-    }
-
     fun handlePickedAttachments(uris: List<Uri>, images: Boolean) {
         if (uris.isEmpty()) return
         if (projectRoot.isBlank()) {
@@ -1158,7 +1157,7 @@ fun AIChatPanel(
                     runCatching {
                         copyUriToWorkspace(context, uri, viewModel.fileAccess, includeImageData = images)
                     }.onSuccess { uploaded ->
-                        pendingAttachments = pendingAttachments + uploaded.toPendingAttachment()
+                        viewModel.addPendingAttachment(uploaded.toPendingAttachment())
                         successCount += 1
                     }.onFailure { error ->
                         failures += (error.message ?: uploadFallbackError(context))
@@ -1496,7 +1495,7 @@ fun AIChatPanel(
                 inputAttachments = attachments.toAgentAttachments()
             )
             viewModel.clearInputDraft()
-            pendingAttachments = emptyList()
+            viewModel.clearPendingAttachments()
             followBottom = true
             scope.launch {
                 kotlinx.coroutines.delay(0)
@@ -1971,7 +1970,7 @@ fun AIChatPanel(
                 reasoningEffort = reasoningEffort,
                 onReasoningEffortChange = { viewModel.setSessionReasoningEffort(it) },
                 pendingAttachments = pendingAttachments,
-                onRemoveAttachment = ::removePendingAttachment,
+                onRemoveAttachment = viewModel::removePendingAttachment,
                 canUploadFiles = canUploadFiles,
                 canUploadImages = canUploadImages,
                 onUploadFile = { filePicker.launch(arrayOf("*/*")) },
@@ -2014,6 +2013,7 @@ fun AIChatPanel(
                 onSelectModelInOnboarding = onSelectModelInOnboarding,
                 onModelSheetDismiss = onDismissModelSheetInOnboarding,
                 onOpenProviders = onOpenProviders,
+                onOpenSearchProviders = onOpenSearchProviders,
                 onOpenMcp = onOpenMcp,
                 // 主页模型弹层的「测试」按钮：直接复用设置页的连通性测试链路，状态由弹层自己持有。
                 onRunModelTest = settingsViewModel?.let { svm -> { p, m -> svm.runModelTest(p, m) } },
@@ -2086,7 +2086,7 @@ fun AIChatPanel(
                     onOptionSelected = { option ->
                         viewModel.executeRewindOption(targetId, option) { text, attachments ->
                             viewModel.updateInputDraft(text)
-                            pendingAttachments = attachments.map { it.toPendingAttachment() }
+                            viewModel.setPendingAttachments(attachments.map { it.toPendingAttachment() })
                         }
                     },
                     onDismissRequest = { viewModel.dismissRewindMenu() }

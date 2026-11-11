@@ -118,6 +118,7 @@ import com.aiverse.feature.agent.presentation.notification.AgentLiveNotification
 import com.aiverse.feature.agent.presentation.notification.AgentApprovalNotificationManager
 import com.aiverse.feature.agent.presentation.notification.AgentApprovalNotificationManager.ApprovalKind
 import com.aiverse.feature.agent.presentation.component.BalanceCapsuleState
+import com.aiverse.feature.agent.presentation.component.PendingUploadAttachment
 import com.aiverse.feature.agent.presentation.component.RewindOption
 import com.aiverse.feature.agent.presentation.component.toolRunningLabelRes
 import com.aiverse.feature.agent.presentation.component.formatTokenCount
@@ -329,6 +330,52 @@ class AIAgentViewModel @Inject constructor(
         val id = _currentSessionId.value ?: return
         _inputDrafts.value = _inputDrafts.value - id
         draftPrefs.edit().remove(id).apply()
+    }
+
+    /**
+     * 各会话各自的待发送附件，按会话区分存在内存里（与草稿同一作用域）。
+     * 以前放在聊天页 composable 的 remember，切到设置页再回来附件就被销毁；现在提到会话级 ViewModel，
+     * 切页 / 切会话都在（草稿文字不走，附件也不走）。content uri 落盘从简，暂只保进程内存活期间。
+     */
+    private val _pendingAttachments = MutableStateFlow<Map<String, List<PendingUploadAttachment>>>(emptyMap())
+    internal val pendingAttachments: StateFlow<List<PendingUploadAttachment>> = _currentSessionId
+        .flatMapLatest { id ->
+            if (id == null) flowOf(emptyList()) else _pendingAttachments.map { it[id].orEmpty() }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** 追加一个已落盘的待发送附件到当前会话。 */
+    internal fun addPendingAttachment(attachment: PendingUploadAttachment) {
+        val id = _currentSessionId.value ?: return
+        _pendingAttachments.value = _pendingAttachments.value +
+            (id to (_pendingAttachments.value[id].orEmpty() + attachment))
+    }
+
+    /** 按下标移除当前会话的一个待发送附件。 */
+    internal fun removePendingAttachment(index: Int) {
+        val id = _currentSessionId.value ?: return
+        val remaining = _pendingAttachments.value[id].orEmpty().filterIndexed { i, _ -> i != index }
+        _pendingAttachments.value = if (remaining.isEmpty()) {
+            _pendingAttachments.value - id
+        } else {
+            _pendingAttachments.value + (id to remaining)
+        }
+    }
+
+    /** 整体替换当前会话的待发送附件（rewind 回填用）。 */
+    internal fun setPendingAttachments(attachments: List<PendingUploadAttachment>) {
+        val id = _currentSessionId.value ?: return
+        _pendingAttachments.value = if (attachments.isEmpty()) {
+            _pendingAttachments.value - id
+        } else {
+            _pendingAttachments.value + (id to attachments)
+        }
+    }
+
+    /** 清空当前会话的待发送附件（发送成功后）。 */
+    internal fun clearPendingAttachments() {
+        val id = _currentSessionId.value ?: return
+        _pendingAttachments.value = _pendingAttachments.value - id
     }
 
     /**
@@ -2904,6 +2951,7 @@ class AIAgentViewModel @Inject constructor(
         _retryStates.value = _retryStates.value - sessionId
         _inputDrafts.value = _inputDrafts.value - sessionId
         draftPrefs.edit().remove(sessionId).apply()
+        _pendingAttachments.value = _pendingAttachments.value - sessionId
     }
 
     /** 新建会话；工作区里已有空会话时直接切过去复用（当前会话为空则优先），避免堆积空会话。 */

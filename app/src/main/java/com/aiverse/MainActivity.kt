@@ -873,6 +873,9 @@ fun AppNavigation(
                                     onOpenProviders = {
                                         navController.navigate("settings?section=providers&from=chat")
                                     },
+                                    onOpenSearchProviders = {
+                                        navController.navigate("settings?section=search_provider&from=chat")
+                                    },
                                     onOpenMcp = {
                                         navController.navigate("settings?section=mcp&from=chat")
                                     }

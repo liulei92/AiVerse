@@ -13,6 +13,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -223,6 +224,8 @@ internal fun ChatInputBar(
     onModelSheetDismiss: (() -> Unit)? = null,
     /** 长按模型图标时打开 AI 供应商设置页。 */
     onOpenProviders: () -> Unit = {},
+    /** 长按联网搜索图标时打开搜索提供商设置页。 */
+    onOpenSearchProviders: () -> Unit = {},
     /** 点击输入区的 MCP 图标，直接打开 MCP 服务器设置页。 */
     onOpenMcp: () -> Unit = {},
     /** 主页模型弹层的连通性测试：null（无设置页 ViewModel 的宿主）时弹层不显示测试按钮。 */
@@ -849,7 +852,17 @@ internal fun ChatInputBar(
                                     labelRes = R.string.inputbar_action_web_search,
                                     onTrigger = { onToggleWebSearch() },
                                     buttonContent = @Composable {
-                                        IconButton(onClick = onToggleWebSearch, modifier = Modifier.size(36.dp)) {
+                                        // 单击切换联网搜索；长按跳「设置 → 搜索提供商」，与模型按钮长按跳供应商一致。
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(CircleShape)
+                                                .combinedClickable(
+                                                    onClick = onToggleWebSearch,
+                                                    onLongClick = onOpenSearchProviders
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
                                             Icon(
                                                 FeatherIcons.Globe,
                                                 contentDescription = stringResource(R.string.chat_web_search_toggle),

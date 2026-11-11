@@ -356,6 +356,7 @@ fun SettingsScreen(
                 "providers" -> SettingsSection.Providers
                 "mcp" -> SettingsSection.Mcp
                 "phoneControl" -> SettingsSection.PhoneControl
+                "search_provider" -> SettingsSection.SearchProvider
                 else -> SettingsSection.Menu
             }
         )
