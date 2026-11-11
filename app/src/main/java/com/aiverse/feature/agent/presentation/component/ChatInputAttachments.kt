@@ -40,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -98,9 +99,12 @@ internal fun QueuedRequestPanel(
     onEditQueued: (QueuedRequest) -> Unit,
     onInterjectQueued: (String) -> Unit
 ) {
-    // 按会话记忆展开状态，默认展开；弹窗/键盘叠加时联动强制收起（同待办面板）。
+    // 按会话记忆展开状态，默认展开；键盘/弹窗叠加时自动收起一次，但不持续压制——
+    // 收起后仍可点箭头展开（列表已 heightIn 限高，不顶开输入框）。同待办面板（#44）。
     var isExpanded by rememberSaveable(sessionId) { mutableStateOf(true) }
-    val effectiveExpanded = isExpanded && !forceCollapse
+    LaunchedEffect(forceCollapse) {
+        if (forceCollapse) isExpanded = false
+    }
     // 拖拽中读取最新队列与回调：pointerInput 只在 key 变化时重启，用 rememberUpdatedState 避免捕获陈旧值。
     val currentQueue by rememberUpdatedState(queuedRequests)
     val moveQueued by rememberUpdatedState(onMoveQueued)
@@ -138,8 +142,8 @@ internal fun QueuedRequestPanel(
                 )
                 Spacer(Modifier.weight(1f))
                 ExpandableChevronIcon(
-                    expanded = effectiveExpanded,
-                    contentDescription = if (effectiveExpanded) {
+                    expanded = isExpanded,
+                    contentDescription = if (isExpanded) {
                         stringResource(R.string.common_collapse_action)
                     } else {
                         stringResource(R.string.common_expand)
@@ -149,7 +153,7 @@ internal fun QueuedRequestPanel(
                 )
             }
             AnimatedVisibility(
-                visible = effectiveExpanded,
+                visible = isExpanded,
                 enter = fadeIn(tween(180)) + expandVertically(tween(220)),
                 exit = fadeOut(tween(140)) + shrinkVertically(tween(180))
             ) {

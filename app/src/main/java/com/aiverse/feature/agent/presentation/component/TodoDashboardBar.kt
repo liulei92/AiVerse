@@ -69,10 +69,16 @@ fun TodoDashboardBar(
 
     // 按会话隔离记忆展开状态，新会话默认收起
     var isExpanded by rememberSaveable(sessionId) { mutableStateOf(false) }
-    val effectiveExpanded = isExpanded && !forceCollapse
 
-    LaunchedEffect(effectiveExpanded) {
-        onExpandedChange(effectiveExpanded)
+    // 键盘弹出时自动收起一次，避免输入框被挤压；但不持续压制——收起后用户仍可点箭头展开查看
+    // 完整任务列表（展开列表已 heightIn 限高，不会顶开输入框）。此前用 effectiveExpanded =
+    // isExpanded && !forceCollapse 持续压制，导致键盘弹出时点箭头无效（#44）。
+    LaunchedEffect(forceCollapse) {
+        if (forceCollapse) isExpanded = false
+    }
+
+    LaunchedEffect(isExpanded) {
+        onExpandedChange(isExpanded)
     }
 
     val totalCount = items.size
@@ -140,7 +146,7 @@ fun TodoDashboardBar(
                     )
                 }
 
-                if (!effectiveExpanded && inProgressItem != null) {
+                if (!isExpanded && inProgressItem != null) {
                     Spacer(Modifier.width(Spacing.xs))
                     Text(
                         text = inProgressItem.subject,
@@ -155,8 +161,8 @@ fun TodoDashboardBar(
                 }
 
                 ExpandableChevronIcon(
-                    expanded = effectiveExpanded,
-                    contentDescription = if (effectiveExpanded) {
+                    expanded = isExpanded,
+                    contentDescription = if (isExpanded) {
                         stringResource(R.string.common_collapse_action)
                     } else {
                         stringResource(R.string.common_expand)
@@ -168,7 +174,7 @@ fun TodoDashboardBar(
 
             // 展开时展示待办列表（平滑淡入展开、向上卷折淡出）
             AnimatedVisibility(
-                visible = effectiveExpanded,
+                visible = isExpanded,
                 enter = fadeIn(tween(180)) + expandVertically(tween(220)),
                 exit = fadeOut(tween(140)) + shrinkVertically(tween(180))
             ) {
