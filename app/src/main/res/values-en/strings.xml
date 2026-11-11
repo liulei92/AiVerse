@@ -709,6 +709,10 @@
     <string name="chat_open_browser">Open browser</string>
     <string name="chat_message_navigation">Message navigation</string>
     <string name="chat_message_timeline_empty">No messages</string>
+    <string name="chat_message_nav_search_hint">Search messages…</string>
+    <string name="chat_message_nav_search_clear">Clear search</string>
+    <string name="chat_message_nav_only_user">Only user messages</string>
+    <string name="chat_message_nav_no_match">No matching messages</string>
     <string name="chat_role_user">User</string>
     <string name="chat_role_assistant">Assistant</string>
     <string name="chat_role_tool">Tool</string>

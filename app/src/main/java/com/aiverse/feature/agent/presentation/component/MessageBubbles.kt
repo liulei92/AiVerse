@@ -249,7 +249,7 @@ internal fun AgentMessageItem(
     isChunkFooter: Boolean = true,
     /** 该消息仍在生成中（AI 思考/流式输出尚未完成）：隐藏朗读按钮，回答完毕才显示。 */
     messageInProgress: Boolean = false,
-    /** 整轮回复仍在进行中（isBusy：AI 多步工具调用尚未全部完成）：整轮期间隐藏所有消息的朗读按钮，
+    /** 整轮回复仍在进行中（AI 多步工具调用尚未全部完成）：整轮期间隐藏所有消息的朗读按钮，
      *  待整轮结束才显示，避免中间步骤消息被误判为已完成而提前挂出喇叭。 */
     turnBusy: Boolean = false,
 ) {
@@ -371,50 +371,59 @@ internal fun AgentMessageItem(
                         } else if (isUser) {
                             val bubbleStyle = LocalUserBubbleStyle.current
                             val chatFontSizeSp = LocalChatFontSizeSp.current
-                            // 用户消息：右对齐气泡，外观由所选聊天气泡样式决定。
+                            // 用户消息：右对齐，外观由所选聊天气泡样式决定。
+                            // 无气泡（NO_BUBBLE）与助手侧一致：正文直接铺在页面底色上（扁平文档流），不套容器。
+                            val userBody: @Composable () -> Unit = {
+                                SelectionContainer {
+                                    CompositionLocalProvider(
+                                        LocalTextSelectionColors provides TextSelectionColors(
+                                            handleColor = MaterialTheme.colorScheme.primary,
+                                            backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
+                                        )
+                                    ) {
+                                        Text(
+                                            text = message.content,
+                                            color = chatBubbleTextColor(ChatBubbleRole.USER),
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontSize = chatFontSizeSp.sp,
+                                                lineHeight = (chatFontSizeSp + 4).sp
+                                            ),
+                                            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm)
+                                        )
+                                    }
+                                }
+                            }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.widthIn(max = maxUserBubbleWidth)
                             ) {
-                                Surface(
-                                    shape = chatBubbleShape(ChatBubbleRole.USER),
-                                    color = chatBubbleColor(ChatBubbleRole.USER),
-                                    border = chatBubbleBorder(ChatBubbleRole.USER),
-                                    shadowElevation = chatBubbleShadowElevation(ChatBubbleRole.USER),
-                                    modifier = Modifier.weight(1f, fill = false)
-                                ) {
-                                    SelectionContainer {
-                                        CompositionLocalProvider(
-                                            LocalTextSelectionColors provides TextSelectionColors(
-                                                handleColor = MaterialTheme.colorScheme.primary,
-                                                backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f),
-                                            )
-                                        ) {
-                                            Text(
-                                                text = message.content,
-                                                color = chatBubbleTextColor(ChatBubbleRole.USER),
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontSize = chatFontSizeSp.sp,
-                                                    lineHeight = (chatFontSizeSp + 4).sp
-                                                ),
-                                                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm)
-                                            )
-                                        }
-                                    }
-                                }
-                                if (bubbleStyle == ChatBubbleStyle.COMIC) {
-                                    // 漫画风格：右侧黑色小箭头（气泡尾巴）。
-                                    Canvas(
-                                        modifier = Modifier
-                                            .size(9.dp, 14.dp)
+                                if (bubbleStyle == ChatBubbleStyle.NO_BUBBLE) {
+                                    // 无气泡：用户正文直接铺底、右对齐，不渲染 COMIC 箭头尾巴（那是气泡装饰）。
+                                    userBody()
+                                } else {
+                                    Surface(
+                                        shape = chatBubbleShape(ChatBubbleRole.USER),
+                                        color = chatBubbleColor(ChatBubbleRole.USER),
+                                        border = chatBubbleBorder(ChatBubbleRole.USER),
+                                        shadowElevation = chatBubbleShadowElevation(ChatBubbleRole.USER),
+                                        modifier = Modifier.weight(1f, fill = false)
                                     ) {
-                                        val path = Path().apply {
-                                            moveTo(0f, 0f)
-                                            lineTo(size.width, size.height / 2f)
-                                            lineTo(0f, size.height)
-                                            close()
+                                        userBody()
+                                    }
+                                    if (bubbleStyle == ChatBubbleStyle.COMIC) {
+                                        // 漫画风格：右侧黑色小箭头（气泡尾巴）。
+                                        Canvas(
+                                            modifier = Modifier
+                                                .size(9.dp, 14.dp)
+                                        ) {
+                                            val path = Path().apply {
+                                                moveTo(0f, 0f)
+                                                lineTo(size.width, size.height / 2f)
+                                                lineTo(0f, size.height)
+                                                close()
+                                            }
+                                            drawPath(path, Color.Black)
                                         }
-                                        drawPath(path, Color.Black)
                                     }
                                 }
                             }

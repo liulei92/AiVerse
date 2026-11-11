@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -113,46 +114,57 @@ private fun ChatBubblePreview(style: ChatBubbleStyle) {
         ChatBubbleStyle.HEARTBEAT -> BorderStroke(1.5.dp, Color(0xFFBDBDBD))
         // 极简纯白：白底在白弹窗上看不出，预览加浅灰描边保证可见（真实聊天区背景非纯白，故真实气泡不加）。
         ChatBubbleStyle.MINIMAL_WHITE -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        // 无气泡：真实聊天区不套容器（正文直接铺底色），预览用淡描边示意，避免在白弹窗上完全看不出。
-        ChatBubbleStyle.NO_BUBBLE -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        // 无气泡：真实渲染不套容器（正文直接铺在页面底色上），预览同样无描边，保持一致。
+        ChatBubbleStyle.NO_BUBBLE -> null
         else -> null
     }
     val shape = if (style == ChatBubbleStyle.FRESH_GREEN) RoundedCornerShape(24.dp) else RoundedCornerShape(10.dp)
     val elevation = if (style == ChatBubbleStyle.SOFT_SHADOW) 4.dp else 0.dp
+
+    val previewContent: @Composable () -> Unit = {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.bubble_preview_text),
+                color = textColor,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Start,
+                modifier = Modifier.fillMaxWidth()
+            )
+            MarkdownContent(
+                text = stringResource(R.string.bubble_preview_markdown),
+                color = textColor,
+                blockBackground = blockBackground,
+                blockTextColor = blockTextColor,
+                compact = true,
+                fontSizeSp = 10,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
 
     // 预览区固定宽度：气泡 + 漫画箭头都在固定区内，右侧样式名起始位置每行对齐。
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.width(148.dp)
     ) {
-        Surface(
-            shape = shape,
-            color = color,
-            border = border,
-            shadowElevation = elevation,
-            modifier = Modifier.width(140.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
+        if (style == ChatBubbleStyle.NO_BUBBLE) {
+            // 无气泡预览：正文直接铺在弹窗底色上，无容器无描边（与真实渲染一致）。
+            Box(modifier = Modifier.width(140.dp)) {
+                previewContent()
+            }
+        } else {
+            Surface(
+                shape = shape,
+                color = color,
+                border = border,
+                shadowElevation = elevation,
+                modifier = Modifier.width(140.dp)
             ) {
-                Text(
-                    text = stringResource(R.string.bubble_preview_text),
-                    color = textColor,
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Start,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                MarkdownContent(
-                    text = stringResource(R.string.bubble_preview_markdown),
-                    color = textColor,
-                    blockBackground = blockBackground,
-                    blockTextColor = blockTextColor,
-                    compact = true,
-                    fontSizeSp = 10,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                previewContent()
             }
         }
         if (style == ChatBubbleStyle.COMIC) {

@@ -213,7 +213,7 @@ private fun DiffContent(diffData: DiffData, padding: androidx.compose.foundation
                     state = rememberLazyListState()
                 ) {
                     items(count = diffData.lines.size, key = { "row-$it" }) { index ->
-                        DiffLineRow(diffData.lines[index], gutterWidth)
+                        diffData.lines.getOrNull(index)?.let { DiffLineRow(it, gutterWidth) }
                     }
                 }
             }
@@ -393,11 +393,16 @@ fun highlightCode(code: String, language: SyntaxLanguage?, darkMode: Boolean): A
         buildAnnotatedString {
             append(code)
             codeHighlights.forEach { h ->
+                val start = h.location.start
+                val end = h.location.end
+                // 高亮引擎可能给出 start>end 或越界区间，直接 addStyle 会抛 Reversed range/越界崩溃；
+                // 与 SafeMarkdownHighlightedCode 一致地丢弃非法区间，降级为纯文本。
+                if (start < 0 || start >= end || end > code.length) return@forEach
                 val style = when (h) {
                     is ColorHighlight -> SpanStyle(color = Color(h.rgb).copy(alpha = 1f))
                     is BoldHighlight -> SpanStyle(fontWeight = FontWeight.Bold)
                 }
-                addStyle(style, h.location.start, h.location.end)
+                addStyle(style, start, end)
             }
         }
     } catch (e: Exception) {

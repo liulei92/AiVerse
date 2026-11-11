@@ -219,13 +219,14 @@ internal fun LogTab(
     val commits = filteredCommits
 
     // 泳道调色板：按列号循环取色，分支越多颜色越丰富。
-    val laneColors = rememberLaneColors(graph.maxLane + 1)
+    val safeMaxLane = graph.maxLane.coerceAtLeast(0)
+    val laneColors = rememberLaneColors(safeMaxLane + 1)
     // 每个提交到其父提交的边列表（按提交索引分组），供 Canvas 绘制连线。
     val edgesByCommit = remember(graph) { groupEdgesByCommit(graph) }
     // Canvas 宽度：每个泳道一列，加左右内边距。线性历史（无分叉/合并）时收紧泳道宽度，
     // 让出更多空间给提交信息；有分叉时每泳道 16dp。节点在泳道内自动居中，无需改绘制。
-    val laneWidth = if (graph.maxLane == 0) 10.dp else 16.dp
-    val canvasWidth = laneWidth * (graph.maxLane + 1) + Spacing.xs * 2
+    val laneWidth = if (safeMaxLane == 0) 10.dp else 16.dp
+    val canvasWidth = laneWidth * (safeMaxLane + 1) + Spacing.xs * 2
     // 每行高度，用于计算连线纵向跨度（节点居中）。
     val rowHeight = 72.dp
     // 预拉取下一页：列表滑动至接近底部（剩余 20 项）且还有更多提交时提前发起后台拉取，消除滑到底部等待停顿。
@@ -510,6 +511,11 @@ private fun GraphCanvas(
         val centerX = lane * lanePx + lanePx / 2f + padPx
         val centerY = size.height / 2f
         val stroke = 2.5.dp.toPx()
+        // 防御：画布无尺寸、泳道宽为 0（搜索态/占位）或坐标非有限值（NaN/Inf）时跳过绘制，
+        // 避免用非法坐标构造 Path/圆点导致渲染阶段异常。
+        if (size.width <= 0f || size.height <= 0f || lanePx <= 0f ||
+            !centerX.isFinite() || !centerY.isFinite()
+        ) return@Canvas
 
         // 所有相关泳道（包含 top 和 bottom 的并集）
         val allLanes = (activeTopLanes + activeBottomLanes + lane).toSet()

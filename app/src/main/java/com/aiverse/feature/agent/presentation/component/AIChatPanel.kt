@@ -46,6 +46,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -86,15 +88,24 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aiverse.R
 import com.aiverse.core.theme.Spacing
+import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.tts.LocalTtsController
 import com.aiverse.core.ui.ImageViewerHost
 import com.aiverse.core.ui.LocalImageViewer
 import com.aiverse.core.ui.AdaptiveModalBottomSheet
+import com.aiverse.core.ui.AppTextField
+import com.aiverse.core.ui.appTextFieldColors
 import com.aiverse.core.ui.readableContentMaxWidth
 import com.aiverse.core.ui.rememberImageViewerState
 import com.aiverse.core.ui.rememberViewerDecodeSpec
@@ -118,6 +129,8 @@ import compose.icons.FeatherIcons
 import compose.icons.feathericons.ArrowDown
 import compose.icons.feathericons.Code
 import compose.icons.feathericons.MessageCircle
+import compose.icons.feathericons.Search
+import compose.icons.feathericons.X
 import compose.icons.feathericons.User
 import java.io.File
 import kotlinx.coroutines.delay
@@ -850,17 +863,23 @@ fun AIChatPanel(
     }
 
     val isBusy = agentState is AgentUIState.Loading || agentState is AgentUIState.Streaming
-    // 自动朗读：回复生成完成（isBusy 下降沿）且开关开启时，朗读最后一条助手消息。
+    // 整轮是否仍在进行：agentState 在多步任务的「流式→工具→流式」衔接处可能短暂回落到
+    // Idle/Result（如工具执行间隙、轮次边界），此时仅靠 isBusy 会误判本轮已结束。
+    // 只要仍有流式文本、运行中/准备中的工具或压缩在途，本轮就未真正收尾；
+    // 以「busy 或 仍有在途工作」作为整轮进行中信号，保证本轮结束前所有朗读按钮都不出现。
+    val turnInProgress = isBusy || streamingText != null || runningTool.isNotEmpty() ||
+        preparingTool != null || isCompacting
+    // 自动朗读：整轮回复真正完成（turnInProgress 下降沿）且开关开启时，朗读最后一条助手消息。
     val autoRead by viewModel.ttsController.autoReadFlow.collectAsStateWithLifecycle(initialValue = false)
     val prevBusyForTts = remember { mutableStateOf(false) }
-    LaunchedEffect(isBusy) {
-        if (prevBusyForTts.value && !isBusy && autoRead) {
+    LaunchedEffect(turnInProgress) {
+        if (prevBusyForTts.value && !turnInProgress && autoRead) {
             val last = messages.lastOrNull {
                 it.role == MessageRole.ASSISTANT && it.content.hasVisibleContent()
             }
             if (last != null) viewModel.ttsController.play(last.id, last.content)
         }
-        prevBusyForTts.value = isBusy
+        prevBusyForTts.value = turnInProgress
     }
     LaunchedEffect(Unit) {
         viewModel.ttsController.errorMessage.collect { msg ->
@@ -1642,8 +1661,8 @@ fun AIChatPanel(
                     isChunkFooter = item.isChunkFooter,
                     // 该消息仍在生成中（AI 思考/流式）：隐藏朗读按钮，回答完毕才显示。
                     messageInProgress = isBusy && message.id == messages.lastOrNull()?.id,
-                    // 整轮回复仍在进行中（isBusy）：整轮期间隐藏所有朗读按钮，待整轮结束才显示。
-                    turnBusy = isBusy,
+                    // 整轮回复仍在进行中（turnInProgress）：整轮期间隐藏所有朗读按钮，待整轮结束才显示。
+                    turnBusy = turnInProgress,
                     reasoningVisible = item.reasoningVisible,
                     contentPadding = if (item.groupMember) ToolGroupMemberPadding else PaddingValues(0.dp),
                     onRewindClick = { viewModel.openRewindMenu(it) },
@@ -2259,6 +2278,14 @@ private fun MessageTimelineSheet(
     ) {
         // 只列用户消息 + AI 最终文本回答（过滤思考过程与工具调用，见 [isTimelineEntry]）。
         val timelineEntries = messages.filter { it.isTimelineEntry() }
+        // 搜索关键词（边输边过滤，仅内存数据）与「仅用户消息」过滤开关。
+        var searchQuery by rememberSaveable { mutableStateOf("") }
+        var onlyUser by rememberSaveable { mutableStateOf(false) }
+        val keyword = searchQuery.trim()
+        val filteredEntries = timelineEntries.filter { message ->
+            (!onlyUser || message.role == MessageRole.USER) &&
+                (keyword.isEmpty() || message.content.contains(keyword, ignoreCase = true))
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2272,7 +2299,59 @@ private fun MessageTimelineSheet(
                     .padding(horizontal = Spacing.lg)
                     .padding(bottom = Spacing.sm)
             )
-            if (timelineEntries.isEmpty()) {
+            // 关键词搜索框：纯前端过滤当前会话消息，不触发任何数据请求。
+            AppTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = stringResource(R.string.chat_message_nav_search_hint),
+                singleLine = true,
+                colors = appTextFieldColors(),
+                leadingIcon = {
+                    Icon(
+                        imageVector = FeatherIcons.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        Icon(
+                            imageVector = FeatherIcons.X,
+                            contentDescription = stringResource(R.string.chat_message_nav_search_clear),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .clickable { searchQuery = "" }
+                                .size(18.dp)
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.lg)
+            )
+            Spacer(modifier = Modifier.height(Spacing.sm))
+            // 「仅用户消息」过滤开关（FilterChip，风格同设置页筛选 chip）。
+            FilterChip(
+                selected = onlyUser,
+                onClick = { onlyUser = !onlyUser },
+                label = { Text(stringResource(R.string.chat_message_nav_only_user), fontSize = 13.sp) },
+                shape = RoundedCornerShape(50),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = MaterialTheme.semanticColors.cardSurface,
+                    labelColor = MaterialTheme.colorScheme.onSurface
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = onlyUser,
+                    borderColor = MaterialTheme.semanticColors.subtleBorder,
+                    selectedBorderColor = Color.Transparent
+                ),
+                modifier = Modifier.padding(horizontal = Spacing.lg)
+            )
+            if (filteredEntries.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2280,7 +2359,10 @@ private fun MessageTimelineSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = stringResource(R.string.chat_message_timeline_empty),
+                        text = stringResource(
+                            if (timelineEntries.isEmpty()) R.string.chat_message_timeline_empty
+                            else R.string.chat_message_nav_no_match
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2289,12 +2371,13 @@ private fun MessageTimelineSheet(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 400.dp),
+                        .heightIn(max = 320.dp),
                     contentPadding = PaddingValues(bottom = Spacing.lg)
                 ) {
-                    itemsIndexed(timelineEntries, key = { _, m -> m.id }) { _, message ->
+                    itemsIndexed(filteredEntries, key = { _, m -> m.id }) { _, message ->
                         MessageTimelineRow(
                             message = message,
+                            highlightKeyword = keyword,
                             onClick = { onSelectMessage(message) }
                         )
                     }
@@ -2304,10 +2387,11 @@ private fun MessageTimelineSheet(
     }
 }
 
-/** 消息时间线里的一行：左侧角色图标 + 正文首行预览（单行省略）。 */
+/** 消息时间线里的一行：左侧角色图标 + 正文首行预览（单行省略），关键词命中的片段用主题色加粗标出。 */
 @Composable
 private fun MessageTimelineRow(
     message: AgentUIMessage,
+    highlightKeyword: String,
     onClick: () -> Unit,
 ) {
     val (roleColor, roleIcon, roleLabelRes) = when (message.role) {
@@ -2336,6 +2420,30 @@ private fun MessageTimelineRow(
             ?: message.toolName
             ?: ""
     }
+    // 预览正文（空则退化为角色名）。带关键词时把命中片段标为主题色加粗。
+    val basePreview = preview.ifEmpty { roleLabel }
+    val primary = MaterialTheme.colorScheme.primary
+    val displayText = remember(basePreview, highlightKeyword, primary) {
+        if (highlightKeyword.isEmpty()) {
+            AnnotatedString(basePreview)
+        } else {
+            buildAnnotatedString {
+                val lower = basePreview.lowercase()
+                val keywordLower = highlightKeyword.lowercase()
+                var cursor = 0
+                while (true) {
+                    val index = lower.indexOf(keywordLower, startIndex = cursor)
+                    if (index < 0) break
+                    append(basePreview.substring(cursor, index))
+                    withStyle(SpanStyle(color = primary, fontWeight = FontWeight.Bold)) {
+                        append(basePreview.substring(index, index + keywordLower.length))
+                    }
+                    cursor = index + keywordLower.length
+                }
+                append(basePreview.substring(cursor))
+            }
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2360,7 +2468,7 @@ private fun MessageTimelineRow(
         Spacer(modifier = Modifier.width(Spacing.md))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = preview.ifEmpty { roleLabel },
+                text = displayText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,

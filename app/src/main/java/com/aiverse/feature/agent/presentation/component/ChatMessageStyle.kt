@@ -116,7 +116,8 @@ internal fun chatBubbleColorFor(style: ChatBubbleStyle): Color = when (style) {
     ChatBubbleStyle.FRESH_GREEN -> Color(0xFF4CAF50)
     ChatBubbleStyle.HEARTBEAT -> Color(0xFFF2F2F2)
     ChatBubbleStyle.ORIGINAL -> MaterialTheme.colorScheme.primary
-    // 无气泡样式：AI 回复不套容器（正文直接铺底色），这里给用户消息一个普通底色兜底。
+    // 无气泡样式：用户与助手两侧都不套容器（正文直接铺在页面底色上），此值不再作为气泡底色渲染，
+    // 仅保留给块级元素配色（chatBlockColorsFor）做深浅推导，避免深色模式下代码块/表格配色失联。
     ChatBubbleStyle.NO_BUBBLE -> MaterialTheme.colorScheme.surface
 }
 
@@ -165,9 +166,8 @@ internal fun chatBubbleBorder(role: ChatBubbleRole): BorderStroke? {
         ChatBubbleStyle.CLASSIC_OUTLINE -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.onSurface)
         ChatBubbleStyle.COMIC -> BorderStroke(2.dp, Color.Black)
         ChatBubbleStyle.HEARTBEAT -> BorderStroke(1.5.dp, Color(0xFFBDBDBD))
-        // 无气泡样式只对 AI 回复生效（AI 直接去包裹，不走这里）；用户消息选它时回退为描边气泡。
-        ChatBubbleStyle.NO_BUBBLE ->
-            if (role == ChatBubbleRole.USER) BorderStroke(1.5.dp, MaterialTheme.colorScheme.onSurface) else null
+        // 无气泡样式：用户与助手两侧都不套容器（正文直接铺底），故统一无描边。
+        ChatBubbleStyle.NO_BUBBLE -> null
         else -> null
     }
 }

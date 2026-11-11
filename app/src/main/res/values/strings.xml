@@ -709,6 +709,10 @@
     <string name="chat_open_browser">打开浏览器</string>
     <string name="chat_message_navigation">消息导航</string>
     <string name="chat_message_timeline_empty">暂无消息</string>
+    <string name="chat_message_nav_search_hint">搜索消息…</string>
+    <string name="chat_message_nav_search_clear">清除搜索</string>
+    <string name="chat_message_nav_only_user">仅用户消息</string>
+    <string name="chat_message_nav_no_match">无匹配消息</string>
     <string name="chat_role_user">用户</string>
     <string name="chat_role_assistant">助手</string>
     <string name="chat_role_tool">工具</string>

@@ -9,6 +9,7 @@ import com.aiverse.feature.workspace.domain.FileAccessProvider
 import com.aiverse.feature.workspace.domain.PathHomeResolver
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -40,6 +41,10 @@ class ToolOutputStore @Inject constructor(
         const val TAIL_CHARS = 20_000
         const val MAX_INLINE_CHARS = HEAD_CHARS + TAIL_CHARS
         val LARGE_TEXT_FIELDS = listOf("output", "content", "text", "stdout", "stderr", "body", "result")
+        /** 结构内可截断字符串字段的最小长度，低于此值不值得为省预算而截断。 */
+        const val MIN_TRUNCATE_FIELD_CHARS = 200
+        /** 整体超限时最多执行的「截断最大字段」轮数，避免超大结果导致长时间循环。 */
+        const val MAX_TRUNCATE_PASSES = 24
         val TIMESTAMP_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS")
     }
 
@@ -109,6 +114,13 @@ class ToolOutputStore @Inject constructor(
         val serialized = json.encodeToString(element)
         if (serialized.length <= MAX_INLINE_CHARS) return element
 
+        // 整体超限：不要把结构化结果整体折叠成 {"content": ...}（那会让 getIssue 的
+        // issue.title/body/state/labels 等内容字段无法按结构读取）。优先在结构内深挖最大的
+        // 长字符串字段（如 getIssue 的 issue.body、listIssues 的 issues[i].body），把该字段
+        // 截断为「头 + 省略提示 + 尾」并保留其余字段与 JSON 结构；无法收敛时才回退到折叠。
+        val reduced = reduceOverBudget(toolName, callId, element)
+        if (reduced != null) return reduced
+
         val stored = boundText(toolName, callId, serialized)
         return stored.toJsonObject("content")
     }
@@ -142,6 +154,121 @@ class ToolOutputStore @Inject constructor(
             append(text.take(HEAD_CHARS))
             append(appContext.getString(R.string.tool_output_omitted, omitted, storageHint))
             append(text.takeLast(TAIL_CHARS))
+        }
+    }
+
+    /** 结构内某个待截断字符串字段的定位：路径（对象键 / 数组下标）与全文。 */
+    private data class DeepTextField(val path: List<Any>, val text: String)
+
+    /**
+     * 整体超限时的结构化降级：反复找出结构内最大、键名属于 [LARGE_TEXT_FIELDS] 的字符串字段，
+     * 把它截断为「头 + 省略提示 + 尾」并保留其余字段与 JSON 结构，直到整体回到 [MAX_INLINE_CHARS] 内。
+     * 找不到可截断字段（如巨大数组但每项都很小）或轮数耗尽时返回 null，由调用方回退为折叠。
+     */
+    private fun reduceOverBudget(toolName: String, callId: String, element: JsonElement): JsonElement? {
+        var current = element
+        var primary: StoredToolOutput? = null
+        var passes = 0
+        while (passes < MAX_TRUNCATE_PASSES) {
+            val serialized = json.encodeToString(current)
+            val over = serialized.length - MAX_INLINE_CHARS
+            if (over <= 0) return current
+            val target = findDeepTextField(current) ?: return current.takeIf { primary != null }
+            if (target.text.length <= MIN_TRUNCATE_FIELD_CHARS) return current.takeIf { primary != null }
+            val targetLen = (target.text.length - over).coerceAtLeast(MIN_TRUNCATE_FIELD_CHARS)
+            val stored = truncateToBudget(toolName, callId, target.text, targetLen, persist = primary == null)
+            current = replaceAt(current, target.path, JsonPrimitive(stored.preview))
+            if (primary == null) {
+                primary = stored
+                val root = current as? JsonObject
+                if (root != null) {
+                    val updated = root.toMutableMap()
+                    addMetadata(updated, stored)
+                    current = JsonObject(updated)
+                }
+            }
+            passes++
+        }
+        return current.takeIf { primary != null }
+    }
+
+    /** 深度优先找出结构内最大、键名属于 [LARGE_TEXT_FIELDS] 的字符串字段。 */
+    private fun findDeepTextField(element: JsonElement, path: List<Any> = emptyList()): DeepTextField? {
+        var best: DeepTextField? = null
+        when (element) {
+            is JsonObject -> element.forEach { (key, value) ->
+                val candidate = if (value is JsonPrimitive && value.isString && key in LARGE_TEXT_FIELDS) {
+                    DeepTextField(path + key, value.content)
+                } else {
+                    findDeepTextField(value, path + key)
+                }
+                if (candidate != null && (best == null || candidate.text.length > best.text.length)) best = candidate
+            }
+            is JsonArray -> element.forEachIndexed { index, value ->
+                val candidate = findDeepTextField(value, path + index)
+                if (candidate != null && (best == null || candidate.text.length > best.text.length)) best = candidate
+            }
+            else -> {}
+        }
+        return best
+    }
+
+    /** 按路径（对象键 / 数组下标）不可变地把 [element] 中的字段替换为 [newValue]。 */
+    private fun replaceAt(element: JsonElement, path: List<Any>, newValue: JsonElement): JsonElement {
+        if (path.isEmpty()) return newValue
+        return when (element) {
+            is JsonObject -> {
+                val key = path[0] as String
+                val updated = element.toMutableMap()
+                updated[key] = replaceAt(element[key]!!, path.drop(1), newValue)
+                JsonObject(updated)
+            }
+            is JsonArray -> {
+                val index = path[0] as Int
+                val updated = element.toMutableList()
+                updated[index] = replaceAt(element[index], path.drop(1), newValue)
+                JsonArray(updated)
+            }
+            else -> element
+        }
+    }
+
+    /**
+     * 把 [text] 截断为约 [targetLen] 字符的「头 + 省略提示 + 尾」。[persist] 为 true 时全文落盘供读取
+     * （仅对第一个被截断的最大字段落盘并暴露路径，后续字段只留行内预览，避免过多文件写入）。
+     */
+    private fun truncateToBudget(
+        toolName: String,
+        callId: String,
+        text: String,
+        targetLen: Int,
+        persist: Boolean
+    ): StoredToolOutput {
+        val writeResult = if (persist) writeFullOutput(toolName, callId, text) else StoredPathResult()
+        return StoredToolOutput(
+            preview = buildBudgetPreview(text, targetLen, writeResult.outputPath),
+            truncated = true,
+            totalChars = text.length.toLong(),
+            outputPath = writeResult.outputPath,
+            storageError = writeResult.storageError
+        )
+    }
+
+    /** 按预算构建「头 + 省略提示 + 尾」预览，头尾对半分。 */
+    private fun buildBudgetPreview(text: String, targetLen: Int, outputPath: String?): String {
+        val keep = targetLen.coerceIn(1, text.length)
+        val head = keep / 2
+        val tail = keep - head
+        val omitted = text.length - keep
+        val storageHint = if (outputPath != null) {
+            appContext.getString(R.string.tool_output_saved_hint, outputPath)
+        } else {
+            appContext.getString(R.string.tool_output_unsaved_hint)
+        }
+        return buildString {
+            append(text.take(head))
+            append(appContext.getString(R.string.tool_output_omitted, omitted, storageHint))
+            append(text.takeLast(tail))
         }
     }
 

@@ -265,7 +265,7 @@ fun GitScreen(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
-                    when (GitTab.entries[page]) {
+                    when (GitTab.entries.getOrNull(page) ?: GitTab.STATUS) {
                         GitTab.STATUS -> StatusTab(
                             status = state.status,
                             busy = state.busy,
