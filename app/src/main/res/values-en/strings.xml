@@ -105,6 +105,16 @@
     <string name="settings_appearance_chat_font">Chat Font Size</string>
     <string name="settings_appearance_input_font">Input Font Size</string>
     <string name="settings_appearance_ui_scale">UI Scale</string>
+    <string name="settings_appearance_files">Files</string>
+    <string name="file_tree_filename_display">File Name Display</string>
+    <string name="file_name_display_scroll">Single line (scroll)</string>
+    <string name="file_name_display_two_lines">Up to two lines</string>
+    <string name="file_name_display_ellipsis">Single line (ellipsis)</string>
+    <string name="file_tree_show_hidden">Show Hidden Files</string>
+    <string name="file_tree_indent_density">Indent Density</string>
+    <string name="indent_compact">Compact</string>
+    <string name="indent_standard">Standard</string>
+    <string name="file_tree_muted_coloring">Muted Coloring</string>
     <string name="settings_appearance_reset">Restore Defaults</string>
     <string name="settings_appearance_theme_package">Theme Package</string>
     <string name="settings_appearance_theme_package_export">Export Theme Package</string>

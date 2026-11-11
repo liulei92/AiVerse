@@ -86,6 +86,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.aiverse.core.theme.AIEditorTheme
 import com.aiverse.core.theme.AppThemePreset
+import com.aiverse.core.theme.FileTreeDisplayPrefs
 import com.aiverse.core.theme.UIDensity
 import com.aiverse.core.ui.BetaWatermark
 import com.aiverse.core.ui.ImageSource
@@ -323,6 +324,7 @@ class MainActivity : ComponentActivity() {
             val inputFontSizeSp by appearanceSettings.inputFontSizeSpFlow.collectAsStateWithLifecycle(initialValue = AppearanceSettingsRepository.DEFAULT_INPUT_FONT_SIZE_SP)
             val uiFontScale by appearanceSettings.uiFontScaleFlow.collectAsStateWithLifecycle(initialValue = AppearanceSettingsRepository.DEFAULT_UI_FONT_SCALE)
             val uiDensity by appearanceSettings.uiDensityFlow.collectAsStateWithLifecycle(initialValue = UIDensity.STANDARD)
+            val fileTreeDisplayPrefs by appearanceSettings.fileTreeDisplayPrefsFlow.collectAsStateWithLifecycle(initialValue = FileTreeDisplayPrefs.Default)
             val systemDarkTheme = isSystemInDarkTheme()
             val darkTheme = when (themeMode) {
                 AppThemeMode.AUTO -> systemDarkTheme
@@ -700,6 +702,7 @@ fun AppNavigation(
             awaitingPermissionSessionIds = awaitingPermissionSessionIds,
             subSessionsByParent = subSessionsByParent,
             browseState = browseState,
+            fileTreePrefs = fileTreeDisplayPrefs,
             expandedPaths = expandedPaths,
             expandingPath = expandingPath,
             fileOpPaths = fileOpPaths,

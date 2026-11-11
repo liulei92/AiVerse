@@ -124,6 +124,16 @@
     <string name="density_compact">紧凑</string>
     <string name="density_standard">标准</string>
     <string name="density_comfortable">舒适</string>
+    <string name="settings_appearance_files">文件</string>
+    <string name="file_tree_filename_display">文件名显示</string>
+    <string name="file_name_display_scroll">单行横向滚动</string>
+    <string name="file_name_display_two_lines">最多两行</string>
+    <string name="file_name_display_ellipsis">单行省略号</string>
+    <string name="file_tree_show_hidden">显示隐藏文件</string>
+    <string name="file_tree_indent_density">缩进密度</string>
+    <string name="indent_compact">紧凑</string>
+    <string name="indent_standard">标准</string>
+    <string name="file_tree_muted_coloring">弱化着色</string>
     <string name="settings_appearance_reset">恢复默认</string>
     <string name="settings_appearance_theme_package">主题包</string>
     <string name="settings_appearance_theme_package_export">导出主题包</string>

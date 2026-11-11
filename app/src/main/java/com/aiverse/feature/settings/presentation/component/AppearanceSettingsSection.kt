@@ -33,6 +33,9 @@ import androidx.compose.ui.text.AnnotatedString
 import com.aiverse.R
 import com.aiverse.core.theme.AppThemePreset
 import com.aiverse.core.theme.ChatBubbleStyle
+import com.aiverse.core.theme.FileNameDisplay
+import com.aiverse.core.theme.FileTreeDisplayPrefs
+import com.aiverse.core.theme.FileTreeIndentDensity
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.UIDensity
 import com.aiverse.core.ui.SegmentedTabs
@@ -49,6 +52,7 @@ import compose.icons.feathericons.Box
 import compose.icons.feathericons.ChevronUp
 import compose.icons.feathericons.Cpu
 import compose.icons.feathericons.Download
+import compose.icons.feathericons.Eye
 import compose.icons.feathericons.Folder
 import compose.icons.feathericons.Globe
 import compose.icons.feathericons.Image
@@ -77,6 +81,11 @@ internal fun AppearanceSettingsSection(
     inputFontSizeSp: Int,
     uiFontScale: Float,
     uiDensity: UIDensity,
+    fileTreePrefs: FileTreeDisplayPrefs,
+    onSetFileNameDisplay: (FileNameDisplay) -> Unit,
+    onSetShowHiddenFiles: (Boolean) -> Unit,
+    onSetFileIndentDensity: (FileTreeIndentDensity) -> Unit,
+    onSetFileMutedColoring: (Boolean) -> Unit,
     onOpenThemeSheet: () -> Unit,
     onOpenBackgroundSheet: () -> Unit,
     onOpenUserBubbleStyleSheet: () -> Unit,
@@ -229,6 +238,31 @@ internal fun AppearanceSettingsSection(
             )
         }
 
+        SettingsGroupHeader(text = stringResource(R.string.settings_appearance_files))
+        SettingsGroup {
+            FileNameDisplayRow(
+                selected = fileTreePrefs.fileNameDisplay,
+                onSelect = onSetFileNameDisplay
+            )
+            SettingsDivider()
+            SettingsRow(
+                icon = FeatherIcons.Eye,
+                title = stringResource(R.string.file_tree_show_hidden),
+                trailing = { AppSwitch(checked = fileTreePrefs.showHiddenFiles, onCheckedChange = onSetShowHiddenFiles) }
+            )
+            SettingsDivider()
+            FileIndentDensityRow(
+                selected = fileTreePrefs.indentDensity,
+                onSelect = onSetFileIndentDensity
+            )
+            SettingsDivider()
+            SettingsRow(
+                icon = FeatherIcons.Moon,
+                title = stringResource(R.string.file_tree_muted_coloring),
+                trailing = { AppSwitch(checked = fileTreePrefs.mutedColoring, onCheckedChange = onSetFileMutedColoring) }
+            )
+        }
+
         SettingsGroupHeader(text = stringResource(R.string.settings_appearance_input_bar))
         SettingsGroup {
             // 顺序与输入框快捷栏一致（共用 DEFAULT_QUICK_ACTION_ORDER，按使用频率）。
@@ -333,6 +367,65 @@ private fun DensityRow(
     ) {
         Text(
             text = stringResource(R.string.settings_appearance_density),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(bottom = Spacing.sm)
+        )
+        SegmentedTabs(
+            selected = options.indexOf(selected).coerceAtLeast(0),
+            labels = labels,
+            onSelect = { index -> onSelect(options[index]) }
+        )
+    }
+}
+
+/** 文件树文件名显示三档选择行：单行横向滚动 / 最多两行 / 单行省略号，实时持久化。 */
+@Composable
+private fun FileNameDisplayRow(
+    selected: FileNameDisplay,
+    onSelect: (FileNameDisplay) -> Unit
+) {
+    val options = FileNameDisplay.entries
+    val labels = listOf(
+        stringResource(R.string.file_name_display_scroll),
+        stringResource(R.string.file_name_display_two_lines),
+        stringResource(R.string.file_name_display_ellipsis)
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm)
+    ) {
+        Text(
+            text = stringResource(R.string.file_tree_filename_display),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(bottom = Spacing.sm)
+        )
+        SegmentedTabs(
+            selected = options.indexOf(selected).coerceAtLeast(0),
+            labels = labels,
+            onSelect = { index -> onSelect(options[index]) }
+        )
+    }
+}
+
+/** 文件树缩进密度两档选择行：紧凑 / 标准，实时持久化。 */
+@Composable
+private fun FileIndentDensityRow(
+    selected: FileTreeIndentDensity,
+    onSelect: (FileTreeIndentDensity) -> Unit
+) {
+    val options = FileTreeIndentDensity.entries
+    val labels = listOf(
+        stringResource(R.string.indent_compact),
+        stringResource(R.string.indent_standard)
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm)
+    ) {
+        Text(
+            text = stringResource(R.string.file_tree_indent_density),
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(bottom = Spacing.sm)
         )

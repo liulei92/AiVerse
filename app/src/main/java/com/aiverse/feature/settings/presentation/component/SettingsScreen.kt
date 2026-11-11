@@ -305,6 +305,7 @@ fun SettingsScreen(
     val inputFontSizeSp by viewModel.inputFontSizeSp.collectAsStateWithLifecycle()
     val uiFontScale by viewModel.uiFontScale.collectAsStateWithLifecycle()
     val uiDensity by viewModel.uiDensity.collectAsStateWithLifecycle()
+    val fileTreeDisplayPrefs by viewModel.fileTreeDisplayPrefs.collectAsStateWithLifecycle()
     val inputBarPrefs by viewModel.inputBarPrefs.collectAsStateWithLifecycle()
     val defaultSkillInstallScope by viewModel.defaultSkillInstallScope.collectAsStateWithLifecycle()
     val languageTag by viewModel.languageTag.collectAsStateWithLifecycle()
@@ -1063,6 +1064,11 @@ fun SettingsScreen(
                     inputFontSizeSp = inputFontSizeSp,
                     uiFontScale = uiFontScale,
                     uiDensity = uiDensity,
+                    fileTreePrefs = fileTreeDisplayPrefs,
+                    onSetFileNameDisplay = { viewModel.setFileNameDisplay(it) },
+                    onSetShowHiddenFiles = { viewModel.setShowHiddenFiles(it) },
+                    onSetFileIndentDensity = { viewModel.setFileIndentDensity(it) },
+                    onSetFileMutedColoring = { viewModel.setFileMutedColoring(it) },
                     onOpenThemeSheet = { showThemeSheet = true },
                     onOpenBackgroundSheet = { showBackgroundSheet = true },
                     onOpenUserBubbleStyleSheet = { showUserBubbleStyleSheet = true },

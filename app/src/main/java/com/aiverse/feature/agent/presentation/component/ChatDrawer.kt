@@ -94,6 +94,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.aiverse.core.theme.FileNameDisplay
+import com.aiverse.core.theme.FileTreeDisplayPrefs
+import com.aiverse.core.theme.FileTreeIndentDensity
 import com.aiverse.core.theme.Radius
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
@@ -169,6 +172,7 @@ fun ChatDrawerContent(
     onExport: (ChatSession) -> Unit,
     subSessionsByParent: Map<String, List<ChatSession>> = emptyMap(),
     browseState: FileBrowseState,
+    fileTreePrefs: FileTreeDisplayPrefs = FileTreeDisplayPrefs.Default,
     expandedPaths: Set<String>,
     expandingPath: String? = null,
     fileOpPaths: Set<String> = emptySet(),
@@ -372,6 +376,7 @@ fun ChatDrawerContent(
                 )
                 1 -> FileBrowserTab(
                     state = browseState,
+                    fileTreePrefs = fileTreePrefs,
                     expandedPaths = expandedPaths,
                     expandingPath = expandingPath,
                     fileOpPaths = fileOpPaths,
@@ -897,6 +902,7 @@ private fun SubAgentExpandToggle(
 @Composable
 private fun FileBrowserTab(
     state: FileBrowseState,
+    fileTreePrefs: FileTreeDisplayPrefs,
     expandedPaths: Set<String>,
     expandingPath: String?,
     fileOpPaths: Set<String>,
@@ -1025,17 +1031,19 @@ private fun FileBrowserTab(
                 val textMeasurer = rememberTextMeasurer()
                 val textStyle = MaterialTheme.typography.bodyMedium
                 val density = LocalDensity.current
+                // 缩进宽度按偏好：标准档 16dp（历史值）/ 紧凑档 10dp。
+                val indentWidth = fileTreePrefs.indentDensity.indentDp.dp
                 // 预算最宽一行的内容宽度（固定开销 + 缩进 + 文本），供所有行取统一宽度，
                 // 以实现整棵树统一横向平移（而非每行各自滚动）。
                 // 逐个 measure 在大目录下会在组合期同步跑上千次文本测量；先按「缩进 + 字符宽度权重」
                 // 挑出最宽的那一行，只对它做一次真实测量。估算不精确，但这里只用来给横向滚动留够宽度。
-                val maxContentPx = remember(state.nodes, textStyle) {
+                val maxContentPx = remember(state.nodes, textStyle, indentWidth) {
                     with(density) {
                         val widest = state.nodes.maxByOrNull { node ->
                             node.depth * 4 + node.displayName.sumOf { ch -> if (ch.code > 0x2E80) 2 else 1 }
                         } ?: return@with 0
                         val textW = textMeasurer.measure(widest.displayName, textStyle).size.width
-                        (FILE_TREE_ROW_OVERHEAD.toPx() + (Spacing.lg * widest.depth).toPx() + textW).toInt()
+                        (FILE_TREE_ROW_OVERHEAD.toPx() + (indentWidth * widest.depth).toPx() + textW).toInt()
                     }
                 }
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -1052,6 +1060,7 @@ private fun FileBrowserTab(
                             FileTreeRow(
                                 node = node,
                                 rowWidth = rowWidth,
+                                fileTreePrefs = fileTreePrefs,
                                 expanding = node.entry.isDirectory && node.path == expandingPath,
                                 busy = node.path in fileOpPaths,
                                 selectionState = selState,
@@ -1545,6 +1554,7 @@ private fun FileTreeActionSheet(
 private fun FileTreeRow(
     node: FileTreeNode,
     rowWidth: Dp,
+    fileTreePrefs: FileTreeDisplayPrefs,
     expanding: Boolean,
     busy: Boolean,
     selectionState: Int = 0, // 0 未选 / 1 全选 / 2 部分（仅文件夹）
@@ -1565,12 +1575,16 @@ private fun FileTreeRow(
         }
     }
     val isDotfile = node.root == null && node.entry.name.startsWith(".")
+    // 弱化着色关闭时：.gitignore / dotfile 均用常规色（读取失败仍标红），图标与文本一致。
     val decorationColor: Color? = when {
         node.hasError -> MaterialTheme.colorScheme.error
+        !fileTreePrefs.mutedColoring -> null
         node.ignored -> FileTreeIgnoredColor
         isDotfile -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
         else -> null
     }
+    val indentWidth = fileTreePrefs.indentDensity.indentDp.dp
+    val fileNameDisplay = fileTreePrefs.fileNameDisplay
     Row(
         modifier = modifier
             .width(rowWidth)
@@ -1611,7 +1625,7 @@ private fun FileTreeRow(
             }
             Spacer(Modifier.width(Spacing.xs))
         }
-        Spacer(Modifier.width(Spacing.lg * node.depth))
+        Spacer(Modifier.width(indentWidth * node.depth))
         if (node.entry.isDirectory) {
             if (showExpanding) {
                 CircularProgressIndicator(
@@ -1648,8 +1662,10 @@ private fun FileTreeRow(
             text = node.displayName,
             style = MaterialTheme.typography.bodyMedium,
             color = decorationColor ?: MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            softWrap = false
+            // 文件名显示偏好：单行横向滚动（历史默认）/ 最多两行换行 / 单行省略号。
+            maxLines = if (fileNameDisplay == FileNameDisplay.TWO_LINES) 2 else 1,
+            softWrap = fileNameDisplay == FileNameDisplay.TWO_LINES,
+            overflow = if (fileNameDisplay == FileNameDisplay.SINGLE_LINE_ELLIPSIS) TextOverflow.Ellipsis else null
         )
     }
 }

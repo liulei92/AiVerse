@@ -9,6 +9,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aiverse.core.net.AppProxy
 import com.aiverse.core.theme.ChatBubbleStyle
+import com.aiverse.core.theme.FileNameDisplay
+import com.aiverse.core.theme.FileTreeDisplayPrefs
+import com.aiverse.core.theme.FileTreeIndentDensity
 import com.aiverse.core.theme.ThemePackage
 import com.aiverse.core.theme.UIDensity
 import com.aiverse.core.ui.overlay.OverlayBallService
@@ -713,6 +716,10 @@ class SettingsViewModel @Inject constructor(
     private val _uiDensity = MutableStateFlow(UIDensity.STANDARD)
     val uiDensity: StateFlow<UIDensity> = _uiDensity.asStateFlow()
 
+    /** 侧边栏文件树显示偏好（文件名显示/隐藏文件/缩进密度/弱化着色），默认与历史行为一致。 */
+    private val _fileTreeDisplayPrefs = MutableStateFlow(FileTreeDisplayPrefs.Default)
+    val fileTreeDisplayPrefs: StateFlow<FileTreeDisplayPrefs> = _fileTreeDisplayPrefs.asStateFlow()
+
     /** 三档字号落盘的节流 job（滑块拖动防积压），见 [setChatFontSizeSp] 等。 */
     private var fontWriteJob: Job? = null
 
@@ -1206,6 +1213,12 @@ class SettingsViewModel @Inject constructor(
             launch {
                 appearanceSettingsRepository.uiDensityFlow.collectLatest {
                     _uiDensity.value = it
+                }
+            }
+
+            launch {
+                appearanceSettingsRepository.fileTreeDisplayPrefsFlow.collectLatest {
+                    _fileTreeDisplayPrefs.value = it
                 }
             }
 
@@ -2510,10 +2523,39 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /** 恢复外观为默认值（清空三档字号与密度档，回到仓库默认）。 */
+    /** 设置文件树文件名显示方式。 */
+    fun setFileNameDisplay(display: FileNameDisplay) {
+        viewModelScope.launch {
+            appearanceSettingsRepository.setFileNameDisplay(display)
+        }
+    }
+
+    /** 设置是否显示隐藏文件。 */
+    fun setShowHiddenFiles(show: Boolean) {
+        viewModelScope.launch {
+            appearanceSettingsRepository.setShowHiddenFiles(show)
+        }
+    }
+
+    /** 设置文件树缩进密度。 */
+    fun setFileIndentDensity(density: FileTreeIndentDensity) {
+        viewModelScope.launch {
+            appearanceSettingsRepository.setFileIndentDensity(density)
+        }
+    }
+
+    /** 设置是否弱化着色 .gitignore / dotfile。 */
+    fun setFileMutedColoring(muted: Boolean) {
+        viewModelScope.launch {
+            appearanceSettingsRepository.setFileMutedColoring(muted)
+        }
+    }
+
+    /** 恢复外观为默认值（清空三档字号、密度档与文件树显示偏好，回到仓库默认）。 */
     fun restoreAppearanceDefaults() {
         viewModelScope.launch {
             appearanceSettingsRepository.restoreFontSizes(null, null, null, null)
+            appearanceSettingsRepository.restoreFileTreeDisplay()
         }
     }
 

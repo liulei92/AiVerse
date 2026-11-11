@@ -38,7 +38,9 @@ import com.aiverse.feature.settings.domain.model.BalanceConfig
 import com.aiverse.feature.settings.domain.model.ProviderType
 import com.aiverse.feature.settings.domain.service.ModelCostCalculator
 import com.aiverse.feature.settings.domain.repository.AIProviderRepository
+import com.aiverse.core.theme.FileTreeDisplayPrefs
 import com.aiverse.feature.settings.data.repository.AgentSoundSettingsRepository
+import com.aiverse.feature.settings.data.repository.AppearanceSettingsRepository
 import com.aiverse.feature.settings.data.repository.BalanceSettingsRepository
 import com.aiverse.feature.settings.data.remote.BalanceFetcher
 import com.aiverse.feature.settings.data.repository.ContainerSettingsRepository
@@ -183,6 +185,7 @@ class AIAgentViewModel @Inject constructor(
     private val backupManager: BackupManager,
     private val mcpManager: McpManager,
     private val agentSoundSettings: AgentSoundSettingsRepository,
+    private val appearanceSettingsRepository: AppearanceSettingsRepository,
     private val containerSettingsRepository: ContainerSettingsRepository,
     private val containerOsDetector: ContainerOsDetector,
     private val generalSettingsRepository: GeneralSettingsRepository,
@@ -667,8 +670,10 @@ class AIAgentViewModel @Inject constructor(
      * 监听工作区根与所有已展开目录：任一发生变动（不限 AI，终端与其它 App 同样算）或手动刷新都会重建树。
      * 只监听展开中的目录、不递归整棵树，避免大仓库开出大量 inotify 句柄。
      */
-    val browseState: StateFlow<FileBrowseState> = combine(_expandedPaths, containerRootNode) { expanded, root -> expanded to root }
-        .flatMapLatest { (expanded, root) ->
+    val browseState: StateFlow<FileBrowseState> = combine(
+        _expandedPaths, containerRootNode, appearanceSettingsRepository.fileTreeDisplayPrefsFlow
+    ) { expanded, root, prefs -> Triple(expanded, root, prefs) }
+        .flatMapLatest { (expanded, root, prefs) ->
             val watched = expanded + WorkspacePathMapper.CONTAINER_ROOT
             val triggers = merge(
                 watched.map { fileChangeHub.watchWorkspace(it).asDirtySignal() }.merge().debounce(BROWSE_DEBOUNCE_MS),
@@ -678,8 +683,8 @@ class AIAgentViewModel @Inject constructor(
             flow {
                 // 首次产出前由 stateIn 初值 Loading 占位；后续展开/折叠/刷新不再回到 Loading，
                 // StateFlow 保留上一份 Success 直到新树就绪，避免闪加载动画与滚动位置丢失。
-                emit(buildBrowseTree(expanded, root))
-                triggers.collect { emit(buildBrowseTree(expanded, root)) }
+                emit(buildBrowseTree(expanded, root, prefs))
+                triggers.collect { emit(buildBrowseTree(expanded, root, prefs)) }
             }.flowOn(Dispatchers.IO)
         }
         // 新树已就绪：清掉展开等待态（无论成功/出错都清，避免转圈卡死）。
@@ -687,7 +692,7 @@ class AIAgentViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FileBrowseState.Loading)
 
     /** 读取工作区根与当前容器根，按 [expanded] 递归展开，产出扁平的可见节点列表；工作区根读取失败则整体报错。 */
-    private fun buildBrowseTree(expanded: Set<String>, containerRoot: FileTreeRoot.Container): FileBrowseState {
+    private fun buildBrowseTree(expanded: Set<String>, containerRoot: FileTreeRoot.Container, prefs: FileTreeDisplayPrefs): FileBrowseState {
         val workspaceRoot = WorkspacePathMapper.CONTAINER_ROOT
         val workspaceEntries = runCatching { fileAccess.listFiles(workspaceRoot) }.getOrElse { e ->
             FileLogger.w(TAG, "列目录失败: $workspaceRoot", e)
@@ -698,7 +703,7 @@ class AIAgentViewModel @Inject constructor(
         if (workspaceRoot in expanded) {
             appendBrowseChildren(
                 workspaceRoot, workspaceEntries, depth = 1, expanded = expanded,
-                ignorePatterns = loadRootGitignore(workspaceRoot), relParts = emptyList(), out = nodes
+                ignorePatterns = loadRootGitignore(workspaceRoot), relParts = emptyList(), prefs = prefs, out = nodes
             )
         }
         // 当前容器根：读不到（容器未安装、远程未连接）时只把该行标红，不影响工作区那棵。
@@ -712,7 +717,7 @@ class AIAgentViewModel @Inject constructor(
         if (containerEntries != null) {
             appendBrowseChildren(
                 CONTAINER_FS_ROOT, containerEntries, depth = 1, expanded = expanded,
-                ignorePatterns = emptyList(), relParts = emptyList(), out = nodes
+                ignorePatterns = emptyList(), relParts = emptyList(), prefs = prefs, out = nodes
             )
         }
         return FileBrowseState.Success(nodes)
@@ -746,11 +751,14 @@ class AIAgentViewModel @Inject constructor(
         expanded: Set<String>,
         ignorePatterns: List<String>,
         relParts: List<String>,
+        prefs: FileTreeDisplayPrefs,
         out: MutableList<FileTreeNode>
     ) {
         // 按名字去重：文件系统的 readdir 在 FUSE 存储（外部工作区/模拟存储）上可能重复返回同一条目，
         // AOSP 的 ReaddirHelper 亦做同样处理。同名条目会产生重复的节点 path，撞坏 LazyColumn 的 key。
         for (entry in entries.distinctBy { it.name }.sortedWith(BROWSE_ORDER)) {
+            // 隐藏文件偏好：关闭时跳过 .gitignore、dotfile 等以点开头的条目（含目录，其子项不再展开）。
+            if (!prefs.showHiddenFiles && entry.name.startsWith(".")) continue
             val path = childPathPrefix(parent) + entry.name
             val parts = relParts + entry.name
             val ignored = ignorePatterns.isNotEmpty() &&
@@ -762,7 +770,7 @@ class AIAgentViewModel @Inject constructor(
             }
             val children = runCatching { fileAccess.listFiles(path) }.getOrNull()
             out += FileTreeNode(entry, path, depth, isExpanded = true, hasError = children == null, ignored = ignored)
-            if (children != null) appendBrowseChildren(path, children, depth + 1, expanded, ignorePatterns, parts, out)
+            if (children != null) appendBrowseChildren(path, children, depth + 1, expanded, ignorePatterns, parts, prefs, out)
         }
     }
 

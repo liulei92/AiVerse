@@ -1,12 +1,16 @@
 package com.aiverse.feature.settings.data.repository
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.aiverse.core.datastore.preferencesCorruptionHandler
+import com.aiverse.core.theme.FileNameDisplay
+import com.aiverse.core.theme.FileTreeDisplayPrefs
+import com.aiverse.core.theme.FileTreeIndentDensity
 import com.aiverse.core.theme.UIDensity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -49,6 +53,16 @@ class AppearanceSettingsRepository @Inject constructor(
         UIDensity.fromId(prefs[UI_DENSITY_KEY])
     }
 
+    /** 侧边栏文件树显示偏好：文件名显示 / 显示隐藏文件 / 缩进密度 / 弱化着色，默认与历史行为一致。 */
+    val fileTreeDisplayPrefsFlow: Flow<FileTreeDisplayPrefs> = context.appearanceDataStore.data.map { prefs ->
+        FileTreeDisplayPrefs(
+            fileNameDisplay = FileNameDisplay.fromId(prefs[FILE_NAME_DISPLAY_KEY]),
+            showHiddenFiles = prefs[SHOW_HIDDEN_FILES_KEY] ?: FileTreeDisplayPrefs.Default.showHiddenFiles,
+            indentDensity = FileTreeIndentDensity.fromId(prefs[FILE_INDENT_DENSITY_KEY]),
+            mutedColoring = prefs[FILE_MUTED_COLORING_KEY] ?: FileTreeDisplayPrefs.Default.mutedColoring
+        )
+    }
+
     suspend fun setChatFontSizeSp(sizeSp: Int) {
         context.appearanceDataStore.edit { it[CHAT_FONT_SIZE_KEY] = sizeSp.coerceIn(MIN_CHAT_FONT_SIZE_SP, MAX_CHAT_FONT_SIZE_SP) }
     }
@@ -64,6 +78,26 @@ class AppearanceSettingsRepository @Inject constructor(
     /** 设置界面密度档。 */
     suspend fun setUiDensity(density: UIDensity) {
         context.appearanceDataStore.edit { it[UI_DENSITY_KEY] = density.id }
+    }
+
+    /** 设置文件树文件名显示方式。 */
+    suspend fun setFileNameDisplay(display: FileNameDisplay) {
+        context.appearanceDataStore.edit { it[FILE_NAME_DISPLAY_KEY] = display.id }
+    }
+
+    /** 设置是否显示隐藏文件。 */
+    suspend fun setShowHiddenFiles(show: Boolean) {
+        context.appearanceDataStore.edit { it[SHOW_HIDDEN_FILES_KEY] = show }
+    }
+
+    /** 设置文件树缩进密度。 */
+    suspend fun setFileIndentDensity(density: FileTreeIndentDensity) {
+        context.appearanceDataStore.edit { it[FILE_INDENT_DENSITY_KEY] = density.id }
+    }
+
+    /** 设置是否弱化着色 .gitignore / dotfile。 */
+    suspend fun setFileMutedColoring(muted: Boolean) {
+        context.appearanceDataStore.edit { it[FILE_MUTED_COLORING_KEY] = muted }
     }
 
     /** 备份快照：当前聊天字号（sp）。 */
@@ -88,11 +122,25 @@ class AppearanceSettingsRepository @Inject constructor(
         }
     }
 
+    /** 清空文件树显示偏好，回退默认（与历史行为一致）。 */
+    suspend fun restoreFileTreeDisplay() {
+        context.appearanceDataStore.edit {
+            it.remove(FILE_NAME_DISPLAY_KEY)
+            it.remove(SHOW_HIDDEN_FILES_KEY)
+            it.remove(FILE_INDENT_DENSITY_KEY)
+            it.remove(FILE_MUTED_COLORING_KEY)
+        }
+    }
+
     companion object {
         private val CHAT_FONT_SIZE_KEY = intPreferencesKey("chat_font_size_sp")
         private val INPUT_FONT_SIZE_KEY = intPreferencesKey("input_font_size_sp")
         private val UI_FONT_SCALE_KEY = floatPreferencesKey("ui_font_scale")
         private val UI_DENSITY_KEY = stringPreferencesKey("ui_density")
+        private val FILE_NAME_DISPLAY_KEY = stringPreferencesKey("file_name_display")
+        private val SHOW_HIDDEN_FILES_KEY = booleanPreferencesKey("file_show_hidden")
+        private val FILE_INDENT_DENSITY_KEY = stringPreferencesKey("file_indent_density")
+        private val FILE_MUTED_COLORING_KEY = booleanPreferencesKey("file_muted_coloring")
 
         const val MIN_CHAT_FONT_SIZE_SP = 12
         const val MAX_CHAT_FONT_SIZE_SP = 22
