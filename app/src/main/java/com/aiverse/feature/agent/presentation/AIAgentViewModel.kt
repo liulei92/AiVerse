@@ -1812,7 +1812,8 @@ class AIAgentViewModel @Inject constructor(
                     agentName = session?.subagentType?.takeIf { it.isNotBlank() && it != "subagent" },
                     title = session?.title.orEmpty(),
                     status = SubAgentCardStatus.RUNNING,
-                    startedAt = System.currentTimeMillis()
+                    startedAt = System.currentTimeMillis(),
+                    parentSessionId = session?.parentId
                 )
                 )
         }
@@ -1839,7 +1840,8 @@ class AIAgentViewModel @Inject constructor(
                 excerpt = digest?.excerpt ?: previous?.excerpt,
                 changedFiles = digest?.changedFiles?.takeIf { it.isNotEmpty() } ?: previous?.changedFiles.orEmpty(),
                 elapsedMs = System.currentTimeMillis() - startedAt,
-                startedAt = startedAt
+                startedAt = startedAt,
+                parentSessionId = previous?.parentSessionId
             )
             )
         // 卡片状态只服务当前进程的展示，超过 50 条就丢掉最早的，避免长会话无限增长。
@@ -2869,6 +2871,11 @@ class AIAgentViewModel @Inject constructor(
         // 此时不能再覆盖新 job 的状态；仅当无新 job 接管时才做清理。
         if (sessionJobs[sessionId]?.isActive != true) {
             setAgentState(sessionId, AgentUIState.Idle)
+        }
+        // 界面手动停止：把常驻状态行卡片同步翻成「已停止」，否则 job 已取消、UI 却还停在「运行中」。
+        // 若 TaskTool stop/del 已先 emit 过 STOPPED，卡片已是 STOPPED，这里幂等重写一遍耗时，无副作用。
+        if (_subAgentCards.value[sessionId]?.status == SubAgentCardStatus.RUNNING) {
+            markSubAgentFinished(sessionId, SubAgentCardStatus.STOPPED)
         }
         _runningTools.value = _runningTools.value - sessionId
         setStreamingText(sessionId, null)

@@ -294,5 +294,7 @@ data class SubAgentCardState(
     val excerpt: String? = null,
     val changedFiles: List<String> = emptyList(),
     val elapsedMs: Long? = null,
-    val startedAt: Long = System.currentTimeMillis()
+    val startedAt: Long = System.currentTimeMillis(),
+    /** 父（根）会话 id：消息流常驻状态行按它筛选当前会话的子代理。 */
+    val parentSessionId: String? = null
 )

@@ -15,11 +15,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,8 +46,12 @@ import com.aiverse.feature.agent.presentation.SubAgentCardState
 import com.aiverse.feature.agent.presentation.SubAgentCardStatus
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.AlertCircle
+import compose.icons.feathericons.ChevronDown
 import compose.icons.feathericons.ChevronRight
+import compose.icons.feathericons.ChevronUp
 import compose.icons.feathericons.Cpu
+import compose.icons.feathericons.X
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -498,4 +510,219 @@ private fun tierLabel(tier: String?): String? = when (tier?.lowercase()) {
     "standard" -> stringResource(R.string.settings_subagent_tier_standard)
     "strong" -> stringResource(R.string.settings_subagent_tier_strong)
     else -> null
+}
+
+/**
+ * 消息流常驻状态行（issue #43）：派发子代理后，在消息列表顶部常显一条状态行，
+ * 不随「N 次工具调用」分组折叠——用户无需展开工具调用详情即可看到谁在跑、跑了多久。
+ *
+ * 数据复用 [SubAgentCardState]（与工具详情卡片同一份，见 [SubAgentDispatchCard]），只按父会话
+ * 筛选当前会话的子代理，不新造数据源。
+ *
+ * @param states 当前会话的子代理卡片（已按 startedAt 升序，含运行中与已完成）。
+ * @param onOpen 点击某一项进入对应子代理会话。
+ * @param onStop 停止运行中的子代理。
+ */
+@Composable
+internal fun SubAgentStatusRow(
+    states: List<SubAgentCardState>,
+    onOpen: (String) -> Unit,
+    onStop: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (states.isEmpty()) return
+    val runningCount = states.count { it.status == SubAgentCardStatus.RUNNING }
+    // 折叠开关：默认展开，用户点过则以选择为准；状态行本身常驻，只有明细可收合。
+    var expanded by remember { mutableStateOf(true) }
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(Radius.sm),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+    ) {
+        Column(
+            modifier = Modifier.padding(Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clip(RoundedCornerShape(Radius.xs))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = FeatherIcons.Cpu,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+                Spacer(Modifier.width(Spacing.sm))
+                Text(
+                    text = stringResource(R.string.subagent_status_row_title),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (runningCount > 0) {
+                    Spacer(Modifier.width(Spacing.xs))
+                    SubAgentStatusPill(
+                        label = stringResource(R.string.subagent_status_row_running_count, runningCount),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Icon(
+                    imageVector = if (expanded) FeatherIcons.ChevronUp else FeatherIcons.ChevronDown,
+                    contentDescription = stringResource(
+                        if (expanded) R.string.common_collapse else R.string.common_expand
+                    ),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            if (expanded) {
+                states.forEach { state ->
+                    SubAgentStatusRowItem(state = state, onOpen = onOpen, onStop = onStop)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 常驻状态行里的单个子代理条目：状态药丸 + 代理名 + 实时/总耗时 +（完成后的摘要/改动文件）+
+ * 进入会话 +（运行中的停止按钮）。
+ *
+ * 运行中每 1s 刷新一次耗时（`now - startedAt`）；已完成/失败/已停止显示固定耗时 [SubAgentCardState.elapsedMs]。
+ */
+@Composable
+private fun SubAgentStatusRowItem(
+    state: SubAgentCardState,
+    onOpen: (String) -> Unit,
+    onStop: (String) -> Unit
+) {
+    val running = state.status == SubAgentCardStatus.RUNNING
+    // 停止二次确认：点 × 先弹对话框，确认后才真正停，避免误触把运行中的子代理一下停掉。
+    var showStopConfirm by remember(state.subSessionId) { mutableStateOf(false) }
+    // 运行中的实时耗时：存绝对起始戳，重启计时不漂移。
+    var elapsedMs by remember(state.subSessionId, state.startedAt) { mutableLongStateOf(0L) }
+    LaunchedEffect(running, state.startedAt) {
+        if (!running) return@LaunchedEffect
+        while (true) {
+            elapsedMs = (System.currentTimeMillis() - state.startedAt).coerceAtLeast(0L)
+            delay(1000)
+        }
+    }
+    // 展示耗时：运行中用实时值，结束后用落定的 elapsedMs。
+    val displayMs = if (running) elapsedMs else state.elapsedMs
+    val elapsedText = displayMs?.takeIf { it > 0 }?.let { formatTaskDuration(it) }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(Radius.xs),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier
+                .clickable { onOpen(state.subSessionId) }
+                .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SubAgentStatusChip(state.status)
+                Spacer(Modifier.width(Spacing.sm))
+                Text(
+                    text = state.agentName ?: stringResource(R.string.subagent_card_default_agent),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (elapsedText != null) {
+                    Spacer(Modifier.width(Spacing.sm))
+                    Text(
+                        text = stringResource(
+                            if (running) R.string.subagent_status_row_elapsed_running
+                            else R.string.subagent_status_row_elapsed_done,
+                            elapsedText
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1
+                    )
+                }
+                if (running) {
+                    Spacer(Modifier.width(Spacing.sm))
+                    // 停止按钮：真正启用宿主下发的 onStop（此前卡片未消费）。
+                    Icon(
+                        imageVector = FeatherIcons.X,
+                        contentDescription = stringResource(R.string.subagent_card_stop),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clickable { showStopConfirm = true }
+                    )
+                }
+            }
+            // 完成后的结果摘要与改动文件：与工具详情卡片同一份，多数场景无需进子会话即可看到结论。
+            state.excerpt?.takeIf { it.isNotBlank() }?.let { excerpt ->
+                Text(
+                    text = excerpt,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            state.changedFiles.takeIf { it.isNotEmpty() }?.let { files ->
+                Text(
+                    text = stringResource(R.string.subagent_card_changed_files, files.size),
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+
+    if (showStopConfirm) {
+        AlertDialog(
+            onDismissRequest = { showStopConfirm = false },
+            title = { Text(stringResource(R.string.subagent_stop_confirm_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.subagent_stop_confirm_message,
+                        state.agentName ?: stringResource(R.string.subagent_card_default_agent)
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showStopConfirm = false
+                    onStop(state.subSessionId)
+                }) {
+                    Text(stringResource(R.string.subagent_stop_confirm_action), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStopConfirm = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
 }

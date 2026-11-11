@@ -194,12 +194,19 @@ class ToolPermissionPolicyEngine @Inject constructor(
             if (toolName == SHIZUKU_TOOL && !safetyDisabled) {
                 return EvalResult(Verdict.ASK, emptyList(), rememberDisabledReason = appContext.getString(R.string.tool_shizuku_confirmation_reason))
             }
-            // 文件写操作（写入/编辑）永远需用户确认：AUTO 模式也不会自动放行。
+            // 文件写操作（写入/编辑）默认逐次确认：AUTO 模式也不自动放行。
+            // 但用户在弹窗里点过「始终允许」落下的整工具 ALLOW 规则要读到——否则规则写进去了却永远不生效，每次照样弹。
             // 越界写已在上面被白名单 DENY；走到这里的都是白名单内或未启用白名单。
             if (isFileWriteTool(toolName, capabilities)) {
+                val writeRules = rulesRepo.loadEffectiveForCurrentProject().filter { it.toolName == toolName }
+                if (writeRules.any { it.pattern == PermissionRule.WHOLE_TOOL && it.decision == PermissionDecision.ALLOW }) {
+                    return EvalResult(Verdict.ALLOW, emptyList())
+                }
+                // 尚未记忆：设计上写文件每次都要确认，故「始终允许」不可用（按钮不亮），
+                // 只给单次放行并说明原因，避免按钮亮着、文案却承诺会记住而实际无效。
                 return EvalResult(
                     Verdict.ASK,
-                    listOf(PermissionRule.WHOLE_TOOL),
+                    rememberablePatterns = emptyList(),
                     rememberDisabledReason = appContext.getString(R.string.tool_write_always_confirm_reason)
                 )
             }

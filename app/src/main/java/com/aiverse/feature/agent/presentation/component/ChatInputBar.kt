@@ -1328,20 +1328,23 @@ internal fun ToolPermissionPanel(
                             text = stringResource(R.string.chat_perm_deny),
                             onClick = { onChoice(PermissionChoice.REJECT) },
                             modifier = Modifier.weight(1f),
-                            tone = AgentActionTone.Danger
+                            tone = AgentActionTone.Danger,
+                            compact = true
                         )
                         AgentActionButton(
                             text = stringResource(R.string.chat_perm_always_allow),
                             onClick = { onChoice(PermissionChoice.ALWAYS) },
                             modifier = Modifier.weight(1f),
                             enabled = canRemember,
-                            tone = AgentActionTone.Neutral
+                            tone = AgentActionTone.Neutral,
+                            compact = true
                         )
                         AgentActionButton(
                             text = stringResource(R.string.common_allow),
                             onClick = { onChoice(PermissionChoice.ONCE) },
                             modifier = Modifier.weight(1f),
-                            tone = AgentActionTone.Success
+                            tone = AgentActionTone.Success,
+                            compact = true
                         )
                     }
                 }

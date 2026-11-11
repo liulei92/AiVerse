@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -74,7 +73,10 @@ internal fun AgentActionButton(
             color = content,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
-            style = if (compact) MaterialTheme.typography.labelLarge else LocalTextStyle.current
+            // 两档字号统一从 MaterialTheme.typography 取（紧凑档 labelLarge、普通档 bodyLarge），
+            // 二者同属主题字体体系，跟随同一套字体缩放（系统字号/应用界面字体大小）。
+            // 不再用 LocalTextStyle.current（环境继承、可被外部覆盖），消除两档字号来源不一致。
+            style = if (compact) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyLarge
         )
     }
 }

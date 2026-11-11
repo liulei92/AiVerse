@@ -727,6 +727,13 @@ fun AIChatPanel(
     val subAgentCards by viewModel.subAgentCards.collectAsStateWithLifecycle()
 
     val currentSessionId by viewModel.currentSessionId.collectAsStateWithLifecycle()
+    // 消息流常驻状态行（issue #43）：只取当前会话派发的子代理（按父会话 id 关联），按派发先后排序。
+    // 与工具详情卡片复用同一份 [SubAgentCardState]，仅把状态提升到消息流一层常显。
+    val currentSubAgentStates = remember(subAgentCards, currentSessionId) {
+        subAgentCards.values
+            .filter { it.parentSessionId != null && it.parentSessionId == currentSessionId }
+            .sortedBy { it.startedAt }
+    }
     val inputBarPrefs by viewModel.inputBarPrefs.collectAsStateWithLifecycle()
     val compactionThresholdPercent by viewModel.compactionThresholdPercent.collectAsStateWithLifecycle()
     val webSearchEnabled by viewModel.webSearchEnabled.collectAsStateWithLifecycle()
@@ -1750,6 +1757,18 @@ fun AIChatPanel(
         ) {
             // 内容层：消息列表延伸到屏幕底部，输入框悬浮其上，滚动时卡片可滑入输入框后面
             Column(modifier = Modifier.fillMaxSize()) {
+            // 消息流常驻子代理状态行（issue #43）：当前会话有子代理时始终可见，
+            // 不随「N 次工具调用」分组折叠；与工具详情卡片复用同一份状态数据。
+            if (currentSubAgentStates.isNotEmpty()) {
+                SubAgentStatusRow(
+                    states = currentSubAgentStates,
+                    onOpen = { id -> viewModel.selectSession(id) },
+                    onStop = { id -> viewModel.stopAgentSession(id) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.lg, vertical = Spacing.xs)
+                )
+            }
             Box(modifier = Modifier.weight(1f)) {
                 if (!messagesReady) {
                     // 远程模式连接未就绪时显示连接状态占位，避免空白或旧工作区记录闪烁
