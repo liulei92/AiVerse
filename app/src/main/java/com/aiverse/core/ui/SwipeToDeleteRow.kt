@@ -173,11 +173,13 @@ fun SwipeToDeleteRow(
             }
         }
 
-        // 表层分组行：手势回弹与滑动展开；滑开状态下点击先收回、不触发 onClick
+        // 表层分组行：手势回弹与滑动展开；滑开状态下点击先收回、不触发 onClick。
+        // 背景（cardSurface）先 clip 成与内层卡片一致的圆角，再铺色，避免四角露出直角灰底。
         Row(
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
                 .background(rowBackground)
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
