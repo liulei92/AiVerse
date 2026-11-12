@@ -1,12 +1,12 @@
 name: Nightly Build
 
-# 每天北京时间 0:00 / 6:00 / 12:00 / 18:00 自动构建最新 main 的 beta 测试包（三架构）并上传到 Actions artifact。
+# 每小时（北京时间）自动构建最新 main 的 beta 测试包（三架构）并上传到 Actions artifact。
 # 目的：测试的人随时能拿到最新构建，且能尽早发现编译挂了。只传 artifact，不发 GitHub Release。
 # beta = 继承 release 的正式签名 + R8，包名 com.aiverse.beta（与正式版同机共存、互不覆盖）；
 # 签名校验生效，但测试包不参与检查更新（见 SettingsViewModel.isTestPackage），不会把测试机导向正式包。
 on:
   schedule:
-    - cron: '0 4,10,16,22 * * *'  # UTC，对应北京时间 0/6/12/18（与 sync-to-gitcode 一致）
+    - cron: '0 * * * *'  # 每小时（UTC 整点，对应北京时间每小时的 :00）
   workflow_dispatch:
 
 permissions:
