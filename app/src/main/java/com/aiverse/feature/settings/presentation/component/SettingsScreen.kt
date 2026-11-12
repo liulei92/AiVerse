@@ -151,7 +151,7 @@ import com.aiverse.feature.plugins.presentation.PluginRepoSection
 import com.aiverse.feature.terminal.presentation.component.TerminalSettingsSheet
 
 /** 使用手册在线文档站地址。 */
-private const val USER_GUIDE_DOCS_URL = "https://aiverse.qlyyz.xyz"
+private const val USER_GUIDE_DOCS_URL = "https://aivapp.cn"
 
 /** 大屏设置页左侧常驻菜单宽度。 */
 private val SettingsMenuWidth = 320.dp

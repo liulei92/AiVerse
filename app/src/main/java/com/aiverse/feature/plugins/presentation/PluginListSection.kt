@@ -71,7 +71,7 @@ import java.util.Date
 import java.util.Locale
 
 /** 脚本插件使用文档链接（安装脚本正上方图标跳转）。 */
-private const val SCRIPTS_DOCS_URL = "https://aiverse.qlyyz.xyz/guide/scripts"
+private const val SCRIPTS_DOCS_URL = "https://aivapp.cn/guide/scripts"
 
 /** 脚本插件管理页：列表（启用/禁用/卸载）+ 安装入口（仓库页/本地 zip）。 */
 @Composable

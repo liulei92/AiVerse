@@ -834,8 +834,8 @@
     <string name="agreement_notice_suffix">" to understand the usage rules and data handling practices.\n\nBy tapping “Agree and continue”, you confirm that you have read and agree to both documents."</string>
     <string name="agreement_accept">Agree and continue</string>
     <string name="agreement_decline">Disagree</string>
-    <string name="agreement_terms_url">https://aiverse.qlyyz.xyz/en/terms</string>
-    <string name="agreement_privacy_url">https://aiverse.qlyyz.xyz/en/privacy</string>
+    <string name="agreement_terms_url">https://aivapp.cn/en/terms</string>
+    <string name="agreement_privacy_url">https://aivapp.cn/en/privacy</string>
 
     <!-- Ask User Question -->
     <string name="ask_confirm_title">AI needs your confirmation</string>
@@ -2377,7 +2377,7 @@
     <string name="sig_invalid_title">Signature Verification Failed</string>
     <string name="sig_invalid_message">Signature mismatch. Please download from the official source.</string>
     <string name="sig_invalid_button">Go to official site</string>
-    <string name="sig_invalid_repo_url">https://aiverse.qlyyz.xyz</string>
+    <string name="sig_invalid_repo_url">https://aivapp.cn</string>
     <string name="sig_invalid_github_url">https://github.com/yhdmgf/AiVerse</string>
     <string name="sig_invalid_github_button">GitHub Repository</string>
     <string name="sig_invalid_exit">Exit App</string>
