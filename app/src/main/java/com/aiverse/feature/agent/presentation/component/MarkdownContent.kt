@@ -32,9 +32,9 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aiverse.R
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.semanticColors
 import com.mikepenz.markdown.compose.MarkdownElement
 import com.mikepenz.markdown.compose.LocalMarkdownColors
@@ -182,18 +182,24 @@ internal fun MarkdownContent(
         table = typography.bodySmall.copy(color = color),
     )
 
+    val densityTokens = LocalUIDensityTokens.current
     val mdPadding = markdownPadding(
-        block = 4.dp,
-        list = 2.dp,
-        listItemBottom = 1.dp,
-        listIndent = 12.dp,
-        codeBlock = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        block = densityTokens.scale(4),
+        list = densityTokens.scale(2),
+        listItemBottom = densityTokens.scale(1),
+        listIndent = densityTokens.scale(12),
+        codeBlock = PaddingValues(
+            start = densityTokens.sm,
+            end = densityTokens.sm,
+            top = densityTokens.sm,
+            bottom = densityTokens.sm,
+        ),
     )
 
     val mdDimens = markdownDimens(
-        codeBackgroundCornerSize = 6.dp,
-        tableCellPadding = 6.dp,
-        tableCornerSize = 6.dp,
+        codeBackgroundCornerSize = densityTokens.scale(6),
+        tableCellPadding = densityTokens.scale(6),
+        tableCornerSize = densityTokens.scale(6),
     )
 
     // 代码高亮配色跟随**块底**（而非页面底）的深浅：深底气泡的块底被调成深色后，若仍用
@@ -447,7 +453,7 @@ private fun SafeMarkdownHighlightedCode(
     MarkdownCodeBackground(
         color = LocalMarkdownColors.current.codeBackground,
         shape = RoundedCornerShape(LocalMarkdownDimens.current.codeBackgroundCornerSize),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = LocalUIDensityTokens.current.scale(8)),
         showHeader = showHeader,
         language = language,
         code = code,

@@ -59,7 +59,9 @@ data class UIDensityTokens(
     /** 输入类控件（文本框/下拉）基准高度。 */
     val fieldHeight: Dp,
     /** chip / 小按钮基准高度。 */
-    val chipHeight: Dp
+    val chipHeight: Dp,
+    /** 底部悬浮 Tab 栏容器高度（含 6dp 底部留白）。 */
+    val tabBarHeight: Dp
 ) {
     /** 按语义取卡片圆角 Shape。 */
     val cardShape get() = RoundedCornerShape(cardCorner)
@@ -75,6 +77,15 @@ data class UIDensityTokens(
 
     /** 按语义取 chip 圆角 Shape。 */
     val chipShape get() = RoundedCornerShape(chipCorner)
+
+    /**
+     * 把「标准档基准值（裸 dp 数）」按当前密度缩放。用于无精确语义 token 对应的
+     * 容器高度、最小宽度等结构性尺寸；语义值一律优先用上面具名 token。
+     */
+    fun scale(baseDp: Int): Dp = (baseDp * factor).dp
+
+    /** 当前令牌所属密度档的缩放系数（标准档为 1.0）。 */
+    private val factor: Float = density.scale
 
     companion object {
         /** 标准档令牌：所有值等于 [Spacing] / [Radius] 原始定义，行为与历史版本一致。 */
@@ -104,7 +115,8 @@ data class UIDensityTokens(
                 chipCorner = (8 * s).dp,
                 touchTarget = (48 * s).dp,
                 fieldHeight = (52 * s).dp,
-                chipHeight = (32 * s).dp
+                chipHeight = (32 * s).dp,
+                tabBarHeight = (68 * s).dp
             )
         }
     }

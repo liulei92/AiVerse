@@ -190,7 +190,7 @@ fun FloatingTabBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(68.dp)
+            .height(t.tabBarHeight)
             .background(
                 Brush.verticalGradient(
                     listOf(maskColor.copy(alpha = 0f), maskColor.copy(alpha = 0.98f))
@@ -296,7 +296,7 @@ fun FloatingTabBar(
                             scaleY = (2f - stretchScaleX).coerceIn(0.94f, 1f)
                         }
                         .width(indicatorWidthDp)
-                        .height(44.dp)
+                        .height(t.scale(44))
                         .shadow(
                             elevation = t.xs / 2,
                             shape = RoundedCornerShape(t.rPill),
@@ -340,7 +340,7 @@ fun FloatingTabBar(
                     Column(
                         modifier = Modifier
                             .onGloballyPositioned { tabBounds[index] = it.boundsInParent() }
-                            .widthIn(min = 84.dp)
+                            .widthIn(min = t.scale(84))
                             .graphicsLayer {
                                 scaleX = tabScale
                                 scaleY = tabScale
@@ -505,7 +505,7 @@ fun FloatingTabBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(68.dp)
+            .height(t.tabBarHeight)
             .background(
                 Brush.verticalGradient(
                     listOf(maskColor.copy(alpha = 0f), maskColor.copy(alpha = 0.98f))
@@ -592,7 +592,7 @@ fun FloatingTabBar(
                             scaleY = if (isDragging) 0.98f else (2f - stretchScale.value).coerceIn(0.95f, 1f)
                         }
                         .width(indicatorWidthDp)
-                        .height(44.dp)
+                        .height(t.scale(44))
                         .shadow(
                             elevation = t.xs / 2,
                             shape = RoundedCornerShape(t.rPill),
@@ -636,7 +636,7 @@ fun FloatingTabBar(
                     Column(
                         modifier = Modifier
                             .onGloballyPositioned { tabBounds[index] = it.boundsInParent() }
-                            .widthIn(min = 84.dp)
+                            .widthIn(min = t.scale(84))
                             .graphicsLayer {
                                 scaleX = tabScale
                                 scaleY = tabScale

@@ -94,6 +94,7 @@ import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.theme.LocalHyperOSStyle
 import com.aiverse.core.theme.LocalInputFontSizeSp
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.ui.rememberImeBottomInset
 import com.aiverse.core.ui.PressableSurface
 import com.aiverse.feature.onboarding.domain.OnboardingStep
@@ -147,12 +148,14 @@ import compose.icons.feathericons.Shield
 import compose.icons.feathericons.Zap
 import kotlinx.coroutines.launch
 
-/** 输入框区域蒙版高度：盖住圆角容器，滚动内容滑入时被渐变遮罩；随键盘（IME）上移。 */
-private val INPUT_BAR_MASK_HEIGHT = 110.dp
+/** 输入框区域蒙版标准档基准高度（裸 dp）：盖住圆角容器，滚动内容滑入时被渐变遮罩；随键盘（IME）上移。
+ *  实际高度在 [ChatInputBar] 内按密度令牌缩放。 */
+private const val INPUT_BAR_MASK_HEIGHT_BASE_DP = 110
 
-/** 输入框高度上下限：超过上限后文本在框内滚动。与 TextField 的 heightIn 一致。 */
-private val INPUT_FIELD_MIN_HEIGHT = 44.dp
-private val INPUT_FIELD_MAX_HEIGHT = 140.dp
+/** 输入框高度标准档基准上下限（裸 dp）：超过上限后文本在框内滚动。与 TextField 的 heightIn 一致。
+ *  实际值在 [ChatInputBar] 内按密度令牌缩放。 */
+private const val INPUT_FIELD_MIN_HEIGHT_BASE_DP = 44
+private const val INPUT_FIELD_MAX_HEIGHT_BASE_DP = 140
 
 /**
  * 输入框快捷栏的一个可开关项插槽：供可见按钮渲染与溢出菜单（图标+文字）复用。
@@ -289,6 +292,11 @@ internal fun ChatInputBar(
         color = Color.Transparent,
         modifier = modifier.fillMaxWidth()
     ) {
+        val densityTokens = LocalUIDensityTokens.current
+        // 蒙版高度与输入框高度上下限按密度缩放：compact 收拢、comfortable 放宽，标准档等于原固定值。
+        val inputBarMaskHeight = densityTokens.scale(INPUT_BAR_MASK_HEIGHT_BASE_DP)
+        val inputFieldMinHeight = densityTokens.scale(INPUT_FIELD_MIN_HEIGHT_BASE_DP)
+        val inputFieldMaxHeight = densityTokens.scale(INPUT_FIELD_MAX_HEIGHT_BASE_DP)
         val imeInset = rememberImeBottomInset()
         // 滚动弱化：内容区（slash 菜单/排队面板/数据面板/输入框本体）整体淡出到 40%，蒙版渐变保持不透明。
         val contentAlpha by animateFloatAsState(
@@ -298,20 +306,20 @@ internal fun ChatInputBar(
         )
         // 渐变终点固定在蒙版可视高度内：若跟随整个 Box（含 imeInset 被键盘拉长的部分），
         // 键盘弹起时可见区域只占渐变前段，alpha 被摊薄到几乎透明——看起来像没有蒙版。
-        val maskGradientEndY = with(LocalDensity.current) { INPUT_BAR_MASK_HEIGHT.toPx() }
+        val maskGradientEndY = with(LocalDensity.current) { inputBarMaskHeight.toPx() }
         BoxWithConstraints(
             modifier = Modifier.fillMaxWidth()
         ) {
             val dashboardBodyMaxHeight = (maxHeight - imeInset - Spacing.md).coerceAtLeast(0.dp) * 0.4f
             // 半透明渐变蒙版：盖住输入框区域 + 导航栏（手势小白条）区域，滚动内容滑入时被遮罩
-            // （能看见但看不清）；高度含 IME inset 随键盘上移，渐变在 INPUT_BAR_MASK_HEIGHT 内完成，
+            // （能看见但看不清）；高度含 IME inset 随键盘上移，渐变在 inputBarMaskHeight 内完成，
             // 之下为纯色。注意 IME padding 不能加在外层 Box 上——align(BottomCenter) 的子项
             // 对齐在 padding 内部，会漏掉导航栏那条区域。
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(INPUT_BAR_MASK_HEIGHT + imeInset)
+                    .height(inputBarMaskHeight + imeInset)
                     .background(
                         Brush.verticalGradient(
                             listOf(
@@ -559,7 +567,7 @@ internal fun ChatInputBar(
                         ),
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = INPUT_FIELD_MIN_HEIGHT, max = INPUT_FIELD_MAX_HEIGHT),
+                            .heightIn(min = inputFieldMinHeight, max = inputFieldMaxHeight),
                         placeholder = {
                             Text(
                                 stringResource(if (isBusy) R.string.chat_queue_hint else R.string.chat_input_placeholder),
