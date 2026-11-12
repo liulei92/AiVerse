@@ -112,7 +112,6 @@ import com.aiverse.feature.agent.domain.tool.PendingToolPermission
 import com.aiverse.feature.agent.domain.tool.mode.PlanApprovalRequest
 import com.aiverse.feature.agent.domain.mention.FileMentionState
 import com.aiverse.feature.agent.domain.mention.fileMentionQuery
-import com.aiverse.feature.agent.presentation.AgentUIState
 import com.aiverse.feature.agent.presentation.QueuedRequest
 import com.aiverse.feature.settings.data.remote.ModelTestResult
 import com.aiverse.feature.settings.data.repository.InputBarPrefs
@@ -228,6 +227,8 @@ internal fun ChatInputBar(
     onOpenSearchProviders: () -> Unit = {},
     /** 点击输入区的 MCP 图标，直接打开 MCP 服务器设置页。 */
     onOpenMcp: () -> Unit = {},
+    /** 待发送附件「应用内预览」：打开编辑器并直接进预览模式（容器路径）。 */
+    onOpenInEditor: (String) -> Unit = {},
     /** 主页模型弹层的连通性测试：null（无设置页 ViewModel 的宿主）时弹层不显示测试按钮。 */
     onRunModelTest: (suspend (AIProviderConfig, String) -> ModelTestResult)? = null,
     /** 输入框快捷栏可开关项快照。 */
@@ -528,7 +529,8 @@ internal fun ChatInputBar(
             ) {
                 PendingAttachmentPreviewList(
                     attachments = pendingAttachments,
-                    onRemoveAttachment = onRemoveAttachment
+                    onRemoveAttachment = onRemoveAttachment,
+                    onOpenInEditor = onOpenInEditor
                 )
 
                 Row(
@@ -1353,26 +1355,16 @@ internal fun ToolPermissionPanel(
     }
 }
 
-@Composable
-internal fun StatusBanner(state: AgentUIState) {
-    // 退出动画期间 state 已不是 Error，when 会走 else 渲染空内容，横幅的淡出就变成了瞬间消失；
-    // 拿最后一次的错误文本兜住整段退场。
-    val lastError = rememberLastNonNull((state as? AgentUIState.Error)?.message)
-    AnimatedVisibility(
-        visible = state is AgentUIState.Error,
-        enter = fadeIn() + expandVertically(),
-        exit = fadeOut() + shrinkVertically()
-    ) {
-        lastError?.let { ErrorBubble(message = it) }
-    }
-}
-
 /**
- * 失败错误气泡：风格对齐 ToolPermissionPanel / AskUserQuestionPanel（内联面板，与输入框同宽且两侧留距）。
- * 默认折叠为一行标题（请求失败），点击展开完整错误详情；右上角可一键复制。
+ * 失败错误气泡：风格对齐 ToolPermissionPanel / AskUserQuestionPanel（内联面板，与消息同宽）。
+ * 默认折叠为一行标题（请求失败），点击展开完整错误详情；右上角可一键复制、可关闭。
+ * Issue #55：作为失败回复下方的一条消息随消息流滚动，而非常驻输入框上方；折叠态收紧留白。
  */
 @Composable
-private fun ErrorBubble(message: String) {
+internal fun ErrorBubble(
+    message: String,
+    onDismiss: (() -> Unit)? = null
+) {
     var expanded by remember(message) { mutableStateOf(false) }
     var copied by remember(message) { mutableStateOf(false) }
     val clipboard = LocalClipboard.current
@@ -1385,7 +1377,8 @@ private fun ErrorBubble(message: String) {
         shape = RoundedCornerShape(Radius.md),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Column(modifier = Modifier.padding(Spacing.md)) {
+        // 折叠态收紧留白：上下内边距用 sm 而非 md，行内按钮收紧到 30dp，整卡高度贴近单行文字。
+        Column(modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1407,12 +1400,15 @@ private fun ErrorBubble(message: String) {
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = {
-                    copyScope.launch {
-                        clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("error", message)))
-                        copied = true
-                    }
-                }) {
+                IconButton(
+                    onClick = {
+                        copyScope.launch {
+                            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("error", message)))
+                            copied = true
+                        }
+                    },
+                    modifier = Modifier.size(30.dp)
+                ) {
                     Icon(
                         if (copied) FeatherIcons.Check else FeatherIcons.Copy,
                         contentDescription = if (copied) stringResource(R.string.chat_copied) else stringResource(R.string.chat_copy),
@@ -1426,6 +1422,19 @@ private fun ErrorBubble(message: String) {
                     tint = Brand.IconGray,
                     size = 18.dp
                 )
+                if (onDismiss != null) {
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            FeatherIcons.X,
+                            contentDescription = stringResource(R.string.common_close),
+                            tint = Brand.IconGray,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
             }
             AnimatedVisibility(
                 visible = expanded,
