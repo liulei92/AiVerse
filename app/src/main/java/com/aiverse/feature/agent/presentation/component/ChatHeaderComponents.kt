@@ -36,7 +36,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -100,6 +99,7 @@ import com.aiverse.feature.settings.data.remote.ModelTestResult
 import com.aiverse.feature.settings.domain.model.AIProviderConfig
 import com.aiverse.feature.settings.domain.model.ModelMetadata
 import compose.icons.FeatherIcons
+import compose.icons.feathericons.MoreHorizontal
 import compose.icons.feathericons.GitBranch
 import compose.icons.feathericons.Menu
 import compose.icons.feathericons.MessageCircle
@@ -364,7 +364,7 @@ private fun HeaderOverflowMenu(
     var menuExpanded by remember { mutableStateOf(false) }
     Box {
         CompactHeaderIconButton(
-            icon = Icons.Default.MoreVert,
+            icon = FeatherIcons.MoreHorizontal,
             contentDescription = stringResource(R.string.chat_header_more),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             onClick = { menuExpanded = true }
@@ -468,10 +468,12 @@ private fun HeaderContextUsageButton(
                 properties = PopupProperties(focusable = bubbleExpanded)
             ) {
                 // 展开/收起带淡入淡出 + 高度过渡，不再硬切弹出消失。
+                // 浮窗位于圆环下方（圆环在浮窗顶部一侧），故开合统一锚定顶部：
+                // 展开时自顶部向下生长，收起时向上收缩回圆环，两个方向一致。
                 AnimatedVisibility(
                     visible = bubbleExpanded,
-                    enter = fadeIn(tween(200)) + expandVertically(tween(200)),
-                    exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+                    enter = fadeIn(tween(200)) + expandVertically(tween(200), expandFrom = Alignment.Top),
+                    exit = fadeOut(tween(200)) + shrinkVertically(tween(200), shrinkTowards = Alignment.Top)
                 ) {
                     ComicUsageBubble(
                         detail = detail,
