@@ -104,6 +104,7 @@ import com.aiverse.feature.settings.data.repository.StartupSessionMode
 import com.aiverse.feature.settings.data.repository.ThemePackageManager
 import com.aiverse.feature.settings.data.repository.ThemeSettingsRepository
 import com.aiverse.feature.settings.data.repository.ToolSafetySettingsRepository
+import com.aiverse.feature.settings.data.repository.BackgroundMode
 import com.aiverse.feature.settings.data.repository.BackgroundSettingsRepository
 import com.aiverse.feature.settings.data.repository.ImageGenModelSettingsRepository
 import com.aiverse.feature.settings.data.repository.VisionModelSettingsRepository
@@ -692,15 +693,23 @@ class SettingsViewModel @Inject constructor(
     private val _assistantBubbleStyle = MutableStateFlow(ChatBubbleStyle.CLASSIC_OUTLINE)
     val assistantBubbleStyle: StateFlow<ChatBubbleStyle> = _assistantBubbleStyle.asStateFlow()
 
-    /** 全局自定义背景图文件路径（null=未设置），供设置弹窗展示与预览。 */
+    /** 聊天页自定义背景图文件路径（null=未设置），供设置弹窗展示与预览。 */
     private val _backgroundImagePath = MutableStateFlow<String?>(null)
     val backgroundImagePath: StateFlow<String?> = _backgroundImagePath.asStateFlow()
 
-    /** 背景图不透明度（0~0.2，实际范围由 BackgroundSettingsRepository 的 MIN/MAX 决定），实时写 DataStore，全局背景同步变化。 */
-    private val _backgroundAlpha = MutableStateFlow(BackgroundSettingsRepository.DEFAULT_ALPHA)
+    /** 背景图蒙版强度（底色 overlay 不透明度，0~0.85），实时写 DataStore，聊天页底图同步变化。 */
+    private val _backgroundAlpha = MutableStateFlow(BackgroundSettingsRepository.DEFAULT_MASK)
     val backgroundAlpha: StateFlow<Float> = _backgroundAlpha.asStateFlow()
 
-    /** 透明度落盘的节流 job，见 [setBackgroundAlpha]。 */
+    /** 背景呈现方式（铺满裁切 / 完整显示 / 底部立绘）。 */
+    private val _backgroundMode = MutableStateFlow(BackgroundMode.COVER_CROP)
+    val backgroundMode: StateFlow<BackgroundMode> = _backgroundMode.asStateFlow()
+
+    /** 立绘高度（占面板高度比例，仅 PORTRAIT 模式生效）。 */
+    private val _backgroundPortraitHeight = MutableStateFlow(BackgroundSettingsRepository.DEFAULT_PORTRAIT_HEIGHT)
+    val backgroundPortraitHeight: StateFlow<Float> = _backgroundPortraitHeight.asStateFlow()
+
+    /** 蒙版强度落盘的节流 job，见 [setBackgroundAlpha]。 */
     private var backgroundAlphaWriteJob: Job? = null
 
     private val _chatFontSizeSp = MutableStateFlow(AppearanceSettingsRepository.DEFAULT_CHAT_FONT_SIZE_SP)
@@ -1187,8 +1196,20 @@ class SettingsViewModel @Inject constructor(
             }
 
             launch {
-                backgroundSettingsRepository.alphaFlow.collectLatest {
+                backgroundSettingsRepository.maskFlow.collectLatest {
                     _backgroundAlpha.value = it
+                }
+            }
+
+            launch {
+                backgroundSettingsRepository.backgroundModeFlow.collectLatest {
+                    _backgroundMode.value = it
+                }
+            }
+
+            launch {
+                backgroundSettingsRepository.portraitHeightFlow.collectLatest {
+                    _backgroundPortraitHeight.value = it
                 }
             }
 
@@ -2478,16 +2499,32 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * 调节背景图透明度（0~0.2，实际范围由 BackgroundSettingsRepository 的 MIN_ALPHA/MAX_ALPHA 决定）。
+     * 调节背景图蒙版强度（0~0.85，实际范围由 BackgroundSettingsRepository 的 MIN_MASK/MAX_MASK 决定）。
      *
      * 滑块拖动会连续打进数十个值，DataStore 的写是串行的，逐个落盘会积压出肉眼可见的延迟，
      * 回读又会把整个设置页带着重组。此处只保留最后一个值，停手约 80ms 后写一次。
      */
-    fun setBackgroundAlpha(alpha: Float) {
+    fun setBackgroundAlpha(mask: Float) {
         backgroundAlphaWriteJob?.cancel()
         backgroundAlphaWriteJob = viewModelScope.launch {
             delay(BACKGROUND_ALPHA_WRITE_DEBOUNCE_MS)
-            backgroundSettingsRepository.setBackgroundAlpha(alpha)
+            backgroundSettingsRepository.setBackgroundMask(mask)
+        }
+    }
+
+    /** 设置背景呈现方式。 */
+    fun setBackgroundMode(mode: BackgroundMode) {
+        viewModelScope.launch {
+            backgroundSettingsRepository.setBackgroundMode(mode)
+        }
+    }
+
+    /** 设置立绘高度比例（仅 PORTRAIT 模式生效）。 */
+    fun setBackgroundPortraitHeight(ratio: Float) {
+        backgroundAlphaWriteJob?.cancel()
+        backgroundAlphaWriteJob = viewModelScope.launch {
+            delay(BACKGROUND_ALPHA_WRITE_DEBOUNCE_MS)
+            backgroundSettingsRepository.setPortraitHeight(ratio)
         }
     }
 

@@ -46,6 +46,7 @@ import com.aiverse.feature.settings.data.repository.InputBarPrefs
 import com.aiverse.feature.settings.data.repository.AppThemeMode
 import com.aiverse.feature.settings.data.repository.DEFAULT_QUICK_ACTION_ORDER
 import com.aiverse.feature.settings.data.repository.InputBarQuickAction
+import com.aiverse.feature.settings.data.repository.BackgroundMode
 import com.aiverse.feature.settings.data.repository.BackgroundSettingsRepository
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Box
@@ -64,6 +65,13 @@ import compose.icons.feathericons.Trash
 import compose.icons.feathericons.Zap
 import kotlin.math.roundToInt
 
+/** 背景模式 -> 标签文案资源（设置项尾部与弹窗共用）。 */
+internal fun BackgroundMode.labelRes(): Int = when (this) {
+    BackgroundMode.COVER_CROP -> R.string.settings_background_mode_cover_crop
+    BackgroundMode.COVER_FIT -> R.string.settings_background_mode_cover_fit
+    BackgroundMode.PORTRAIT -> R.string.settings_background_mode_portrait
+}
+
 /**
  * 外观设置二级页：把原来平铺在通用设置里的「主题 / 聊天气泡 / 背景图」收进来，
  * 并新增三档字体大小（聊天、输入框、界面缩放），均实时持久化。
@@ -76,7 +84,8 @@ internal fun AppearanceSettingsSection(
     userBubbleStyle: ChatBubbleStyle,
     assistantBubbleStyle: ChatBubbleStyle,
     backgroundImagePath: String?,
-    backgroundAlpha: Float,
+    backgroundMask: Float,
+    backgroundMode: BackgroundMode,
     chatFontSizeSp: Int,
     inputFontSizeSp: Int,
     uiFontScale: Float,
@@ -197,7 +206,8 @@ internal fun AppearanceSettingsSection(
                 trailing = {
                     Text(
                         text = if (backgroundImagePath != null) {
-                            "${BackgroundSettingsRepository.alphaToSlider(backgroundAlpha).toInt()}%"
+                            "${stringResource(backgroundMode.labelRes())} · " +
+                                "${BackgroundSettingsRepository.maskToSlider(backgroundMask).toInt()}%"
                         } else {
                             stringResource(R.string.settings_background_image_none)
                         },

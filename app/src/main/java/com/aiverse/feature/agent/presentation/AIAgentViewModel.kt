@@ -247,6 +247,35 @@ class AIAgentViewModel @Inject constructor(
     val agentStates: StateFlow<Map<String, AgentUIState>> = _agentStates.asStateFlow()
 
     /**
+     * 消息导航时间线的全量消息源：与聊天列表分页（[messagesState]）解耦，打开浮窗时一次性取全会话消息，
+     * 不受「最近 N 条」限制。过滤掉「纯工具调用」的空助手行后转为 UI 模型。
+     */
+    private val _timelineMessages = MutableStateFlow<List<AgentUIMessage>>(emptyList())
+    val timelineMessages: StateFlow<List<AgentUIMessage>> = _timelineMessages.asStateFlow()
+
+    /** 时间线所属会话 id，用于丢弃打开浮窗后已切走会话的过期查询结果。 */
+    private val _timelineSession = MutableStateFlow<String?>(null)
+
+    /** 打开消息导航浮窗时加载全量会话消息；会话已切走则丢弃结果。 */
+    fun openMessageTimeline(sessionId: String) {
+        _timelineSession.value = sessionId
+        viewModelScope.launch {
+            val list = withContext(Dispatchers.Default) {
+                agentMessageDao.getMessagesBySessionOnce(sessionId)
+            }
+            if (_timelineSession.value != sessionId) return@launch
+            _timelineMessages.value = list.asSequence()
+                .filterNot {
+                    it.role == MessageRole.ASSISTANT.name &&
+                        !it.content.hasVisibleContent() &&
+                        it.reasoning.isNullOrEmpty()
+                }
+                .map { it.toUIMessage() }
+                .toList()
+        }
+    }
+
+    /**
      * 消息流内的失败错误（Issue #55）：按「失败那轮最后一条助手回复」的消息 id 关联（id → 错误文本），
      * UI 在对应助手消息下方渲染错误气泡并随消息流滚动，取代原先常驻输入框上方的横幅。
      */

@@ -14,7 +14,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -42,18 +41,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -125,6 +120,8 @@ import com.aiverse.feature.onboarding.presentation.OnboardingTargetRegistry
 import com.aiverse.feature.settings.data.repository.KeepaliveSettingsRepository
 import com.aiverse.feature.settings.data.repository.AppearanceSettingsRepository
 import com.aiverse.feature.settings.data.repository.AppThemeMode
+import com.aiverse.feature.agent.presentation.component.ChatBackground
+import com.aiverse.feature.settings.data.repository.BackgroundMode
 import com.aiverse.feature.settings.data.repository.BackgroundSettingsRepository
 import com.aiverse.feature.settings.data.repository.ScreenOnSettingsRepository
 import com.aiverse.feature.settings.data.repository.ThemeSettingsRepository
@@ -134,7 +131,6 @@ import com.aiverse.feature.settings.presentation.UpdateCheckUiState
 import com.aiverse.feature.settings.presentation.component.githubReleaseUrl
 import com.aiverse.feature.settings.presentation.component.SettingsScreen
 import com.aiverse.feature.settings.presentation.component.UpdateCheckDialog
-import com.aiverse.feature.settings.presentation.component.decodeBackgroundBitmap
 import com.aiverse.feature.settings.presentation.component.openUrl
 import com.aiverse.feature.settings.presentation.component.settingsPageBackground
 import com.aiverse.feature.terminal.domain.TerminalKeepaliveService
@@ -358,10 +354,6 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // 全局自定义背景图：叠加在所有页面内容之上（水印效果），透明度可调。
-                    // 不拦截触摸事件；弹窗（Dialog 独立窗口）不受层级影响。
-                    val bgPath by backgroundSettings.imagePathFlow.collectAsStateWithLifecycle(initialValue = null)
-                    val bgAlpha by backgroundSettings.alphaFlow.collectAsStateWithLifecycle(initialValue = BackgroundSettingsRepository.DEFAULT_ALPHA)
                     Box(modifier = Modifier.fillMaxSize()) {
                         AgreementGate(repository = agreementRepository) { agreementAccepted ->
                             AppNavigation(
@@ -375,28 +367,6 @@ class MainActivity : ComponentActivity() {
                                 // 全局凭据弹窗：覆盖所有页面，命令行 git 缺凭据在任意页面都能弹。
                                 com.aiverse.feature.credentials.presentation.component.GlobalCredentialDialogHost(
                                     bridge = credentialRequestBridge
-                                )
-                            }
-                        }
-                        if (bgPath != null && bgAlpha > 0f) {
-                            val screen = LocalView.current
-                            val bitmap by produceState<ImageBitmap?>(initialValue = null, bgPath) {
-                                value = kotlinx.coroutines.withContext(Dispatchers.IO) {
-                                    decodeBackgroundBitmap(
-                                        bgPath!!,
-                                        screen.width.coerceAtLeast(1),
-                                        screen.height.coerceAtLeast(1)
-                                    )
-                                }
-                            }
-                            bitmap?.let {
-                                Image(
-                                    bitmap = it,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .alpha(bgAlpha)
                                 )
                             }
                         }
@@ -840,6 +810,10 @@ fun AppNavigation(
             searchState = chatSearchState,
             onSearchQueryChange = { agentViewModel.updateChatSearchQuery(it) },
             onClearSearch = { agentViewModel.clearChatSearch() },
+            onNewChat = {
+                agentViewModel.newSession()
+                if (!permanentDrawer) scope.launch { drawerState.close() }
+            },
             onOpenSearchHit = { hit ->
                 agentViewModel.openChatSearchHit(hit)
                 if (!permanentDrawer) scope.launch { drawerState.close() }
@@ -884,6 +858,26 @@ fun AppNavigation(
                                 .weight(if (paneOpen) paneSplit else 1f)
                                 .onSizeChanged { leftPaneWidthPx = it.width }
                         ) {
+                            // 聊天页底图：仅聊天路由挂载，置于内容（AIChatPanel）之下。
+                            // 先声明即在下层，且 bgPath 为 null 时 ChatBackground 不绘制任何东西。
+                            // 注意：navBody 在顶层 AppNavigation 内，只能用 settingsViewModel，拿不到 Activity 的 repository 成员。
+                            val chatBgPath by settingsViewModel.backgroundImagePath.collectAsStateWithLifecycle()
+                            val chatBgMask by settingsViewModel.backgroundAlpha.collectAsStateWithLifecycle()
+                            val chatBgMode by settingsViewModel.backgroundMode.collectAsStateWithLifecycle()
+                            val chatBgPortraitHeight by settingsViewModel.backgroundPortraitHeight.collectAsStateWithLifecycle()
+                            val chatBgThemeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
+                            val chatBgDarkTheme = when (chatBgThemeMode) {
+                                AppThemeMode.AUTO -> isSystemInDarkTheme()
+                                AppThemeMode.DARK -> true
+                                AppThemeMode.LIGHT -> false
+                            }
+                            ChatBackground(
+                                backgroundPath = chatBgPath,
+                                mask = chatBgMask,
+                                mode = chatBgMode,
+                                portraitHeight = chatBgPortraitHeight,
+                                isDarkTheme = chatBgDarkTheme
+                            )
                             CompositionLocalProvider(
                                 androidx.compose.ui.platform.LocalUriHandler provides fileUriHandler
                             ) {

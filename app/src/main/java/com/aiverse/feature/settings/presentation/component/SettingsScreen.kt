@@ -92,6 +92,7 @@ import com.aiverse.feature.agent.domain.mcp.McpServerStatus
 import com.aiverse.feature.agent.presentation.component.MarkdownContent
 import com.aiverse.feature.agent.presentation.component.MarkdownRenderCache
 import com.aiverse.feature.backup.presentation.BackupScreen
+import androidx.compose.foundation.isSystemInDarkTheme
 import com.aiverse.feature.settings.data.repository.AppThemeMode
 import com.aiverse.feature.settings.data.repository.BackgroundSettingsRepository
 import com.aiverse.feature.settings.domain.model.AIProviderConfig
@@ -301,6 +302,14 @@ fun SettingsScreen(
     val assistantBubbleStyle by viewModel.assistantBubbleStyle.collectAsStateWithLifecycle()
     val backgroundImagePath by viewModel.backgroundImagePath.collectAsStateWithLifecycle()
     val backgroundAlpha by viewModel.backgroundAlpha.collectAsStateWithLifecycle()
+    val backgroundMode by viewModel.backgroundMode.collectAsStateWithLifecycle()
+    val backgroundPortraitHeight by viewModel.backgroundPortraitHeight.collectAsStateWithLifecycle()
+    // 背景预览要与聊天页一致，需知道当前是否暗色主题（决定额外压暗那一层）。
+    val darkTheme = when (themeMode) {
+        AppThemeMode.AUTO -> isSystemInDarkTheme()
+        AppThemeMode.DARK -> true
+        AppThemeMode.LIGHT -> false
+    }
     val chatFontSizeSp by viewModel.chatFontSizeSp.collectAsStateWithLifecycle()
     val inputFontSizeSp by viewModel.inputFontSizeSp.collectAsStateWithLifecycle()
     val uiFontScale by viewModel.uiFontScale.collectAsStateWithLifecycle()
@@ -1059,7 +1068,8 @@ fun SettingsScreen(
                     userBubbleStyle = userBubbleStyle,
                     assistantBubbleStyle = assistantBubbleStyle,
                     backgroundImagePath = backgroundImagePath,
-                    backgroundAlpha = backgroundAlpha,
+                    backgroundMask = backgroundAlpha,
+                    backgroundMode = backgroundMode,
                     chatFontSizeSp = chatFontSizeSp,
                     inputFontSizeSp = inputFontSizeSp,
                     uiFontScale = uiFontScale,
@@ -1632,9 +1642,14 @@ fun SettingsScreen(
     if (showBackgroundSheet) {
         BackgroundImageSheet(
             imagePath = backgroundImagePath,
-            alpha = backgroundAlpha,
+            mask = backgroundAlpha,
+            mode = backgroundMode,
+            portraitHeight = backgroundPortraitHeight,
+            isDarkTheme = darkTheme,
             onPickImage = { viewModel.setBackgroundImage(it) },
-            onAlphaChange = { viewModel.setBackgroundAlpha(it) },
+            onMaskChange = { viewModel.setBackgroundAlpha(it) },
+            onModeChange = { viewModel.setBackgroundMode(it) },
+            onPortraitHeightChange = { viewModel.setBackgroundPortraitHeight(it) },
             onRemove = { viewModel.clearBackgroundImage() },
             onDismiss = { showBackgroundSheet = false }
         )

@@ -731,6 +731,8 @@ fun AIChatPanel(
     val unattachedErrors by viewModel.unattachedErrors.collectAsStateWithLifecycle()
     val messagesState by viewModel.messagesState.collectAsStateWithLifecycle()
     val messages = messagesState.messages
+    // 消息导航浮窗的全量消息源：打开浮窗时一次性取全会话消息，不受聊天列表分页限制。
+    val timelineMessages by viewModel.timelineMessages.collectAsStateWithLifecycle()
     val pendingScroll by viewModel.pendingScrollMessage.collectAsStateWithLifecycle()
     val highlightedMessageId by viewModel.highlightedMessageId.collectAsStateWithLifecycle()
     // 子代理卡片：状态与动作经 CompositionLocal 下发给 task 工具行，避免逐层透传。
@@ -789,6 +791,8 @@ fun AIChatPanel(
     val sessionProviderModel by viewModel.currentSessionProviderModel.collectAsStateWithLifecycle()
     val defaultProviderId = settingsViewModel?.defaultModelProviderId?.collectAsStateWithLifecycle()?.value ?: ""
     val defaultModelName = settingsViewModel?.defaultModel?.collectAsStateWithLifecycle()?.value ?: ""
+    // 背景图是否开启：开启时输入框渐变蒙版改用页面底色且降低终点不透明度，避免背景图在输入框边缘被切出直线。
+    val chatBackgroundEnabled = settingsViewModel?.backgroundImagePath?.collectAsStateWithLifecycle()?.value != null
     // 未绑定会话回退：新会话默认模型（主页空会话中选择后记忆），未设置则为 null（UI 显示默认图标/顶栏模型名留空）。
     val defaultFallbackProvider = providers
         .find { it.id == defaultProviderId }
@@ -830,6 +834,13 @@ fun AIChatPanel(
     val listState = rememberLazyListState()
     // 消息时间线浮窗（顶栏 ··· 菜单「消息导航」入口）：显示当前会话各条消息，点某条滚动定位。
     var showMessageTimeline by remember { mutableStateOf(false) }
+    // 打开浮窗时加载当前会话的全量消息（见 [AIAgentViewModel.openMessageTimeline]）。
+    LaunchedEffect(showMessageTimeline, currentSessionId) {
+        val sessionId = currentSessionId
+        if (showMessageTimeline && sessionId != null) {
+            viewModel.openMessageTimeline(sessionId)
+        }
+    }
     // 消息未就绪时的加载提示：本地读库通常几十毫秒，立刻显示反而闪一下，等一小会儿还没就绪才提示。
     var showMessagesLoading by remember(currentSessionId) { mutableStateOf(false) }
     LaunchedEffect(currentSessionId, messagesReady) {
@@ -2060,6 +2071,7 @@ fun AIChatPanel(
                 onValueChange = viewModel::updateInputDraft,
                 onSend = sendMessage,
                 enterToSend = settingsViewModel?.enterToSend?.collectAsStateWithLifecycle()?.value ?: false,
+                backgroundEnabled = chatBackgroundEnabled,
                 onStop = { viewModel.stopAgent() },
                 isBusy = isBusy,
                 workspaceViewModel = workspaceViewModel,
@@ -2226,7 +2238,7 @@ fun AIChatPanel(
         // 平板双栏下不会只盖住聊天列，也不会被 MainActivity 画在最上层的全局背景水印压住。
         if (showMessageTimeline) {
             MessageTimelineSheet(
-                messages = messages,
+                messages = timelineMessages,
                 onDismiss = { showMessageTimeline = false },
                 onSelectMessage = { message ->
                     val sid = currentSessionId
@@ -2369,7 +2381,7 @@ private fun MessageTimelineSheet(
 ) {
     AdaptiveModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surface
     ) {
         // 只列用户消息 + AI 最终文本回答（过滤思考过程与工具调用，见 [isTimelineEntry]）。

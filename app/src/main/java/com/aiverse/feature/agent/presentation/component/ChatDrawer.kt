@@ -139,6 +139,7 @@ import compose.icons.feathericons.FolderPlus
 import compose.icons.feathericons.Globe
 import compose.icons.feathericons.HardDrive
 import compose.icons.feathericons.MoreHorizontal
+import compose.icons.feathericons.Plus
 import compose.icons.feathericons.RefreshCw
 import compose.icons.feathericons.Server
 import compose.icons.feathericons.Search
@@ -217,6 +218,7 @@ fun ChatDrawerContent(
     searchState: ChatSearchState,
     onSearchQueryChange: (String) -> Unit,
     onClearSearch: () -> Unit,
+    onNewChat: () -> Unit,
     onOpenSearchHit: (ChatSearchHit) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -353,11 +355,30 @@ fun ChatDrawerContent(
                 }
             }
         } else if (selectedTab == 0) {
-            ChatSearchField(
-                query = searchQuery,
-                onQueryChange = onSearchQueryChange,
-                onClear = onClearSearch
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+            ) {
+                ChatSearchField(
+                    query = searchQuery,
+                    onQueryChange = onSearchQueryChange,
+                    onClear = onClearSearch,
+                    modifier = Modifier.weight(1f)
+                )
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                    IconButton(
+                        onClick = onNewChat,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = FeatherIcons.Plus,
+                            contentDescription = stringResource(R.string.chat_new_session),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
 
         Box(modifier = Modifier.weight(1f)) {
@@ -760,13 +781,14 @@ private fun SessionListContent(
 internal fun ChatSearchField(
     query: String,
     onQueryChange: (String) -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     ModelSearchField(
         query = query,
         onQueryChange = onQueryChange,
         placeholder = stringResource(R.string.chat_search_hint),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         trailing = if (query.isEmpty()) null else {
             {
                 IconButton(onClick = onClear, modifier = Modifier.size(24.dp)) {

@@ -240,6 +240,8 @@ internal fun ChatInputBar(
     onToggleWebSearch: () -> Unit = {},
     /** 联网搜索工具当前是否启用。 */
     webSearchEnabled: Boolean = true,
+    /** 聊天页底图是否开启：开启时输入区渐变蒙版改用背景色且终点更透，保留渐变避免背景在输入框边缘出现直线。 */
+    backgroundEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val hasContent = value.isNotBlank() || pendingAttachments.isNotEmpty()
@@ -313,8 +315,16 @@ internal fun ChatInputBar(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0f),
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
+                                if (backgroundEnabled) {
+                                    MaterialTheme.colorScheme.background.copy(alpha = 0f)
+                                } else {
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                                },
+                                if (backgroundEnabled) {
+                                    MaterialTheme.colorScheme.background.copy(alpha = 0.8f)
+                                } else {
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
+                                }
                             ),
                             startY = 0f,
                             endY = maskGradientEndY

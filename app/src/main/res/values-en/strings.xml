@@ -472,6 +472,12 @@
     <string name="settings_background_image_alpha">Opacity</string>
     <string name="settings_background_image_pick">Pick image</string>
     <string name="settings_background_image_remove">Remove background</string>
+    <string name="settings_background_mask">Mask strength</string>
+    <string name="settings_background_mode">Display mode</string>
+    <string name="settings_background_mode_cover_crop">Cover crop</string>
+    <string name="settings_background_mode_cover_fit">Fit</string>
+    <string name="settings_background_mode_portrait">Bottom portrait</string>
+    <string name="settings_background_portrait_height">Portrait height</string>
     <string name="provider_cache_anthropic_title">Anthropic cache breakpoints</string>
     <string name="provider_cache_anthropic_subtitle">Mark system/tools/messages prefixes with explicit cache breakpoints to cut repeated input cost</string>
     <string name="provider_cache_openai_chat_title">OpenAI-compatible cache key</string>
