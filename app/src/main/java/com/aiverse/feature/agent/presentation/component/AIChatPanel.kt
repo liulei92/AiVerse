@@ -74,7 +74,9 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
@@ -1746,16 +1748,35 @@ fun AIChatPanel(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            // 顶栏滚动时轻微变淡（与输入框悬浮层一致），不再整块实心挡住消息层次。
+            // 顶栏滚动时轻微变淡（与输入框悬浮层一致）。整块 alpha 会连背景一起透出消息泛白（issue #66），
+            // 故对齐底部数据栏：垫一层不透明渐变 scrim（由上到下变透）随 headerAlpha 一起淡出，
+            // scrim 淡出后底下仍是实色 Scaffold background，不再透字；色值跟随输入框同一 backgroundEnabled 口径。
             val headerAlpha by animateFloatAsState(
                 targetValue = if (listState.isScrollInProgress) 0.4f else 1f,
                 animationSpec = tween(200),
                 label = "chat-header-alpha"
             )
+            var headerHeightPx by remember { mutableStateOf(0f) }
+            val headerScrimColor = if (chatBackgroundEnabled) {
+                MaterialTheme.colorScheme.background
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .onSizeChanged { headerHeightPx = it.height.toFloat() }
                     .graphicsLayer { alpha = headerAlpha }
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                headerScrimColor.copy(alpha = 0.98f),
+                                headerScrimColor.copy(alpha = 0f)
+                            ),
+                            startY = 0f,
+                            endY = headerHeightPx
+                        )
+                    )
             ) {
             ChatHeader(
                 sessionTitle = sessionTitle,
