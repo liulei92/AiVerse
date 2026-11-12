@@ -95,6 +95,7 @@ import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.theme.LocalHyperOSStyle
 import com.aiverse.core.theme.LocalInputFontSizeSp
 import com.aiverse.core.ui.rememberImeBottomInset
+import com.aiverse.core.ui.PressableSurface
 import com.aiverse.feature.onboarding.domain.OnboardingStep
 import com.aiverse.feature.onboarding.presentation.onboardingTarget
 import com.aiverse.feature.agent.domain.command.SlashCommand
@@ -618,23 +619,27 @@ internal fun ChatInputBar(
                         Box {
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
-                                color = modeColor,
-                                modifier = Modifier
-                                    .clickable { modeMenuExpanded = !modeMenuExpanded }
+                                color = modeColor
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .width(46.dp)
-                                        .padding(vertical = 4.dp),
-                                    contentAlignment = Alignment.Center
+                                // 点击高亮裁剪进按钮圆角，不再方块溢出容器。
+                                PressableSurface(
+                                    onClick = { modeMenuExpanded = !modeMenuExpanded },
+                                    shape = RoundedCornerShape(16.dp)
                                 ) {
-                                    Text(
-                                        text = stringResource(currentMode.labelRes),
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = modeTextColor
+                                    Box(
+                                        modifier = Modifier
+                                            .width(46.dp)
+                                            .padding(vertical = 4.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = stringResource(currentMode.labelRes),
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = modeTextColor
+                                            )
                                         )
-                                    )
+                                    }
                                 }
                             }
                             if (modeMenuExpanded) {

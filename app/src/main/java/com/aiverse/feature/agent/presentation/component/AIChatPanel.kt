@@ -71,6 +71,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
@@ -106,6 +107,7 @@ import com.aiverse.core.ui.LocalImageViewer
 import com.aiverse.core.ui.AdaptiveModalBottomSheet
 import com.aiverse.core.ui.AppTextField
 import com.aiverse.core.ui.appTextFieldColors
+import com.aiverse.core.ui.PressableSurface
 import com.aiverse.core.ui.readableContentMaxWidth
 import com.aiverse.core.ui.rememberImageViewerState
 import com.aiverse.core.ui.rememberViewerDecodeSpec
@@ -2316,17 +2318,22 @@ private fun ScrollToBottomButton(
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         shadowElevation = 6.dp,
-        modifier = modifier
-            .size(SCROLL_TO_BOTTOM_BTN_SIZE.dp)
-            .clickable(onClick = onClick)
+        modifier = modifier.size(SCROLL_TO_BOTTOM_BTN_SIZE.dp)
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = FeatherIcons.ArrowDown,
-                contentDescription = stringResource(R.string.common_scroll_to_bottom),
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(20.dp)
-            )
+        // 按压反馈裁剪进圆形，不再方块溢出；点击区铺满整个圆形按钮。
+        PressableSurface(
+            onClick = onClick,
+            shape = CircleShape,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = FeatherIcons.ArrowDown,
+                    contentDescription = stringResource(R.string.common_scroll_to_bottom),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
@@ -2536,6 +2543,7 @@ private fun MessageTimelineRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(Radius.sm))
             .clickable(onClick = onClick)
             .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically

@@ -49,6 +49,7 @@ import com.aiverse.R
 import com.aiverse.core.theme.Radius
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
+import com.aiverse.core.ui.PressableSurface
 import com.aiverse.feature.agent.presentation.SubAgentCardState
 import com.aiverse.feature.agent.presentation.SubAgentCardStatus
 import compose.icons.FeatherIcons
@@ -572,66 +573,72 @@ internal fun SubAgentStatusRow(
                 ),
             verticalArrangement = Arrangement.spacedBy(Spacing.xs)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded },
-                verticalAlignment = Alignment.CenterVertically
+            PressableSurface(
+                onClick = { expanded = !expanded },
+                shape = RoundedCornerShape(Radius.sm),
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clip(RoundedCornerShape(Radius.xs))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(RoundedCornerShape(Radius.xs))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = FeatherIcons.Cpu,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(Spacing.sm))
+                    Text(
+                        // 收起态且全部结束 → 一行摘要「N 个子代理已完成，点开查看」；展开或仍在运行 → 原标题。
+                        text = if (allFinished && !expanded) {
+                            stringResource(R.string.subagent_status_row_all_done, visibleStates.size)
+                        } else {
+                            stringResource(R.string.subagent_status_row_title)
+                        },
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (runningCount > 0) {
+                        Spacer(Modifier.width(Spacing.xs))
+                        SubAgentStatusPill(
+                            label = stringResource(R.string.subagent_status_row_running_count, runningCount),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    // 叉号：仅收起整条状态横幅（本会话内不再展示），不删除子代理数据，也不影响侧边栏。
                     Icon(
-                        imageVector = FeatherIcons.Cpu,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(13.dp)
+                        imageVector = FeatherIcons.X,
+                        contentDescription = stringResource(R.string.common_close),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                visibleStates.forEach { dismissedIds.add(it.subSessionId) }
+                            }
                     )
-                }
-                Spacer(Modifier.width(Spacing.sm))
-                Text(
-                    // 收起态且全部结束 → 一行摘要「N 个子代理已完成，点开查看」；展开或仍在运行 → 原标题。
-                    text = if (allFinished && !expanded) {
-                        stringResource(R.string.subagent_status_row_all_done, visibleStates.size)
-                    } else {
-                        stringResource(R.string.subagent_status_row_title)
-                    },
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                if (runningCount > 0) {
                     Spacer(Modifier.width(Spacing.xs))
-                    SubAgentStatusPill(
-                        label = stringResource(R.string.subagent_status_row_running_count, runningCount),
-                        color = MaterialTheme.colorScheme.primary
+                    Icon(
+                        imageVector = if (expanded) FeatherIcons.ChevronUp else FeatherIcons.ChevronDown,
+                        contentDescription = stringResource(
+                            if (expanded) R.string.common_collapse else R.string.common_expand
+                        ),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                        modifier = Modifier.size(16.dp)
                     )
                 }
-                Spacer(Modifier.weight(1f))
-                // 叉号：仅收起整条状态横幅（本会话内不再展示），不删除子代理数据，也不影响侧边栏。
-                Icon(
-                    imageVector = FeatherIcons.X,
-                    contentDescription = stringResource(R.string.common_close),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clickable {
-                            visibleStates.forEach { dismissedIds.add(it.subSessionId) }
-                        }
-                )
-                Spacer(Modifier.width(Spacing.xs))
-                Icon(
-                    imageVector = if (expanded) FeatherIcons.ChevronUp else FeatherIcons.ChevronDown,
-                    contentDescription = stringResource(
-                        if (expanded) R.string.common_collapse else R.string.common_expand
-                    ),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                    modifier = Modifier.size(16.dp)
-                )
             }
             if (expanded) {
                 // 明细列表独立滚动：高度封顶后内部自滑，不把外层聊天 LazyColumn 撑高，
@@ -726,6 +733,7 @@ private fun SubAgentStatusRowItem(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .size(16.dp)
+                            .clip(CircleShape)
                             .clickable { showStopConfirm = true }
                     )
                 }

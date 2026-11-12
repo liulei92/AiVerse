@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -84,6 +85,7 @@ import com.aiverse.feature.onboarding.domain.OnboardingStep
 import com.aiverse.feature.onboarding.presentation.onboardingTarget
 import com.aiverse.feature.settings.presentation.component.ModelLogoIcon
 import com.aiverse.core.ui.AppTextField
+import com.aiverse.core.ui.PressableSurface
 import com.aiverse.core.ui.dialogTextFieldColors
 import com.aiverse.feature.settings.data.remote.ModelTestResult
 import com.aiverse.feature.settings.domain.model.AIProviderConfig
@@ -173,70 +175,86 @@ internal fun ChatHeader(
                     Spacer(modifier = Modifier.width(Spacing.sm))
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    // 点标题弹出「重命名会话」对话框。
-                    Text(
-                        text = sessionTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = if (sessionId != null && onRenameSession != null) {
-                            Modifier.clickable { showRenameDialog = true }
-                        } else {
-                            Modifier
+                    // 点标题弹出「重命名会话」对话框：按容器圆角裁剪高亮，不再方块溢出。
+                    if (sessionId != null && onRenameSession != null) {
+                        PressableSurface(
+                            onClick = { showRenameDialog = true },
+                            shape = RoundedCornerShape(Radius.sm),
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs)
+                        ) {
+                            Text(
+                                text = sessionTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
-                    )
+                    } else {
+                        Text(
+                            text = sessionTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     val hyperOS = LocalHyperOSStyle.current
                     if (hyperOS) {
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                            modifier = if (onSelectModel != null) {
-                                Modifier.clickable { showModelSheet = true }
-                            } else {
-                                Modifier
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            // 点击高亮裁剪进 pill 圆角，不再方块溢出容器。
+                            PressableSurface(
+                                onClick = { showModelSheet = true },
+                                enabled = onSelectModel != null,
+                                shape = RoundedCornerShape(50),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    if (!modelName.isNullOrBlank()) {
+                                        ModelLogoIcon(modelName = modelName, size = 12.dp)
+                                    }
+                                    Text(
+                                        text = modelName?.takeIf { it.isNotBlank() }
+                                            ?: stringResource(R.string.chat_no_model_selected),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
+                        }
+                    } else {
+                        // 点模型名直接打开「模型切换」弹窗：给容器边界+圆角，高亮不再凭空一块。
+                        PressableSurface(
+                            onClick = { showModelSheet = true },
+                            enabled = onSelectModel != null,
+                            shape = RoundedCornerShape(Radius.sm),
+                            contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.xs)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
                             ) {
                                 if (!modelName.isNullOrBlank()) {
-                                    ModelLogoIcon(modelName = modelName, size = 12.dp)
+                                    ModelLogoIcon(modelName = modelName, size = 14.dp)
                                 }
                                 Text(
-                                    text = modelName?.takeIf { it.isNotBlank() }
-                                        ?: stringResource(R.string.chat_no_model_selected),
-                                    style = MaterialTheme.typography.labelMedium,
+                                    text = modelName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.chat_no_model_selected),
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
-                        }
-                    } else {
-                        // 点模型名直接打开「模型切换」弹窗。
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                            modifier = if (onSelectModel != null) {
-                                Modifier.clickable { showModelSheet = true }
-                            } else {
-                                Modifier
-                            }
-                        ) {
-                            if (!modelName.isNullOrBlank()) {
-                                ModelLogoIcon(modelName = modelName, size = 14.dp)
-                            }
-                            Text(
-                                text = modelName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.chat_no_model_selected),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
                         }
                     }
                 }
