@@ -48,6 +48,8 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalView
@@ -1168,7 +1170,15 @@ fun AppNavigation(
                     drawerShape = RectangleShape,
                     drawerContainerColor = settingsPageBackground(),
                     drawerTonalElevation = 0.dp,
-                    modifier = Modifier.width(drawerWidth())
+                    modifier = Modifier
+                        .width(drawerWidth())
+                        .shadow(
+                            elevation = 8.dp,
+                            shape = RectangleShape,
+                            clip = false,
+                            ambientColor = Color.Black.copy(alpha = 0.08f),
+                            spotColor = Color.Black.copy(alpha = 0.08f)
+                        )
                 ) {
                     drawerBody()
                 }
