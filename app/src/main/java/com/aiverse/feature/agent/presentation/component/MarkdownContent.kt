@@ -3,9 +3,12 @@ package com.aiverse.feature.agent.presentation.component
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -19,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -32,6 +36,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aiverse.R
 import com.aiverse.core.theme.LocalUIDensityTokens
@@ -41,7 +46,6 @@ import com.mikepenz.markdown.compose.LocalMarkdownColors
 import com.mikepenz.markdown.compose.LocalMarkdownDimens
 import com.mikepenz.markdown.compose.LocalMarkdownPadding
 import com.mikepenz.markdown.compose.Markdown
-import com.mikepenz.markdown.compose.MarkdownSuccess
 import com.mikepenz.markdown.compose.components.MarkdownComponents
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownCodeBackground
@@ -276,24 +280,53 @@ internal fun MarkdownContent(
                 components: MarkdownComponents,
                 modifier: Modifier
             ) -> Unit = remember(lazyScroll) {
+                // 顶层块逐个渲染：首块顶部不叠加 block 间距、末块底部不叠加 block 间距，
+                // 使助手气泡正文上下内边距对称（上下都由气泡的 vertical=t.sm 提供）；
+                // 块与块之间保留统一 block 间距，多段/列表/代码块之间仍有呼吸感。
+                // 库的 MarkdownElement 默认在「每个块前」加 Spacer(block)（含首块），
+                // 这里以 includeSpacer=false 关闭、用 index 自行控制，精确消除首/末块贴边空间。
                 if (lazyScroll) {
                     { state, components, m ->
                         LazyColumn(modifier = m) {
-                            items(
+                            itemsIndexed(
                                 items = state.node.children,
-                                key = { node -> node.startOffset },
-                                contentType = { node -> node.type }
-                            ) { node ->
-                                // 列表位置按偏移保留，节点内部状态与当前 AST 绑定。
-                                key(node) {
-                                    MarkdownElement(node, components, state.content)
+                                key = { _, node -> node.startOffset },
+                                contentType = { _, node -> node.type }
+                            ) { index, node ->
+                                val lastIndex = state.node.children.lastIndex
+                                Column {
+                                    if (index > 0) {
+                                        Spacer(Modifier.height(LocalUIDensityTokens.current.scale(4)))
+                                    }
+                                    androidx.compose.runtime.CompositionLocalProvider(
+                                        LocalIsFirstBlock provides (index == 0),
+                                        LocalIsLastBlock provides (index == lastIndex)
+                                    ) {
+                                        // 列表位置按偏移保留，节点内部状态与当前 AST 绑定。
+                                        key(node) {
+                                            MarkdownElement(node, components, state.content, includeSpacer = false)
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 } else {
                     { state, components, m ->
-                        MarkdownSuccess(state = state, components = components, modifier = m)
+                        Column(modifier = m) {
+                            val children = state.node.children
+                            children.forEachIndexed { index, node ->
+                                if (index > 0) {
+                                    Spacer(Modifier.height(LocalUIDensityTokens.current.scale(4)))
+                                }
+                                androidx.compose.runtime.CompositionLocalProvider(
+                                    LocalIsFirstBlock provides (index == 0),
+                                    LocalIsLastBlock provides (index == children.lastIndex)
+                                ) {
+                                    MarkdownElement(node, components, state.content, includeSpacer = false)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -412,6 +445,13 @@ internal fun MarkdownContent(
  * 高亮文本）。fling 快速滚过大量代码块时这会挤满 Default 线程并制造密集重组。命中缓存
  * 时直接同步拿到结果作为 produceState 初值，既不重算也不闪纯文本。key 含 isDark（主题影响颜色）。
  */
+/** 当前顶层块是否为内容的第一个/最后一个块。MarkdownContent 在遍历顶层块时注入：
+ *  首块顶部、末块底部不再叠加额外间距，使助手气泡正文上下内边距对称（交给气泡统一
+ *  的 vertical=t.sm）。默认 false（无 Provider 包裹时）保持代码块原上下 8dp 外边距，
+ *  不影响 ReasoningBubble 等其它 MarkdownContent 场景。 */
+private val LocalIsFirstBlock = staticCompositionLocalOf { false }
+private val LocalIsLastBlock = staticCompositionLocalOf { false }
+
 private object CodeHighlightCache {
     private data class Key(val code: String, val language: String?, val dark: Boolean)
 
@@ -450,10 +490,17 @@ private fun SafeMarkdownHighlightedCode(
         }.also { CodeHighlightCache.put(code, language, isDark, it) }
     }
 
+    // 代码块的垂直外边距：贴气泡顶/底（首/末块）时归零，交给气泡统一 padding；
+    // 与相邻块之间保留 scale(8) 呼吸感，块与块正常间距不受影响。
+    val isFirstBlock = LocalIsFirstBlock.current
+    val isLastBlock = LocalIsLastBlock.current
     MarkdownCodeBackground(
         color = LocalMarkdownColors.current.codeBackground,
         shape = RoundedCornerShape(LocalMarkdownDimens.current.codeBackgroundCornerSize),
-        modifier = Modifier.fillMaxWidth().padding(vertical = LocalUIDensityTokens.current.scale(8)),
+        modifier = Modifier.fillMaxWidth().padding(
+            top = if (isFirstBlock) 0.dp else LocalUIDensityTokens.current.scale(8),
+            bottom = if (isLastBlock) 0.dp else LocalUIDensityTokens.current.scale(8),
+        ),
         showHeader = showHeader,
         language = language,
         code = code,

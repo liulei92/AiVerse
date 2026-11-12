@@ -1745,7 +1745,13 @@ fun AIChatPanel(
         )
     ) {
         Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        // 背景图启用时容器透明，让下层 ChatBackground（背景图+蒙版）透出（issue #75）；
+        // 未启用时保持实色背景，与无背景图时的既有视觉一致。顶栏/输入框各自仍有渐变蒙版负责防透字。
+        containerColor = if (chatBackgroundEnabled) {
+            Color.Transparent
+        } else {
+            MaterialTheme.colorScheme.background
+        },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             // 顶栏滚动时轻微变淡（与输入框悬浮层一致）。整块 alpha 会连背景一起透出消息泛白（issue #66），

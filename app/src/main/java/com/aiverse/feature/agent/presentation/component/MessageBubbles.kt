@@ -509,7 +509,10 @@ internal fun AgentMessageItem(
                 val durationText = taskDurationMs?.let { formatTaskDuration(it) }
                 val hasMeta = isUser || tokenStats != null || cacheHitRate != null || durationText != null
                 val actionsVisible = isUser || showActions
-                val canSpeak = !isUser && ttsController != null && hasContent && isChunkFooter && !messageInProgress && !turnBusy
+                // 不再用 turnBusy（整轮级）门控：流式期间它对所有历史消息恒为 true，会把已完成的
+                // 历史回复的朗读按钮一并隐藏。messageInProgress 已是本条消息级门控（生成中才隐藏），
+                // 中间步骤消息生成时同样被它挡住，不会提前挂出喇叭；完成后即可正常显示。
+                val canSpeak = !isUser && ttsController != null && hasContent && isChunkFooter && !messageInProgress
                 if ((hasContent || hasAttachments) && message.role != MessageRole.TOOL && isChunkFooter &&
                     (actionsVisible || hasMeta || canSpeak)
                 ) {
@@ -573,7 +576,7 @@ internal fun AgentMessageItem(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(12.dp)
                             )
-                            Spacer(Modifier.width(2.dp))
+                            Spacer(Modifier.width(t.scale(2)))
                             ChatMetaText(text = cacheHitRate)
                             emitted = true
                         }
@@ -585,7 +588,7 @@ internal fun AgentMessageItem(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(13.dp)
                             )
-                            Spacer(Modifier.width(2.dp))
+                            Spacer(Modifier.width(t.scale(2)))
                             ChatMetaText(text = durationText)
                             emitted = true
                         }
