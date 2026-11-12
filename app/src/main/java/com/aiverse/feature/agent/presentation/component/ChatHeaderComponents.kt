@@ -3,9 +3,14 @@ package com.aiverse.feature.agent.presentation.component
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -425,20 +430,28 @@ private fun HeaderContextUsageButton(
             tokenEstimated = tokenEstimated,
             onToggle = { if (detail != null) bubbleExpanded = !bubbleExpanded }
         )
-        if (bubbleExpanded && detail != null) {
+        if (detail != null) {
             val dropOffset = with(density) { 40.dp.roundToPx() }
             Popup(
                 alignment = Alignment.TopCenter,
                 offset = IntOffset(screenCenterX - ringCenterX.roundToInt(), dropOffset),
                 onDismissRequest = { bubbleExpanded = false },
-                properties = PopupProperties(focusable = true)
+                // 仅展开期间可拦截外部点击/返回；收起后不再捕获，避免空弹层挡滚动。
+                properties = PopupProperties(focusable = bubbleExpanded)
             ) {
-                ComicUsageBubble(
-                    detail = detail,
-                    onCompact = onCompact,
-                    onClose = { bubbleExpanded = false },
-                    thresholdPercent = thresholdPercent
-                )
+                // 展开/收起带淡入淡出 + 高度过渡，不再硬切弹出消失。
+                AnimatedVisibility(
+                    visible = bubbleExpanded,
+                    enter = fadeIn(tween(200)) + expandVertically(tween(200)),
+                    exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+                ) {
+                    ComicUsageBubble(
+                        detail = detail,
+                        onCompact = onCompact,
+                        onClose = { bubbleExpanded = false },
+                        thresholdPercent = thresholdPercent
+                    )
+                }
             }
         }
     }
@@ -458,7 +471,9 @@ private fun ComicUsageBubble(
         modifier = Modifier.widthIn(max = 340.dp),
         shape = RoundedCornerShape(Radius.lg),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 6.dp
+        shadowElevation = 6.dp,
+        // 边框统一收在浮窗这一层：内层明细卡不再描边，避免「外一层里一层」双边框。
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         ContextUsageDetailCard(
             detail = detail,
