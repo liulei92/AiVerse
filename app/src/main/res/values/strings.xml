@@ -1810,8 +1810,6 @@
     <string name="perm_global_auto_approve_desc">开启后所有会话不再逐次索要权限；灾难性删除与 Shizuku 仍拦截。</string>
     <string name="perm_overlay_ball">悬浮球</string>
     <string name="perm_overlay_ball_desc">屏幕上方常驻 App 悬浮球，单击切换当前应用，长按弹出控制面板；需悬浮窗权限。</string>
-    <string name="overlay_ball_snap_edge">悬浮球吸附屏幕边缘</string>
-    <string name="overlay_ball_snap_edge_desc">拖动松手后自动平滑吸附到最近的左侧或右侧边缘。</string>
     <string name="overlay_ball_channel">悬浮球</string>
     <string name="overlay_ball_notification">悬浮球已开启：单击切换应用，长按打开控制面板</string>
     <string name="overlay_ball_panel_title">悬浮球</string>

@@ -268,7 +268,6 @@ fun SettingsScreen(
     val disableSafetyInterception by viewModel.disableSafetyInterception.collectAsStateWithLifecycle()
     val globalAutoApprove by viewModel.globalAutoApprove.collectAsStateWithLifecycle()
     val overlayBallEnabled by viewModel.overlayBallEnabled.collectAsStateWithLifecycle()
-    val overlayBallSnapEdge by viewModel.overlayBallSnapEdge.collectAsStateWithLifecycle()
     // 悬浮窗授权页返回后自动启动悬浮球（用户曾开启但未授权时，授权完成后补齐启动）。
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -1340,8 +1339,6 @@ fun SettingsScreen(
                         onRefreshShizuku = { shizukuViewModel.refresh() },
                         overlayBallEnabled = overlayBallEnabled,
                         onToggleOverlayBall = { viewModel.setOverlayBallEnabled(it) },
-                        overlayBallSnapEdge = overlayBallSnapEdge,
-                        onToggleOverlayBallSnapEdge = { viewModel.setOverlayBallSnapEdge(it) },
                         onOpenPhoneControlAccessibility = {
                             phoneControlGrantReturn = SettingsSection.AppPermissions
                             section = SettingsSection.PhoneControlAccessibilityGrant
@@ -1469,7 +1466,8 @@ fun SettingsScreen(
                     onToggleUpdateCheck = { viewModel.setUpdateCheckEnabled(it) },
                     onSelectChannel = { viewModel.setUpdateCheckChannel(it) },
                     onSelectMirror = { viewModel.setUpdateCheckMirror(it) },
-                    onCheckUpdate = { viewModel.checkUpdate(manual = true) }
+                    onCheckUpdate = { viewModel.checkUpdate(manual = true) },
+                    isTestPackage = viewModel.isTestPackage
                 )
             }
         }

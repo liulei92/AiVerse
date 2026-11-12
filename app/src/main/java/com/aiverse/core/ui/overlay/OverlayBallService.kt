@@ -61,8 +61,6 @@ class OverlayBallService : Service() {
     private var panelView: View? = null
     private var ballSizeDp: Int = DEFAULT_SIZE_DP
     private var ballAlphaPercent: Int = ToolSafetySettingsRepository.DEFAULT_ALPHA_PERCENT
-    /** 松手后是否自动吸附到最近的左/右边缘（跟随设置，默认开）。 */
-    private var snapToEdgeEnabled = true
     /** 吸附动画；新拖动开始时取消进行中的动画。 */
     private var snapAnimator: ValueAnimator? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -95,11 +93,6 @@ class OverlayBallService : Service() {
                     ToolSafetySettingsRepository.MIN_ALPHA_PERCENT,
                     ToolSafetySettingsRepository.MAX_ALPHA_PERCENT
                 )
-                snapToEdgeEnabled = toolSafety.overlayBallSnapEdgeFlow.first()
-                // 设置页改动吸附开关后实时生效。
-                scope.launch {
-                    toolSafety.overlayBallSnapEdgeFlow.collect { snapToEdgeEnabled = it }
-                }
                 showBall()
             }
         }
@@ -186,8 +179,8 @@ class OverlayBallService : Service() {
                     if (!moved && !longPressTriggered) {
                         // 单击：快速切换当前 App（球保留，可继续使用）
                         launchMainActivity()
-                    } else if (moved && snapToEdgeEnabled) {
-                        // 拖动结束：松手自动平滑吸附到最近的左/右边缘
+                    } else if (moved) {
+                        // 拖动结束：松手自动平滑吸附到最近的左/右边缘（固定行为）
                         snapToNearestEdge()
                     }
                     true
@@ -195,7 +188,7 @@ class OverlayBallService : Service() {
                 MotionEvent.ACTION_CANCEL -> {
                     imageView.removeCallbacks(longPressRunnable)
                     // 手势被打断但球已拖离原位：同样吸附到最近边缘，避免停在屏幕中间
-                    if (moved && snapToEdgeEnabled) {
+                    if (moved) {
                         snapToNearestEdge()
                     }
                     true

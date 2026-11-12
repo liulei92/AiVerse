@@ -812,9 +812,6 @@ class SettingsViewModel @Inject constructor(
     private val _overlayBallEnabled = MutableStateFlow(false)
     val overlayBallEnabled: StateFlow<Boolean> = _overlayBallEnabled.asStateFlow()
 
-    private val _overlayBallSnapEdge = MutableStateFlow(true)
-    val overlayBallSnapEdge: StateFlow<Boolean> = _overlayBallSnapEdge.asStateFlow()
-
     /** 用户开启悬浮球但尚未授予悬浮窗权限时置位；授权页返回后自动启动。 */
     private var pendingOverlayEnable = false
 
@@ -1328,12 +1325,6 @@ class SettingsViewModel @Inject constructor(
             launch {
                 toolSafetySettingsRepository.overlayBallEnabledFlow.collectLatest {
                     _overlayBallEnabled.value = it
-                }
-            }
-
-            launch {
-                toolSafetySettingsRepository.overlayBallSnapEdgeFlow.collectLatest {
-                    _overlayBallSnapEdge.value = it
                 }
             }
 
@@ -2008,6 +1999,8 @@ class SettingsViewModel @Inject constructor(
      * 需开关开启且当天未检测过，失败时静默（不弹错误窗），无论结果都记录当天已检。
      */
     fun checkUpdate(manual: Boolean) {
+        // 测试版（debug/beta）不走检查更新：包名与正式版不同，应用内升级会把测试机导向正式包。
+        if (isTestPackage) return
         val current = _updateCheckState.value
         // 下载中 / 安装包已就绪：不打断当前流程；手动点「版本」行只把弹窗重新亮出来，不重下
         if (current is UpdateCheckUiState.Downloading || current is UpdateCheckUiState.ReadyToInstall) {
@@ -2064,6 +2057,13 @@ class SettingsViewModel @Inject constructor(
     val inAppInstallSupported: Boolean
         get() = context.packageName == RELEASE_APPLICATION_ID ||
             context.packageName.endsWith(".debug") || context.packageName.endsWith(".beta")
+
+    /**
+     * 是否测试包（debug / beta）：包名带 .debug / .beta 后缀。测试包不参与检查更新（见 [checkUpdate]），
+     * 且关于页隐藏更新入口——包名与正式版不同，应用内升级会把测试机导向正式包。
+     */
+    val isTestPackage: Boolean
+        get() = context.packageName != RELEASE_APPLICATION_ID
 
     /**
      * 下载并安装（更新弹窗主按钮）。
@@ -3298,10 +3298,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setGlobalAutoApprove(enabled: Boolean) {
         viewModelScope.launch { toolSafetySettingsRepository.setGlobalAutoApprove(enabled) }
-    }
-
-    fun setOverlayBallSnapEdge(enabled: Boolean) {
-        viewModelScope.launch { toolSafetySettingsRepository.setOverlayBallSnapEdge(enabled) }
     }
 
     fun setOverlayBallEnabled(enabled: Boolean) {

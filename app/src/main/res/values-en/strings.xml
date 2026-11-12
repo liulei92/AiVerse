@@ -1810,8 +1810,6 @@
     <string name="perm_global_auto_approve_desc">All sessions stop asking for permission; catastrophic deletes and Shizuku are still intercepted.</string>
     <string name="perm_overlay_ball">Overlay ball</string>
     <string name="perm_overlay_ball_desc">A floating app ball stays on screen: tap to switch apps, long-press for a control panel. Requires overlay permission.</string>
-    <string name="overlay_ball_snap_edge">Snap ball to screen edge</string>
-    <string name="overlay_ball_snap_edge_desc">After dragging and releasing, the ball smoothly snaps to the nearest left or right edge.</string>
     <string name="overlay_ball_channel">Overlay ball</string>
     <string name="overlay_ball_notification">Overlay ball is on: tap to switch apps, long-press to open control panel</string>
     <string name="overlay_ball_panel_title">Floating Ball</string>

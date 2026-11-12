@@ -78,7 +78,8 @@ internal fun AboutSection(
     onToggleUpdateCheck: (Boolean) -> Unit,
     onSelectChannel: (UpdateChannel) -> Unit,
     onSelectMirror: (String) -> Unit,
-    onCheckUpdate: () -> Unit
+    onCheckUpdate: () -> Unit,
+    isTestPackage: Boolean
 ) {
     val context = LocalContext.current
     var showChannelSheet by remember { mutableStateOf(false) }
@@ -116,11 +117,11 @@ internal fun AboutSection(
         AboutHeaderCard(appName = stringResource(R.string.app_name), appIcon = appIcon)
 
         SettingsGroup {
-            // 版本：点击手动检查更新
+            // 版本：正式包点击手动检查更新；测试包仅展示版本号（不参与检查更新）
             SettingsRow(
                 icon = FeatherIcons.Tag,
                 title = stringResource(R.string.about_version),
-                onClick = onCheckUpdate,
+                onClick = if (isTestPackage) null else onCheckUpdate,
                 trailing = {
                     Text(
                         text = "v${appInfo.name}",
@@ -129,40 +130,44 @@ internal fun AboutSection(
                     )
                 }
             )
-            SettingsDivider()
-            // 自动检查更新：开关
-            SettingsRow(
-                icon = FeatherIcons.RefreshCw,
-                title = stringResource(R.string.about_auto_check_update),
-                subtitle = stringResource(R.string.about_auto_check_update_desc),
-                trailing = {
-                    AppSwitch(
-                        checked = updateCheckEnabled,
-                        onCheckedChange = onToggleUpdateCheck
-                    )
-                }
-            )
-            SettingsDivider()
-            // 更新通道
-            SettingsRow(
-                icon = FeatherIcons.Globe,
-                title = stringResource(R.string.about_update_channel),
-                onClick = { showChannelSheet = true },
-                trailing = {
-                    Text(
-                        text = stringResource(
-                            if (updateCheckChannel == UpdateChannel.STABLE) {
-                                R.string.update_channel_stable
-                            } else {
-                                R.string.update_channel_latest
-                            }
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.semanticColors.subtleText
-                    )
-                }
-            )
-            SettingsDivider()
+            // 测试包（debug/beta）不参与检查更新：包名与正式版不同，应用内升级会导向正式包。
+            // 隐藏自动检查开关与更新通道，避免无效设置。
+            if (!isTestPackage) {
+                SettingsDivider()
+                // 自动检查更新：开关
+                SettingsRow(
+                    icon = FeatherIcons.RefreshCw,
+                    title = stringResource(R.string.about_auto_check_update),
+                    subtitle = stringResource(R.string.about_auto_check_update_desc),
+                    trailing = {
+                        AppSwitch(
+                            checked = updateCheckEnabled,
+                            onCheckedChange = onToggleUpdateCheck
+                        )
+                    }
+                )
+                SettingsDivider()
+                // 更新通道
+                SettingsRow(
+                    icon = FeatherIcons.Globe,
+                    title = stringResource(R.string.about_update_channel),
+                    onClick = { showChannelSheet = true },
+                    trailing = {
+                        Text(
+                            text = stringResource(
+                                if (updateCheckChannel == UpdateChannel.STABLE) {
+                                    R.string.update_channel_stable
+                                } else {
+                                    R.string.update_channel_latest
+                                }
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.semanticColors.subtleText
+                        )
+                    }
+                )
+                SettingsDivider()
+            }
             // 下载镜像源：更新包下载走它加速，留空表示直连 GitHub
             SettingsRow(
                 icon = FeatherIcons.Download,
