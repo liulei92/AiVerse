@@ -165,7 +165,11 @@ class ModelMetadataService @Inject constructor(
         }
     }
 
-    /** 目录中匹配不到模型时的兜底：统一视为文本模型，128k 输入 / 64k 输出。 */
+    /**
+     * 目录中匹配不到模型时的兜底：统一视为文本模型，128k 输入 / 64k 输出。
+     * 图片输入能力按模型名约定推断（[inferSupportsVisionFromModelName]），仅作为默认值；
+     * 用户在供应商里显式设置过「支持图片」仍优先（见 [mergeModelMetadata]）。
+     */
     private fun default(type: ProviderType, modelId: String): ModelMetadata = ModelMetadata(
         id = modelId,
         providerId = type.name.lowercase(),
@@ -174,7 +178,7 @@ class ModelMetadataService @Inject constructor(
         inputTokens = DEFAULT_CONTEXT_TOKENS,
         outputTokens = DEFAULT_OUTPUT_TOKENS,
         supportsTools = true,
-        supportsVision = false,
+        supportsVision = inferSupportsVisionFromModelName(modelId),
         supportsReasoning = false,
         source = ModelMetadata.Source.INFERRED
     )
@@ -301,6 +305,22 @@ class ModelMetadataService @Inject constructor(
                 lookup(catalog.lowerByProvider, preferred, listOf(candidate.lowercase()))?.let { return it }
             }
             return null
+        }
+
+        /** 目录未收录模型按命名约定推断支持图片的关键词子串（小写匹配）。 */
+        private val VISION_NAME_KEYWORDS = listOf("vision", "multimodal", "4o", "gemini", "claude", "ocr")
+
+        /**
+         * 目录未收录 / 自定义供应商的模型按命名约定推断是否支持图片，作为查不到元数据时的
+         * 兜底默认值（用户显式设置仍优先，见 [mergeModelMetadata]）。
+         *
+         * 常见视觉模型名关键词直接子串匹配；`vl` 仅在独立段匹配（qwen-vl、qwen2.5-vl、vl-70b），
+         * 避免误命中 evil、vlsi 等含 vl 的无关词。
+         */
+        internal fun inferSupportsVisionFromModelName(modelId: String): Boolean {
+            val name = modelId.lowercase()
+            if (VISION_NAME_KEYWORDS.any { it in name }) return true
+            return name.split('-', '/', '_', ' ').any { it == "vl" }
         }
 
         private fun preferredProviders(type: ProviderType): List<String> = when (type) {

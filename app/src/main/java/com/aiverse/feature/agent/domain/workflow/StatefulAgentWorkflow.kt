@@ -1073,7 +1073,7 @@ class StatefulAgentWorkflow @Inject constructor(
             when (msg) {
                 is AgentMessage.UserMessage ->
                     if (msg.images.isEmpty()) msg
-                    else msg.copy(images = emptyList(), content = msg.content.ifBlank { "（图片已省略：当前模型不支持图片输入）" })
+                    else msg.copy(images = emptyList(), content = msg.content.ifBlank { appContext.getString(R.string.agent_image_omitted_unsupported) })
                 is AgentMessage.ToolResultMessage ->
                     if (msg.images.isEmpty()) msg else msg.copy(images = emptyList())
                 is AgentMessage.AssistantMessage -> msg

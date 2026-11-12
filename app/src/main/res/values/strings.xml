@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AiVerse</string>
+    <string name="agent_image_omitted_unsupported">（图片已省略：当前模型被判定为不支持图片输入，可在供应商设置里开启支持）</string>
     <string name="common_tool_missing_argument">缺少参数：%1$s。</string>
     <string name="plan_mode_invalid_action">无效的 action：%1$s。支持 enter 或 exit。</string>
     <string name="plan_mode_already_active">当前已处于 PLAN（计划）模式。</string>
@@ -1655,6 +1656,10 @@
     <string name="prompt_skill_scope_project_hint">装到当前项目，仅本项目可见</string>
     <string name="prompt_skill_scope_global_hint">装到全局，所有项目共享</string>
     <string name="prompts_disable_builtin_hint">只保留你的片段；需要自己补全全部规则，谨慎开启</string>
+    <string name="prompts_fragment_enable">启用片段</string>
+    <string name="prompts_fragment_disable">停用片段</string>
+    <string name="prompts_import">从文件导入</string>
+    <string name="prompts_import_failed">导入失败，无法读取文件</string>
 
     <!-- Skills Settings -->
     <string name="skills_empty">还没有安装技能</string>
@@ -1805,6 +1810,8 @@
     <string name="perm_global_auto_approve_desc">开启后所有会话不再逐次索要权限；灾难性删除与 Shizuku 仍拦截。</string>
     <string name="perm_overlay_ball">悬浮球</string>
     <string name="perm_overlay_ball_desc">屏幕上方常驻 App 悬浮球，单击切换当前应用，长按弹出控制面板；需悬浮窗权限。</string>
+    <string name="overlay_ball_snap_edge">悬浮球吸附屏幕边缘</string>
+    <string name="overlay_ball_snap_edge_desc">拖动松手后自动平滑吸附到最近的左侧或右侧边缘。</string>
     <string name="overlay_ball_channel">悬浮球</string>
     <string name="overlay_ball_notification">悬浮球已开启：单击切换应用，长按打开控制面板</string>
     <string name="overlay_ball_panel_title">悬浮球</string>

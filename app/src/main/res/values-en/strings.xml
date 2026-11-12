@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AiVerse</string>
+    <string name="agent_image_omitted_unsupported">(Image omitted: the current model is inferred not to support image input. You can enable it in the provider settings.)</string>
     <string name="common_tool_missing_argument">Missing parameter: %1$s.</string>
     <string name="plan_mode_invalid_action">Invalid action: %1$s. Supported values: enter or exit.</string>
     <string name="plan_mode_already_active">Already in PLAN mode.</string>
@@ -1655,6 +1656,10 @@
     <string name="prompt_skill_scope_project_hint">Installs to current project, visible only here</string>
     <string name="prompt_skill_scope_global_hint">Installs globally, shared by all projects</string>
     <string name="prompts_disable_builtin_hint">Keep only your own fragments; you must supply every rule yourself</string>
+    <string name="prompts_fragment_enable">Enable fragment</string>
+    <string name="prompts_fragment_disable">Disable fragment</string>
+    <string name="prompts_import">Import from file</string>
+    <string name="prompts_import_failed">Import failed; could not read the file</string>
 
     <!-- Skills Settings -->
     <string name="skills_empty">No skills installed</string>
@@ -1805,6 +1810,8 @@
     <string name="perm_global_auto_approve_desc">All sessions stop asking for permission; catastrophic deletes and Shizuku are still intercepted.</string>
     <string name="perm_overlay_ball">Overlay ball</string>
     <string name="perm_overlay_ball_desc">A floating app ball stays on screen: tap to switch apps, long-press for a control panel. Requires overlay permission.</string>
+    <string name="overlay_ball_snap_edge">Snap ball to screen edge</string>
+    <string name="overlay_ball_snap_edge_desc">After dragging and releasing, the ball smoothly snaps to the nearest left or right edge.</string>
     <string name="overlay_ball_channel">Overlay ball</string>
     <string name="overlay_ball_notification">Overlay ball is on: tap to switch apps, long-press to open control panel</string>
     <string name="overlay_ball_panel_title">Floating Ball</string>

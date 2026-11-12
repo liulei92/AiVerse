@@ -812,6 +812,9 @@ class SettingsViewModel @Inject constructor(
     private val _overlayBallEnabled = MutableStateFlow(false)
     val overlayBallEnabled: StateFlow<Boolean> = _overlayBallEnabled.asStateFlow()
 
+    private val _overlayBallSnapEdge = MutableStateFlow(true)
+    val overlayBallSnapEdge: StateFlow<Boolean> = _overlayBallSnapEdge.asStateFlow()
+
     /** 用户开启悬浮球但尚未授予悬浮窗权限时置位；授权页返回后自动启动。 */
     private var pendingOverlayEnable = false
 
@@ -1325,6 +1328,12 @@ class SettingsViewModel @Inject constructor(
             launch {
                 toolSafetySettingsRepository.overlayBallEnabledFlow.collectLatest {
                     _overlayBallEnabled.value = it
+                }
+            }
+
+            launch {
+                toolSafetySettingsRepository.overlayBallSnapEdgeFlow.collectLatest {
+                    _overlayBallSnapEdge.value = it
                 }
             }
 
@@ -3289,6 +3298,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setGlobalAutoApprove(enabled: Boolean) {
         viewModelScope.launch { toolSafetySettingsRepository.setGlobalAutoApprove(enabled) }
+    }
+
+    fun setOverlayBallSnapEdge(enabled: Boolean) {
+        viewModelScope.launch { toolSafetySettingsRepository.setOverlayBallSnapEdge(enabled) }
     }
 
     fun setOverlayBallEnabled(enabled: Boolean) {

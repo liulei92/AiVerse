@@ -268,6 +268,7 @@ fun SettingsScreen(
     val disableSafetyInterception by viewModel.disableSafetyInterception.collectAsStateWithLifecycle()
     val globalAutoApprove by viewModel.globalAutoApprove.collectAsStateWithLifecycle()
     val overlayBallEnabled by viewModel.overlayBallEnabled.collectAsStateWithLifecycle()
+    val overlayBallSnapEdge by viewModel.overlayBallSnapEdge.collectAsStateWithLifecycle()
     // 悬浮窗授权页返回后自动启动悬浮球（用户曾开启但未授权时，授权完成后补齐启动）。
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -1183,6 +1184,7 @@ fun SettingsScreen(
                         onDeleteFragment = promptsViewModel::deleteFragment,
                         onReorder = promptsViewModel::reorderFragments,
                         onToggleBuiltinDisabled = promptsViewModel::setBuiltinDisabled,
+                        onToggleFragmentEnabled = promptsViewModel::setFragmentEnabled,
                         onBatchDeleteFragments = promptsViewModel::deleteFragments
                     )
                     if (showResetPrompts) {
@@ -1338,6 +1340,8 @@ fun SettingsScreen(
                         onRefreshShizuku = { shizukuViewModel.refresh() },
                         overlayBallEnabled = overlayBallEnabled,
                         onToggleOverlayBall = { viewModel.setOverlayBallEnabled(it) },
+                        overlayBallSnapEdge = overlayBallSnapEdge,
+                        onToggleOverlayBallSnapEdge = { viewModel.setOverlayBallSnapEdge(it) },
                         onOpenPhoneControlAccessibility = {
                             phoneControlGrantReturn = SettingsSection.AppPermissions
                             section = SettingsSection.PhoneControlAccessibilityGrant
