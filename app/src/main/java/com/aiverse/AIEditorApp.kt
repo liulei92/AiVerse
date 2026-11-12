@@ -18,6 +18,7 @@ import com.aiverse.core.util.TombstoneParser
 import net.schmizz.sshj.common.SecurityUtils
 import com.aiverse.feature.agent.domain.container.ContainerInstaller
 import com.aiverse.feature.agent.domain.mcp.McpManager
+import com.aiverse.feature.settings.data.repository.GeneralSettingsRepository
 import com.aiverse.feature.settings.data.repository.KeepaliveSettingsRepository
 import com.aiverse.feature.settings.data.repository.LanguageSettingsRepository
 import com.aiverse.feature.settings.data.repository.LogSettingsRepository
@@ -202,6 +203,10 @@ class AIEditorApp : Application(), Configuration.Provider {
     @Inject
     lateinit var languageSettings: LanguageSettingsRepository
 
+    /** 通用偏好仓库：启动即自增启动次数，供 token 统计页概览展示。 */
+    @Inject
+    lateinit var generalSettings: GeneralSettingsRepository
+
     /** 执行模式同步缓存：启动时从 DataStore 读首帧注入 DI。 */
     @Inject
     lateinit var executionModeHolder: com.aiverse.feature.settings.data.repository.ExecutionModeHolder
@@ -261,6 +266,8 @@ class AIEditorApp : Application(), Configuration.Provider {
         }
         super.onCreate()
         logDeviceInfo()
+        // 启动次数自增：仅主进程冷启动计一次（crash 子进程在 onCreate 最前已 return）。
+        appScope.launch { generalSettings.incrementLaunchCount() }
         // 补记 Java 未捕获异常处理器覆盖不到的异常退出（native 崩溃 / ANR / 低内存被杀 / 被信号杀死）。
         appScope.launch { reportAbnormalExits() }
         // 把提供商级代理注册表挂到 AppProxy（applyGlobal 已在 attachBaseContext 完成），

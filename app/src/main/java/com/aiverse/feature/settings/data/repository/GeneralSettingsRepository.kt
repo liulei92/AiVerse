@@ -56,6 +56,8 @@ class GeneralSettingsRepository @Inject constructor(
         val DELETE_EXTERNAL_WORKSPACE_SESSIONS_KEY = booleanPreferencesKey("delete_external_workspace_sessions")
         /** 「提示词」页使用说明公告已展示内容的哈希；无值或与当前内容哈希不一致时重新弹出。 */
         val PROMPTS_ANNOUNCEMENT_SHOWN_HASH_KEY = stringPreferencesKey("prompts_announcement_shown_hash")
+        /** 应用启动次数：主进程每次冷启动自增一，供 token 统计页概览展示。 */
+        val LAUNCH_COUNT_KEY = intPreferencesKey("launch_count")
 
         /** 首字超时默认 5 分钟，与原硬编码值一致。 */
         const val DEFAULT_FIRST_BYTE_TIMEOUT_SEC = 300
@@ -262,4 +264,12 @@ class GeneralSettingsRepository @Inject constructor(
     suspend fun deleteExternalWorkspaceSessionsSnapshot(): Boolean = deleteExternalWorkspaceSessionsFlow.first()
 
     suspend fun restoreDeleteExternalWorkspaceSessions(enabled: Boolean) = setDeleteExternalWorkspaceSessions(enabled)
+
+    /** 启动次数流；未设置时回退到 0。 */
+    val launchCountFlow: Flow<Int> = context.generalDataStore.data.map { it[LAUNCH_COUNT_KEY] ?: 0 }
+
+    /** 启动次数自增一：在 DataStore 事务内读旧值再写回，单进程内原子。 */
+    suspend fun incrementLaunchCount() {
+        context.generalDataStore.edit { it[LAUNCH_COUNT_KEY] = (it[LAUNCH_COUNT_KEY] ?: 0) + 1 }
+    }
 }

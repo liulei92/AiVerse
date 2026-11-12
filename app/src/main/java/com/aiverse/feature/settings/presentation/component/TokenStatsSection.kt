@@ -197,6 +197,17 @@ internal fun TokenStatsSection(
                         modifier = Modifier.weight(1f)
                     )
                 }
+                // 启动次数与 LLM 调用无关（全量累计），不受 hasData 门控，无调用记录也显示真实值。
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    SummaryCard(
+                        label = stringResource(R.string.settings_token_stats_launch_count),
+                        value = state.launchCount.toString(),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
 

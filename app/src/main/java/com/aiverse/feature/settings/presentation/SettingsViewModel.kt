@@ -294,7 +294,9 @@ data class TokenStatsUiState(
     /** 可供筛选的模型列表。 */
     val availableModels: List<String> = emptyList(),
     /** 各供应商 ID 对应的密钥/凭据数量。 */
-    val providerKeyCounts: Map<String, Int> = emptyMap()
+    val providerKeyCounts: Map<String, Int> = emptyMap(),
+    /** 应用启动次数（与周期/筛选无关，全量累计）。 */
+    val launchCount: Int = 0
 )
 
 private data class ModelStatsPaging(
@@ -1390,6 +1392,12 @@ class SettingsViewModel @Inject constructor(
             launch {
                 toolSafetySettingsRepository.overlayBallEnabledFlow.collectLatest {
                     _overlayBallEnabled.value = it
+                }
+            }
+
+            launch {
+                generalSettingsRepository.launchCountFlow.collectLatest {
+                    _tokenStats.value = _tokenStats.value.copy(launchCount = it)
                 }
             }
 
