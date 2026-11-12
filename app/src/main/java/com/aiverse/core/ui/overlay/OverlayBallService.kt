@@ -1,5 +1,8 @@
 package com.aiverse.core.ui.overlay
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -39,7 +42,8 @@ import kotlinx.coroutines.launch
 /**
  * 系统级悬浮球（工具授权页「悬浮球」开关开启后显示）。
  *
- * 悬浮球使用 App 图标，可拖动到屏幕任意位置；单击快速切换到当前 App，长按在球旁弹出
+ * 悬浮球使用 App 图标，可拖动到屏幕任意位置，松手自动平滑吸附到最近的左/右边缘（可在
+ * 「软件权限」页关闭）；单击快速切换到当前 App，长按在球旁弹出
  * 正方形控制面板（含「大小」与「隐藏透明度」滑块，默认 42dp、100% 不透明）。大小与
  * 透明度持久化到 [ToolSafetySettingsRepository]；App 重启后由 MainActivity 自动恢复（开关开启时）。
  *
@@ -57,6 +61,10 @@ class OverlayBallService : Service() {
     private var panelView: View? = null
     private var ballSizeDp: Int = DEFAULT_SIZE_DP
     private var ballAlphaPercent: Int = ToolSafetySettingsRepository.DEFAULT_ALPHA_PERCENT
+    /** 松手后是否自动吸附到最近的左/右边缘（跟随设置，默认开）。 */
+    private var snapToEdgeEnabled = true
+    /** 吸附动画；新拖动开始时取消进行中的动画。 */
+    private var snapAnimator: ValueAnimator? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -87,6 +95,11 @@ class OverlayBallService : Service() {
                     ToolSafetySettingsRepository.MIN_ALPHA_PERCENT,
                     ToolSafetySettingsRepository.MAX_ALPHA_PERCENT
                 )
+                snapToEdgeEnabled = toolSafety.overlayBallSnapEdgeFlow.first()
+                // 设置页改动吸附开关后实时生效。
+                scope.launch {
+                    toolSafety.overlayBallSnapEdgeFlow.collect { snapToEdgeEnabled = it }
+                }
                 showBall()
             }
         }
@@ -144,6 +157,7 @@ class OverlayBallService : Service() {
         imageView.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    snapAnimator?.cancel()
                     initialX = params.x
                     initialY = params.y
                     initialTouchX = event.rawX
@@ -172,11 +186,18 @@ class OverlayBallService : Service() {
                     if (!moved && !longPressTriggered) {
                         // 单击：快速切换当前 App（球保留，可继续使用）
                         launchMainActivity()
+                    } else if (moved && snapToEdgeEnabled) {
+                        // 拖动结束：松手自动平滑吸附到最近的左/右边缘
+                        snapToNearestEdge()
                     }
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     imageView.removeCallbacks(longPressRunnable)
+                    // 手势被打断但球已拖离原位：同样吸附到最近边缘，避免停在屏幕中间
+                    if (moved && snapToEdgeEnabled) {
+                        snapToNearestEdge()
+                    }
                     true
                 }
                 else -> false
@@ -193,7 +214,46 @@ class OverlayBallService : Service() {
             }
     }
 
+    /** 拖动结束：计算最近的左/右边缘目标 x，并平滑动画吸附过去（y 保持松手位置不变）。 */
+    private fun snapToNearestEdge() {
+        val params = ballParams ?: return
+        val screenW = resources.displayMetrics.widthPixels
+        val ballW = params.width
+        val margin = dp(SNAP_EDGE_MARGIN_DP)
+        val centerX = params.x + ballW / 2
+        val targetX = if (centerX <= screenW / 2) {
+            margin
+        } else {
+            screenW - ballW - margin
+        }.coerceIn(0, (screenW - ballW).coerceAtLeast(0))
+        animateBallTo(targetX)
+    }
+
+    /** 用 [ValueAnimator] 把球从当前 x 平滑滑动到 [targetX]（瞬移改为补间动画）。 */
+    private fun animateBallTo(targetX: Int) {
+        val view = ballView ?: return
+        val params = ballParams ?: return
+        val wm = windowManager ?: return
+        snapAnimator?.cancel()
+        val animator = ValueAnimator.ofInt(params.x, targetX).apply {
+            duration = SNAP_ANIMATION_MS
+            addUpdateListener { anim ->
+                params.x = anim.animatedValue as Int
+                runCatching { wm.updateViewLayout(view, params) }
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (snapAnimator === animation) snapAnimator = null
+                }
+            })
+            start()
+        }
+        snapAnimator = animator
+    }
+
     private fun hideBall() {
+        snapAnimator?.cancel()
+        snapAnimator = null
         ballView?.let { view -> runCatching { windowManager?.removeView(view) } }
         ballView = null
         ballParams = null
@@ -431,6 +491,8 @@ class OverlayBallService : Service() {
     }
 
     override fun onDestroy() {
+        snapAnimator?.cancel()
+        snapAnimator = null
         panelView?.let { view -> runCatching { windowManager?.removeView(view) } }
         panelView = null
         ballView?.let { view -> runCatching { windowManager?.removeView(view) } }
@@ -449,6 +511,10 @@ class OverlayBallService : Service() {
         private const val CHANNEL_ID = "overlay_ball"
         private const val TOUCH_SLOP = 10
         private const val LONG_PRESS_TIMEOUT_MS = 500L
+        /** 吸附动画时长（ms）。 */
+        private const val SNAP_ANIMATION_MS = 250L
+        /** 吸附后离屏幕边缘的留白（dp），保证球完整可见、便于再次拖动。 */
+        private const val SNAP_EDGE_MARGIN_DP = 8
         const val DEFAULT_SIZE_DP = 42
         const val MIN_SIZE_DP = 32
         const val MAX_SIZE_DP = 80

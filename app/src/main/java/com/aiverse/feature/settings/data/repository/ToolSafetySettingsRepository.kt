@@ -35,6 +35,7 @@ class ToolSafetySettingsRepository @Inject constructor(
         val OVERLAY_BALL_KEY = booleanPreferencesKey("overlay_ball_enabled")
         val OVERLAY_BALL_SIZE_KEY = intPreferencesKey("overlay_ball_size")
         val OVERLAY_BALL_ALPHA_KEY = intPreferencesKey("overlay_ball_alpha")
+        val OVERLAY_BALL_SNAP_EDGE_KEY = booleanPreferencesKey("overlay_ball_snap_edge")
 
         /** 悬浮球不透明度默认值（%，完全不透明）。 */
         const val DEFAULT_ALPHA_PERCENT = 100
@@ -88,5 +89,13 @@ class ToolSafetySettingsRepository @Inject constructor(
         context.toolSafetyDataStore.edit {
             it[OVERLAY_BALL_ALPHA_KEY] = alphaPercent.coerceIn(MIN_ALPHA_PERCENT, MAX_ALPHA_PERCENT)
         }
+    }
+
+    /** 悬浮球「松手吸附屏幕边缘」开关流；未设置时回退到 true（默认开启）。 */
+    val overlayBallSnapEdgeFlow: Flow<Boolean> =
+        context.toolSafetyDataStore.data.map { it[OVERLAY_BALL_SNAP_EDGE_KEY] ?: true }
+
+    suspend fun setOverlayBallSnapEdge(enabled: Boolean) {
+        context.toolSafetyDataStore.edit { it[OVERLAY_BALL_SNAP_EDGE_KEY] = enabled }
     }
 }
