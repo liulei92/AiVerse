@@ -133,4 +133,20 @@ class PromptsViewModel @Inject constructor(
             refresh()
         }
     }
+
+    /** 切换某编号片段的单独启用状态：乐观更新本地列表，IO 落盘后重扫校正。 */
+    fun setFragmentEnabled(number: Int, enabled: Boolean) {
+        _state.update { state ->
+            state.copy(
+                fragments = state.fragments.map { fragment ->
+                    if (fragment.number == number) fragment.copy(enabled = enabled) else fragment
+                }
+            )
+        }
+        viewModelScope.launch {
+            val projectRoot = workspaceRepository.currentPath()
+            withContext(Dispatchers.IO) { catalog.setFragmentEnabled(number, enabled) }
+            refresh()
+        }
+    }
 }

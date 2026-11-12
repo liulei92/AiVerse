@@ -14,6 +14,9 @@ internal object PromptFragmentResolver {
     /** 存在该文件即完全禁用内置提示词（仅主代理生效）。 */
     const val DISABLE_BUILTIN_FILE = ".no-builtin"
 
+    /** 片段禁用清单文件名：存被单独禁用的片段编号，每行一个。 */
+    const val DISABLED_FRAGMENTS_FILE = ".disabled-fragments"
+
     private val NUMBERED = Regex("""^(\d{2})-(.+)\.md$""")
 
     /** 顶层数字片段的数字值；非两位数字前缀返回 null。 */
@@ -38,4 +41,22 @@ internal object PromptFragmentResolver {
 
     /** `.no-builtin` 是否存在。 */
     fun isBuiltinDisabled(dir: File): Boolean = File(dir, DISABLE_BUILTIN_FILE).isFile
+
+    /** 读取被单独禁用的片段编号集合（文件缺失或解析失败时为空）。 */
+    fun disabledNumbers(dir: File): Set<Int> =
+        runCatching { File(dir, DISABLED_FRAGMENTS_FILE).readLines() }
+            .getOrDefault(emptyList())
+            .mapNotNull { it.trim().toIntOrNull() }
+            .toSet()
+
+    /** 写被单独禁用的片段编号集合；空集合删除清单文件。 */
+    fun writeDisabledNumbers(dir: File, numbers: Set<Int>) {
+        val marker = File(dir, DISABLED_FRAGMENTS_FILE)
+        if (numbers.isEmpty()) {
+            marker.delete()
+            return
+        }
+        if (!dir.exists()) dir.mkdirs()
+        marker.writeText(numbers.sorted().joinToString("\n") + "\n")
+    }
 }

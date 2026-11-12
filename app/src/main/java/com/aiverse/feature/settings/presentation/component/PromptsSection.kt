@@ -93,6 +93,7 @@ internal fun PromptsSection(
     onDeleteFragment: (Int) -> Unit,
     onReorder: (List<PromptFragment>) -> Unit,
     onToggleBuiltinDisabled: (Boolean) -> Unit,
+    onToggleFragmentEnabled: (Int, Boolean) -> Unit,
     onBatchDeleteFragments: (List<Int>) -> Unit
 ) {
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
@@ -186,6 +187,7 @@ internal fun PromptsSection(
                 onOpenFragment = onOpenFragment,
                 onDeleteFragment = onDeleteFragment,
                 onReorder = onReorder,
+                onToggleFragmentEnabled = onToggleFragmentEnabled,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -290,6 +292,7 @@ private fun PromptList(
     onOpenFragment: (PromptFragment) -> Unit,
     onDeleteFragment: (Int) -> Unit,
     onReorder: (List<PromptFragment>) -> Unit,
+    onToggleFragmentEnabled: (Int, Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var localFragments by remember { mutableStateOf(fragments) }
@@ -348,6 +351,7 @@ private fun PromptList(
                         selectionMode = selection.isActive,
                         selected = selection.isSelected(fragment.number.toString()),
                         onToggleSelect = { selection.toggle(fragment.number.toString()) },
+                        onToggleEnabled = { onToggleFragmentEnabled(fragment.number, it) },
                         dragModifier = if (selection.isActive) {
                             Modifier
                         } else {
@@ -384,7 +388,8 @@ private fun PromptRow(
     dragModifier: Modifier,
     selectionMode: Boolean = false,
     selected: Boolean = false,
-    onToggleSelect: () -> Unit = {}
+    onToggleSelect: () -> Unit = {},
+    onToggleEnabled: (Boolean) -> Unit = {}
 ) {
     val sortDescription = stringResource(R.string.prompts_sort_long_press)
     val row: @Composable () -> Unit = {
@@ -419,7 +424,11 @@ private fun PromptRow(
                     Text(
                         text = "%02d · %s".format(fragment.number, fragment.title),
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = if (fragment.enabled) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.semanticColors.subtleText
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -427,7 +436,11 @@ private fun PromptRow(
                         Text(
                             text = fragment.description,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (fragment.enabled) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.semanticColors.subtleText
+                            },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -437,13 +450,26 @@ private fun PromptRow(
 
             Spacer(modifier = Modifier.width(Spacing.sm))
             SourceBadge(fragment.source)
-            Spacer(modifier = Modifier.width(Spacing.xs))
-            Icon(
-                imageVector = FeatherIcons.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.semanticColors.subtleText,
-                modifier = Modifier.size(18.dp)
+            Spacer(modifier = Modifier.width(Spacing.sm))
+            val toggleDescription = stringResource(
+                if (fragment.enabled) R.string.prompts_fragment_disable else R.string.prompts_fragment_enable
             )
+            if (selectionMode) {
+                Icon(
+                    imageVector = FeatherIcons.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.semanticColors.subtleText,
+                    modifier = Modifier.size(18.dp)
+                )
+            } else {
+                AppSwitch(
+                    checked = fragment.enabled,
+                    onCheckedChange = onToggleEnabled,
+                    modifier = Modifier.semantics {
+                        contentDescription = toggleDescription
+                    }
+                )
+            }
         }
     }
 

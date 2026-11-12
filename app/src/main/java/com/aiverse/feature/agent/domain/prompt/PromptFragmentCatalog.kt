@@ -21,16 +21,26 @@ data class PromptFragment(
     /** 生效层文件；来源为内置时为 null。 */
     val file: File?,
     /** 正文开头的 `<!-- ... -->` 注释，作为列表摘要。 */
-    val description: String
+    val description: String,
+    /** 单独开关：false 时不参与系统提示词组装（列表仍显示，可再启用）。 */
+    val enabled: Boolean = true
 ) {
     val stableReorderKey: String
         get() = "$title:${content.hashCode()}"
 
     val body: String
-        get() = content.replace(LEADING_COMMENT, "")
+        get() = bodyOf(content)
 
     companion object {
         private val LEADING_COMMENT = Regex("(?s)^\\s*<!--.*?-->\\s*")
+        private val DESCRIPTION = Regex("^\\s*<!--\\s*(.*?)\\s*-->", RegexOption.DOT_MATCHES_ALL)
+
+        /** 解析正文开头的 `<!-- 描述 -->` 注释；无则空串。 */
+        fun extractDescription(content: String): String =
+            DESCRIPTION.find(content)?.groupValues?.get(1)?.trim().orEmpty()
+
+        /** 去掉正文开头的 `<!-- 描述 -->` 注释，返回正文。 */
+        fun bodyOf(content: String): String = content.replace(LEADING_COMMENT, "")
 
         fun composeContent(description: String, body: String): String =
             if (description.isBlank()) body else "<!-- ${description.trim().replace("-->", "-- >")} -->\n$body"
@@ -74,12 +84,13 @@ class PromptFragmentCatalog @Inject constructor(
         val builtin = builtinFiles()
         val project = numberedFragments(projectDir(projectRoot))
         val global = numberedFragments(globalDir)
+        val disabled = PromptFragmentResolver.disabledNumbers(globalDir)
         val numbers = LinkedHashSet<Int>().apply {
             addAll(builtin.keys)
             addAll(project.keys)
             addAll(global.keys)
         }
-        val all = numbers.sorted().mapNotNull { resolve(it, builtin, project, global) }
+        val all = numbers.sorted().mapNotNull { resolve(it, builtin, project, global, disabled) }
         // 「完全禁用内置提示词」时列表只保留自定义来源，与注入结果一致。
         return if (isBuiltinDisabled()) {
             all.filter {
@@ -94,20 +105,23 @@ class PromptFragmentCatalog @Inject constructor(
         number,
         builtinFiles(),
         numberedFragments(projectDir(projectRoot)),
-        numberedFragments(globalDir)
+        numberedFragments(globalDir),
+        PromptFragmentResolver.disabledNumbers(globalDir)
     )
 
-    /** 静态基线正文：所有生效片段去掉前导注释后按编号拼接。 */
+    /** 静态基线正文：所有生效片段去掉前导注释后按编号拼接（不含单独禁用的片段）。 */
     fun renderStatic(projectRoot: String?): String =
         list(projectRoot)
-            .mapNotNull { it.content.replace(LEADING_COMMENT, "").trim().takeIf { text -> text.isNotEmpty() } }
+            .filter { it.enabled }
+            .mapNotNull { PromptFragment.bodyOf(it.content).trim().takeIf { text -> text.isNotEmpty() } }
             .joinToString("\n\n")
 
-    /** 「仅自定义片段」模式：只取项目层与全局层的自定义片段正文。 */
+    /** 「仅自定义片段」模式：只取项目层与全局层的自定义片段正文（不含单独禁用的片段）。 */
     fun renderCustomOnly(projectRoot: String?): String =
         list(projectRoot)
+            .filter { it.enabled }
             .filter { it.source == PromptFragmentSource.PROJECT || it.source == PromptFragmentSource.GLOBAL }
-            .mapNotNull { it.content.replace(LEADING_COMMENT, "").trim().takeIf { text -> text.isNotEmpty() } }
+            .mapNotNull { PromptFragment.bodyOf(it.content).trim().takeIf { text -> text.isNotEmpty() } }
             .joinToString("\n\n")
 
     /** 是否存在「完全禁用内置提示词」标记（全局层）。 */
@@ -139,6 +153,11 @@ class PromptFragmentCatalog @Inject constructor(
             if (previousNumber != null && previousNumber != number) {
                 deleteOverridesFor(previousNumber, project)
                 deleteOverridesFor(previousNumber, globalDir)
+                // 改了编号：把旧编号的开关状态迁移到新编号，保持「禁用」跟随片段身份。
+                val disabled = PromptFragmentResolver.disabledNumbers(globalDir)
+                if (previousNumber in disabled) {
+                    PromptFragmentResolver.writeDisabledNumbers(globalDir, (disabled - previousNumber) + number)
+                }
             }
             if (!dir.exists()) dir.mkdirs()
             deleteOverridesFor(number, dir)
@@ -172,6 +191,11 @@ class PromptFragmentCatalog @Inject constructor(
                 File(dir, "%02d-%s.md".format(numbers[index], sanitizeTitle(fragment.title)))
                     .writeText(fragment.content)
             }
+            // 重排后编号重新分配：把各片段的开关状态按新编号重建禁用清单，保证「禁用」跟随片段身份。
+            PromptFragmentResolver.writeDisabledNumbers(
+                globalDir,
+                reordered.filter { !it.enabled }.map { it.number }.toSet()
+            )
             true
         } catch (e: Exception) {
             FileLogger.e(TAG, "重排提示词失败", e)
@@ -223,17 +247,39 @@ class PromptFragmentCatalog @Inject constructor(
         }
     }
 
+    /** 切换某编号片段的启用状态（写入全局层禁用清单）。 */
+    fun setFragmentEnabled(number: Int, enabled: Boolean): Boolean =
+        setFragmentsEnabled(mapOf(number to enabled))
+
+    /** 批量设置片段启用状态（重排后按新编号重建禁用清单用）。 */
+    fun setFragmentsEnabled(updates: Map<Int, Boolean>): Boolean {
+        if (updates.isEmpty()) return true
+        return try {
+            val disabled = PromptFragmentResolver.disabledNumbers(globalDir).toMutableSet()
+            updates.forEach { (number, enabled) ->
+                if (enabled) disabled.remove(number) else disabled.add(number)
+            }
+            PromptFragmentResolver.writeDisabledNumbers(globalDir, disabled)
+            true
+        } catch (e: Exception) {
+            FileLogger.e(TAG, "更新片段开关失败", e)
+            false
+        }
+    }
+
     private fun resolve(
         number: Int,
         builtin: Map<Int, String>,
         project: Map<Int, File>,
-        global: Map<Int, File>
+        global: Map<Int, File>,
+        disabled: Set<Int>
     ): PromptFragment? {
-        project[number]?.let { return readFragment(it, number, PromptFragmentSource.PROJECT) }
-        global[number]?.let { return readFragment(it, number, PromptFragmentSource.GLOBAL) }
+        val enabled = number !in disabled
+        project[number]?.let { return readFragment(it, number, PromptFragmentSource.PROJECT)?.copy(enabled = enabled) }
+        global[number]?.let { return readFragment(it, number, PromptFragmentSource.GLOBAL)?.copy(enabled = enabled) }
         builtin[number]?.let { name ->
             File(localDir, name).takeIf { it.isFile }?.let {
-                return readFragment(it, number, PromptFragmentSource.LOCAL)
+                return readFragment(it, number, PromptFragmentSource.LOCAL)?.copy(enabled = enabled)
             }
             readAsset(name)?.let { content ->
                 return PromptFragment(
@@ -242,7 +288,8 @@ class PromptFragmentCatalog @Inject constructor(
                     PromptFragmentSource.BUILTIN,
                     content,
                     null,
-                    extractDescription(content)
+                    PromptFragment.extractDescription(content),
+                    enabled
                 )
             }
         }
@@ -251,7 +298,7 @@ class PromptFragmentCatalog @Inject constructor(
 
     private fun readFragment(file: File, number: Int, source: PromptFragmentSource): PromptFragment? =
         readText(file)?.let { content ->
-            PromptFragment(number, titleOf(file.name), source, content, file, extractDescription(content))
+            PromptFragment(number, titleOf(file.name), source, content, file, PromptFragment.extractDescription(content))
         }
 
     /** 目录顶层 `<两位数字>-<名称>.md`，按编号去重（同编号取字典序首个）。 */
@@ -294,10 +341,6 @@ class PromptFragmentCatalog @Inject constructor(
         return base.substringAfter('-', missingDelimiterValue = base)
     }
 
-    /** 正文开头的 `<!-- ... -->` 注释即摘要（内置片段都带一行）。 */
-    private fun extractDescription(content: String): String =
-        DESCRIPTION.find(content)?.groupValues?.get(1)?.trim().orEmpty()
-
     private fun sanitizeTitle(title: String): String =
         title.trim().replace(Regex("[^A-Za-z0-9._\\u4e00-\\u9fa5-]"), "-").take(40).ifBlank { "fragment" }
 
@@ -306,7 +349,5 @@ class PromptFragmentCatalog @Inject constructor(
         const val ASSET_DIR = "prompts"
         const val CUSTOM_DIR = "prompts.custom"
         const val LOCAL_DIR = "prompts"
-        val LEADING_COMMENT = Regex("(?s)^\\s*<!--.*?-->\\s*")
-        val DESCRIPTION = Regex("^\\s*<!--\\s*(.*?)\\s*-->", RegexOption.DOT_MATCHES_ALL)
     }
 }

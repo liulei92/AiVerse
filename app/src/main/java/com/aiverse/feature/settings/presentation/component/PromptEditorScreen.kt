@@ -1,14 +1,22 @@
 package com.aiverse.feature.settings.presentation.component
 
+import android.net.Uri
+import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,10 +32,12 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.aiverse.R
@@ -37,6 +47,10 @@ import com.aiverse.feature.agent.domain.prompt.PromptFragment
 import com.aiverse.feature.agent.domain.prompt.PromptFragmentSource
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.ArrowLeft
+import compose.icons.feathericons.UploadCloud
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 提示词片段新建/编辑页：自带顶栏（返回 + 右上角保存），与 [SubAgentEditorScreen] 一致，
@@ -62,6 +76,36 @@ internal fun PromptEditorScreen(
     var description by rememberSaveable { mutableStateOf(initialDescription) }
     var content by rememberSaveable { mutableStateOf(initialContent) }
     var scopeIsProject by rememberSaveable { mutableStateOf(initialScope == PromptFragmentSource.PROJECT) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // 从 md/txt 文件导入：读正文与显示名，标题默认用文件名（去扩展名），摘要沿用正文开头 <!-- 描述 -->。
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val imported = withContext(Dispatchers.IO) {
+                runCatching {
+                    val resolver = context.contentResolver
+                    val text = resolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                    text to name
+                }
+            }.getOrNull()
+            val text = imported?.first
+            val fileName = imported?.second
+            if (text.isNullOrBlank()) {
+                Toast.makeText(context, R.string.prompts_import_failed, Toast.LENGTH_SHORT).show()
+            } else {
+                title = fileName?.substringBeforeLast('.')?.trim()?.takeIf { it.isNotBlank() } ?: title
+                description = PromptFragment.extractDescription(text)
+                content = PromptFragment.bodyOf(text)
+            }
+        }
+    }
 
     val number = numberText.toIntOrNull()
     val numberValid = number != null && number in 0..99
@@ -177,6 +221,26 @@ internal fun PromptEditorScreen(
 
             SettingsGroupHeader(text = stringResource(R.string.prompts_field_content))
             SettingsGroup {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = Spacing.lg, end = Spacing.lg, top = 8.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = {
+                            importLauncher.launch(arrayOf("text/markdown", "text/plain", "application/octet-stream"))
+                        }
+                    ) {
+                        Icon(
+                            imageVector = FeatherIcons.UploadCloud,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(Spacing.xs))
+                        Text(stringResource(R.string.prompts_import))
+                    }
+                }
                 AppTextField(
                     value = content,
                     onValueChange = { content = it },
