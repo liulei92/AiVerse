@@ -48,6 +48,7 @@ import com.aiverse.feature.settings.data.repository.DEFAULT_QUICK_ACTION_ORDER
 import com.aiverse.feature.settings.data.repository.InputBarQuickAction
 import com.aiverse.feature.settings.data.repository.BackgroundMode
 import com.aiverse.feature.settings.data.repository.BackgroundSettingsRepository
+import com.aiverse.feature.settings.domain.model.WelcomeEntry
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Box
 import compose.icons.feathericons.ChevronUp
@@ -108,7 +109,9 @@ internal fun AppearanceSettingsSection(
     onImportThemePackage: (String) -> Unit,
     exportedThemeJson: String?,
     inputBarPrefs: InputBarPrefs,
-    onInputBarPrefsChange: (InputBarPrefs) -> Unit
+    onInputBarPrefsChange: (InputBarPrefs) -> Unit,
+    welcomeEntries: List<WelcomeEntry>,
+    onOpenWelcomeEntriesSheet: () -> Unit
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -285,6 +288,20 @@ internal fun AppearanceSettingsSection(
                 )
                 if (index < DEFAULT_QUICK_ACTION_ORDER.lastIndex) SettingsDivider()
             }
+        }
+
+        SettingsGroupHeader(text = stringResource(R.string.settings_welcome_entries))
+        SettingsGroup {
+            SettingsRow(
+                icon = FeatherIcons.MessageSquare,
+                title = stringResource(R.string.settings_welcome_entries),
+                subtitle = stringResource(
+                    R.string.settings_welcome_entries_count,
+                    welcomeEntries.size,
+                    WELCOME_ENTRIES_MAX
+                ),
+                onClick = onOpenWelcomeEntriesSheet
+            )
         }
 
         SettingsGroupHeader(text = stringResource(R.string.settings_appearance_theme_package))

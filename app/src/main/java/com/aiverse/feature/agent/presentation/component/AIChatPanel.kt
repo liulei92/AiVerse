@@ -791,6 +791,8 @@ fun AIChatPanel(
     val sessionProviderModel by viewModel.currentSessionProviderModel.collectAsStateWithLifecycle()
     val defaultProviderId = settingsViewModel?.defaultModelProviderId?.collectAsStateWithLifecycle()?.value ?: ""
     val defaultModelName = settingsViewModel?.defaultModel?.collectAsStateWithLifecycle()?.value ?: ""
+    // 新对话页快捷入口：settingsViewModel 为 null 时优雅降级为空列表（WelcomeState 不显示网格）。
+    val welcomeEntries = settingsViewModel?.welcomeEntries?.collectAsStateWithLifecycle()?.value ?: emptyList()
     // 背景图是否开启：开启时输入框渐变蒙版改用页面底色且降低终点不透明度，避免背景图在输入框边缘被切出直线。
     val chatBackgroundEnabled = settingsViewModel?.backgroundImagePath?.collectAsStateWithLifecycle()?.value != null
     // 未绑定会话回退：新会话默认模型（主页空会话中选择后记忆），未设置则为 null（UI 显示默认图标/顶栏模型名留空）。
@@ -1844,7 +1846,16 @@ fun AIChatPanel(
                 } else if (messages.isEmpty()) {
                     WelcomeState(
                         bottomReserve = with(LocalDensity.current) { inputBarReservePx.toDp() },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        welcomeEntries = welcomeEntries,
+                        onNavigateToTerminal = onNavigateToTerminal,
+                        onNavigateToGit = onNavigateToGit,
+                        onFillPrompt = { prompt ->
+                            // 仅当输入框为空时填入提示词（不自动发送）。
+                            if (inputText.isBlank()) {
+                                viewModel.updateInputDraft(prompt)
+                            }
+                        }
                     )
                 } else {
                     LazyColumn(

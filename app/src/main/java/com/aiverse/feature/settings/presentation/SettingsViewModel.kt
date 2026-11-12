@@ -74,6 +74,7 @@ import com.aiverse.feature.settings.data.remote.UpdateCheckService
 import com.aiverse.feature.settings.data.repository.UpdateCheckSettingsRepository
 import com.aiverse.feature.settings.data.repository.InputBarPrefs
 import com.aiverse.feature.settings.data.repository.InputBarSettingsRepository
+import com.aiverse.feature.settings.data.repository.WelcomeEntriesRepository
 import com.aiverse.feature.settings.data.repository.BalanceSettingsRepository
 import com.aiverse.feature.settings.data.repository.UpdateChannel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -121,6 +122,7 @@ import com.aiverse.feature.settings.domain.service.ModelCostCalculator
 import com.aiverse.feature.settings.domain.service.ProviderDashboardRunner
 import com.aiverse.feature.settings.domain.model.ProviderType
 import com.aiverse.feature.settings.domain.model.ProxyType
+import com.aiverse.feature.settings.domain.model.WelcomeEntry
 import com.aiverse.R
 import com.aiverse.feature.settings.domain.repository.AIProviderRepository
 import com.aiverse.feature.terminal.data.repository.TerminalSettings
@@ -435,6 +437,7 @@ class SettingsViewModel @Inject constructor(
     private val terminalSettingsRepository: TerminalSettingsRepository,
     private val proxySettingsRepository: ProxySettingsRepository,
     private val inputBarSettingsRepository: InputBarSettingsRepository,
+    private val welcomeEntriesRepository: WelcomeEntriesRepository,
     private val balanceSettingsRepository: BalanceSettingsRepository,
     private val balanceFetcher: BalanceFetcher,
     private val okHttpClient: OkHttpClient
@@ -466,6 +469,9 @@ class SettingsViewModel @Inject constructor(
     /** 输入框快捷栏可开关项快照（订阅仓库单一真源，设置页与对话页即时同步）。 */
     val inputBarPrefs: StateFlow<InputBarPrefs> = inputBarSettingsRepository.inputBarPrefs
 
+    /** 新对话页快捷入口（欢迎卡片）快照（订阅仓库单一真源，设置页与对话页即时同步）。 */
+    val welcomeEntries: StateFlow<List<WelcomeEntry>> = welcomeEntriesRepository.entries
+
     /** 余额查询结果（providerId -> Result），供模型编辑页「余额信息」项显示查到的额度。 */
     private val _balanceResults = MutableStateFlow<Map<String, Result<String>>>(emptyMap())
     val balanceResults: StateFlow<Map<String, Result<String>>> = _balanceResults.asStateFlow()
@@ -491,6 +497,44 @@ class SettingsViewModel @Inject constructor(
     /** 更新输入框快捷栏开关并落盘。 */
     fun updateInputBarPrefs(newPrefs: InputBarPrefs) {
         inputBarSettingsRepository.updateInputBarPrefs(newPrefs)
+    }
+
+    /** 新增欢迎卡片；达到上限时 [onResult] 收到 false（调用方可据此提示，不落盘）。 */
+    fun addWelcomeEntry(entry: WelcomeEntry, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch { onResult(welcomeEntriesRepository.add(entry)) }
+    }
+
+    /** 更新欢迎卡片（按 id 匹配；id 不存在时忽略）。 */
+    fun updateWelcomeEntry(entry: WelcomeEntry) {
+        viewModelScope.launch { welcomeEntriesRepository.update(entry) }
+    }
+
+    /** 删除欢迎卡片（按 id；图片图标时同步清理图片文件）。 */
+    fun removeWelcomeEntry(id: String) {
+        viewModelScope.launch { welcomeEntriesRepository.remove(id) }
+    }
+
+    /** 启用/停用欢迎卡片（按 id）。 */
+    fun setWelcomeEntryEnabled(id: String, enabled: Boolean) {
+        viewModelScope.launch { welcomeEntriesRepository.setEnabled(id, enabled) }
+    }
+
+    /** 移动欢迎卡片到目标索引（0 起，上下移）。 */
+    fun moveWelcomeEntry(id: String, toIndex: Int) {
+        viewModelScope.launch { welcomeEntriesRepository.move(id, toIndex) }
+    }
+
+    /** 恢复欢迎卡片为默认预置（清空含图片后重建预置项）。 */
+    fun restoreWelcomeDefaults() {
+        viewModelScope.launch { welcomeEntriesRepository.restoreDefaults() }
+    }
+
+    /**
+     * 保存欢迎卡片图标图片到私有目录，成功后经 [onResult] 回调绝对路径（失败回调 null）。
+     * 调用方把返回路径存入 [WelcomeEntry.iconValue]（iconKind = IMAGE）后再 [updateWelcomeEntry]。
+     */
+    fun saveWelcomeIconImage(uri: Uri, onResult: (String?) -> Unit) {
+        viewModelScope.launch { onResult(welcomeEntriesRepository.saveIconImage(uri)) }
     }
 
     fun setTerminalTheme(themeId: String) {

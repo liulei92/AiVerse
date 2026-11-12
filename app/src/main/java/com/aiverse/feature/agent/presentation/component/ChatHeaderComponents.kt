@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -62,14 +64,17 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -83,7 +88,11 @@ import com.aiverse.core.theme.Spacing
 import com.aiverse.feature.agent.domain.model.AgentMode
 import com.aiverse.feature.onboarding.domain.OnboardingStep
 import com.aiverse.feature.onboarding.presentation.onboardingTarget
+import com.aiverse.feature.settings.domain.model.WelcomeEntry
+import com.aiverse.feature.settings.domain.model.WelcomeEntryAction
+import com.aiverse.feature.settings.domain.model.WelcomeIconKind
 import com.aiverse.feature.settings.presentation.component.ModelLogoIcon
+import com.aiverse.feature.settings.presentation.component.welcomeEntryVectorIcon
 import com.aiverse.core.ui.AppTextField
 import com.aiverse.core.ui.PressableSurface
 import com.aiverse.core.ui.dialogTextFieldColors
@@ -95,6 +104,7 @@ import compose.icons.feathericons.GitBranch
 import compose.icons.feathericons.Menu
 import compose.icons.feathericons.MessageCircle
 import compose.icons.feathericons.Plus
+import coil.compose.AsyncImage
 import compose.icons.feathericons.Terminal
 
 @Composable
@@ -688,8 +698,30 @@ internal fun RemoteConnectingPlaceholder(
     }
 }
 
+/**
+ * 新对话页空状态：提示语 + 已启用快捷入口卡片网格（welcome entry）。
+ *
+ * 入口全部为空或全部禁用时仅显示提示语；否则在提示语下方渲染卡片网格。
+ * 已启用入口正常显示；disabled 入口仍显示但置灰、点击无动作。
+ * 网格列数：入口数 ≤4 时 2 列，>4 时最多 3 列（6 个 = 3×2）。
+ *
+ * @param bottomReserve 底部输入区留白（用于垂直居中偏移）。
+ * @param welcomeEntries 可配置快捷入口列表（含 disabled；全禁用时整体不显示网格）。
+ * @param onNavigateToTerminal OPEN_TERMINAL 入口点击回调。
+ * @param onNavigateToGit OPEN_GIT 入口点击回调。
+ * @param onFillPrompt FILL_PROMPT 入口点击回调，入参为填充提示词（是否填入由调用方决策）。
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun WelcomeState(bottomReserve: Dp, modifier: Modifier = Modifier) {
+internal fun WelcomeState(
+    bottomReserve: Dp,
+    modifier: Modifier = Modifier,
+    welcomeEntries: List<WelcomeEntry> = emptyList(),
+    onNavigateToTerminal: () -> Unit = {},
+    onNavigateToGit: () -> Unit = {},
+    onFillPrompt: (String) -> Unit = {}
+) {
+    val hasEnabled = remember(welcomeEntries) { welcomeEntries.any { it.enabled } }
     BoxWithConstraints(
         modifier = modifier.padding(Spacing.xl),
         contentAlignment = Alignment.Center
@@ -714,6 +746,118 @@ internal fun WelcomeState(bottomReserve: Dp, modifier: Modifier = Modifier) {
             Text(
                 text = stringResource(R.string.chat_input_hint),
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            // 入口非空且至少有一个启用时显示网格；全部禁用则只保留提示语。
+            // 已启用入口正常显示；disabled 入口仍显示但置灰、点击无动作（见 WelcomeEntryCard）。
+            if (welcomeEntries.isNotEmpty() && hasEnabled) {
+                Spacer(Modifier.height(Spacing.md))
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 480.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    maxItemsInEachRow = if (welcomeEntries.size <= 4) 2 else 3
+                ) {
+                    welcomeEntries.forEach { entry ->
+                        WelcomeEntryCard(
+                            entry = entry,
+                            enabled = entry.enabled,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                when (entry.action) {
+                                    WelcomeEntryAction.OPEN_TERMINAL -> onNavigateToTerminal()
+                                    WelcomeEntryAction.OPEN_GIT -> onNavigateToGit()
+                                    WelcomeEntryAction.FILL_PROMPT -> onFillPrompt(entry.promptText)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 快捷入口卡片：图标 + 标题 + 副标题（副标题可空，空则不占位）。disabled 时置灰且点击无动作。 */
+@Composable
+private fun WelcomeEntryCard(
+    entry: WelcomeEntry,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    val cardDesc = stringResource(R.string.welcome_entry_card_desc, entry.title)
+    PressableSurface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .semantics { contentDescription = cardDesc }
+            .alpha(if (enabled) 1f else 0.45f),
+        shape = RoundedCornerShape(Radius.md),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        contentPadding = PaddingValues(Spacing.md)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+        ) {
+            WelcomeEntryIcon(entry)
+            Text(
+                text = entry.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (entry.subtitle.isNotBlank()) {
+                Text(
+                    text = entry.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 快捷入口图标：EMOJI/TEXT 用文本渲染，IMAGE 用 coil 异步图片加载（缩略圆角），
+ * VECTOR 用 Feather 本地矢量图标（与项目其它页面的图标惯例一致）。
+ */
+@Composable
+private fun WelcomeEntryIcon(entry: WelcomeEntry) {
+    when (entry.iconKind) {
+        WelcomeIconKind.IMAGE -> {
+            if (entry.iconValue.isNotBlank()) {
+                AsyncImage(
+                    // iconValue 为应用私有目录图片绝对路径，用 File 作为 model 让 coil 可靠加载本地文件。
+                    model = java.io.File(entry.iconValue),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(Radius.sm))
+                )
+            }
+        }
+        WelcomeIconKind.VECTOR -> {
+            Icon(
+                imageVector = welcomeEntryVectorIcon(entry.iconValue),
+                contentDescription = null,
+                modifier = Modifier.size(40.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+        // EMOJI / TEXT：直接以文本渲染 iconValue。
+        else -> {
+            Text(
+                text = entry.iconValue,
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

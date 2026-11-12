@@ -295,6 +295,7 @@ fun SettingsScreen(
     val goalMaxTokens by viewModel.goalMaxTokens.collectAsStateWithLifecycle()
     val deleteExternalWorkspaceSessions by viewModel.deleteExternalWorkspaceSessions.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val welcomeEntries by viewModel.welcomeEntries.collectAsStateWithLifecycle()
     val themePresetId by viewModel.themePresetId.collectAsStateWithLifecycle()
     val dynamicColorEnabled by viewModel.dynamicColorEnabled.collectAsStateWithLifecycle()
     val iconColorEnabled by viewModel.iconColorEnabled.collectAsStateWithLifecycle()
@@ -484,6 +485,7 @@ fun SettingsScreen(
     var showImageSourceSheet by remember { mutableStateOf(false) }
     var showThemeSheet by remember { mutableStateOf(false) }
     var showBackgroundSheet by remember { mutableStateOf(false) }
+    var showWelcomeEntriesSheet by remember { mutableStateOf(false) }
     var showUserBubbleStyleSheet by remember { mutableStateOf(false) }
     var showAssistantBubbleStyleSheet by remember { mutableStateOf(false) }
     var showLanguageSheet by remember { mutableStateOf(false) }
@@ -1081,6 +1083,7 @@ fun SettingsScreen(
                     onSetFileMutedColoring = { viewModel.setFileMutedColoring(it) },
                     onOpenThemeSheet = { showThemeSheet = true },
                     onOpenBackgroundSheet = { showBackgroundSheet = true },
+                    onOpenWelcomeEntriesSheet = { showWelcomeEntriesSheet = true },
                     onOpenUserBubbleStyleSheet = { showUserBubbleStyleSheet = true },
                     onOpenAssistantBubbleStyleSheet = { showAssistantBubbleStyleSheet = true },
                     onSetChatFontSizeSp = { viewModel.setChatFontSizeSp(it) },
@@ -1101,7 +1104,8 @@ fun SettingsScreen(
                         }
                     },
                     inputBarPrefs = inputBarPrefs,
-                    onInputBarPrefsChange = { viewModel.updateInputBarPrefs(it) }
+                    onInputBarPrefsChange = { viewModel.updateInputBarPrefs(it) },
+                    welcomeEntries = welcomeEntries
                 )
                 SettingsSection.Providers -> ProvidersSection(
                     providers = providers,
@@ -1652,6 +1656,20 @@ fun SettingsScreen(
             onPortraitHeightChange = { viewModel.setBackgroundPortraitHeight(it) },
             onRemove = { viewModel.clearBackgroundImage() },
             onDismiss = { showBackgroundSheet = false }
+        )
+    }
+
+    if (showWelcomeEntriesSheet) {
+        WelcomeEntriesSheet(
+            entries = welcomeEntries,
+            onAddEntry = { entry -> viewModel.addWelcomeEntry(entry) },
+            onUpdateEntry = { viewModel.updateWelcomeEntry(it) },
+            onRemoveEntry = { viewModel.removeWelcomeEntry(it) },
+            onSetEntryEnabled = { id, enabled -> viewModel.setWelcomeEntryEnabled(id, enabled) },
+            onMoveEntry = { id, toIndex -> viewModel.moveWelcomeEntry(id, toIndex) },
+            onRestoreDefaults = { viewModel.restoreWelcomeDefaults() },
+            onSaveIconImage = { uri, onResult -> viewModel.saveWelcomeIconImage(uri, onResult) },
+            onDismiss = { showWelcomeEntriesSheet = false }
         )
     }
 
