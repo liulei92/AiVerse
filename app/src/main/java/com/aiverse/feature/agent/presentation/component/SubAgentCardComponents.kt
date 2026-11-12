@@ -49,14 +49,13 @@ import com.aiverse.R
 import com.aiverse.core.theme.Radius
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
+import com.aiverse.core.ui.ExpandableChevronIcon
 import com.aiverse.core.ui.PressableSurface
 import com.aiverse.feature.agent.presentation.SubAgentCardState
 import com.aiverse.feature.agent.presentation.SubAgentCardStatus
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.AlertCircle
-import compose.icons.feathericons.ChevronDown
 import compose.icons.feathericons.ChevronRight
-import compose.icons.feathericons.ChevronUp
 import compose.icons.feathericons.Cpu
 import compose.icons.feathericons.X
 import kotlinx.coroutines.delay
@@ -598,6 +597,16 @@ internal fun SubAgentStatusRow(
                         )
                     }
                     Spacer(Modifier.width(Spacing.sm))
+                    // 展开/收起箭头放到标题左侧，与 Cpu 图标一起作状态指示器；整行点击仍切换展开态。
+                    ExpandableChevronIcon(
+                        expanded = expanded,
+                        contentDescription = stringResource(
+                            if (expanded) R.string.common_collapse else R.string.common_expand
+                        ),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                        modifier = Modifier.padding(end = Spacing.xs),
+                        size = 16.dp
+                    )
                     Text(
                         // 收起态且全部结束 → 一行摘要「N 个子代理已完成，点开查看」；展开或仍在运行 → 原标题。
                         text = if (allFinished && !expanded) {
@@ -618,26 +627,27 @@ internal fun SubAgentStatusRow(
                     }
                     Spacer(Modifier.weight(1f))
                     // 叉号：仅收起整条状态横幅（本会话内不再展示），不删除子代理数据，也不影响侧边栏。
-                    Icon(
-                        imageVector = FeatherIcons.X,
-                        contentDescription = stringResource(R.string.common_close),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clip(CircleShape)
-                            .clickable {
-                                visibleStates.forEach { dismissedIds.add(it.subSessionId) }
-                            }
-                    )
-                    Spacer(Modifier.width(Spacing.xs))
-                    Icon(
-                        imageVector = if (expanded) FeatherIcons.ChevronUp else FeatherIcons.ChevronDown,
-                        contentDescription = stringResource(
-                            if (expanded) R.string.common_collapse else R.string.common_expand
-                        ),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                        modifier = Modifier.size(16.dp)
-                    )
+                    // 有运行中的子代理时不给关闭入口，避免进行中状态与停止按钮被一键隐藏；
+                    // 全部结束后 × 独占右端，并用 md 间距与左侧内容拉开，减少误触。
+                    if (runningCount == 0) {
+                        Spacer(Modifier.width(Spacing.md))
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(RoundedCornerShape(Radius.sm))
+                                .clickable {
+                                    visibleStates.forEach { dismissedIds.add(it.subSessionId) }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = FeatherIcons.X,
+                                contentDescription = stringResource(R.string.common_close),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
                 }
             }
             if (expanded) {

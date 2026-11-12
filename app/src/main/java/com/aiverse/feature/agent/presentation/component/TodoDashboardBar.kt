@@ -9,6 +9,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -139,6 +140,20 @@ fun TodoDashboardBar(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+                Spacer(Modifier.width(Spacing.xs))
+
+                // 展开/收起箭头移到标题左侧，同时充当展开状态指示器；整行点击仍切换展开态。
+                ExpandableChevronIcon(
+                    expanded = isExpanded,
+                    contentDescription = if (isExpanded) {
+                        stringResource(R.string.common_collapse_action)
+                    } else {
+                        stringResource(R.string.common_expand)
+                    },
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    size = 16.dp
+                )
+
                 Spacer(Modifier.width(Spacing.sm))
 
                 // 进度胶囊或当前进行中的任务简述
@@ -176,28 +191,25 @@ fun TodoDashboardBar(
                     Spacer(Modifier.weight(1f))
                 }
 
-                // 手动关闭入口（issue #54）：点 × 整条收起，本会话内不再显示，直到新待办活动。
-                Icon(
-                    imageVector = FeatherIcons.X,
-                    contentDescription = stringResource(R.string.common_close),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clip(RoundedCornerShape(Radius.xs))
-                        .clickable { dismissed = true }
-                )
-                Spacer(Modifier.width(Spacing.xs))
-
-                ExpandableChevronIcon(
-                    expanded = isExpanded,
-                    contentDescription = if (isExpanded) {
-                        stringResource(R.string.common_collapse_action)
-                    } else {
-                        stringResource(R.string.common_expand)
-                    },
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    size = 16.dp
-                )
+                // 手动关闭入口（issue #54）：有进行中任务时不给关闭入口，避免进行中状态被一键隐藏；
+                // 全部完成后 × 独占右端并用 md 间距与左侧内容拉开，减少误触。
+                if (inProgressItem == null) {
+                    Spacer(Modifier.width(Spacing.md))
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(RoundedCornerShape(Radius.sm))
+                            .clickable { dismissed = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = FeatherIcons.X,
+                            contentDescription = stringResource(R.string.common_close),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
             }
 
             // 展开时展示待办列表（平滑淡入展开、向上卷折淡出）
