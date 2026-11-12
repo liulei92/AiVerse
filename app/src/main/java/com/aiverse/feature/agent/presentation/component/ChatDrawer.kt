@@ -931,7 +931,8 @@ private fun SubAgentExpandToggle(
 
 /**
  * Tab1：当前工作区的文件树。从工作区根就地展开，缩进表示层级；
- * 每行共享同一横向滚动，路径过深时左右滑动查看完整名称，不再截断成省略号。
+ * 仅「单行横向滚动」档每行共享同一横向滚动，路径过深时左右滑动查看完整名称，不再截断成省略号；
+ * 其余档位（最多两行 / 单行省略号）行宽取容器宽度，文本按档位换行或省略号截断。
  * 新建文件/文件夹通过长按目录（含工作区根）行的菜单发起。
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -1295,11 +1296,16 @@ private fun FileBrowserTab(
                 val density = LocalDensity.current
                 // 缩进宽度按偏好：标准档 16dp（历史值）/ 紧凑档 10dp。
                 val indentWidth = fileTreePrefs.indentDensity.indentDp.dp
+                // 文件名显示档位：仅「单行横向滚动」档需要横向滚动与统一宽度预算；
+                // 最多两行 / 单行省略号档行宽取容器宽度，让文本按档位换行或截断。
+                val nameScrolls = fileTreePrefs.fileNameDisplay == FileNameDisplay.SINGLE_LINE_SCROLL
                 // 预算最宽一行的内容宽度（固定开销 + 缩进 + 文本），供所有行取统一宽度，
                 // 以实现整棵树统一横向平移（而非每行各自滚动）。
+                // 仅滚动档生效；remember key 含 nameScrolls，档位切换时重算（否则切回滚动档会拿到缓存 0）。
                 // 逐个 measure 在大目录下会在组合期同步跑上千次文本测量；先按「缩进 + 字符宽度权重」
                 // 挑出最宽的那一行，只对它做一次真实测量。估算不精确，但这里只用来给横向滚动留够宽度。
-                val maxContentPx = remember(visibleNodes, textStyle, indentWidth) {
+                val maxContentPx = remember(visibleNodes, textStyle, indentWidth, nameScrolls) {
+                    if (!nameScrolls) return@remember 0
                     with(density) {
                         val widest = visibleNodes.maxByOrNull { node ->
                             node.depth * 4 + node.displayName.sumOf { ch -> if (ch.code > 0x2E80) 2 else 1 }
@@ -1309,13 +1315,12 @@ private fun FileBrowserTab(
                     }
                 }
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    val rowWidthPx = maxOf(constraints.maxWidth, maxContentPx)
+                    val rowWidthPx = if (nameScrolls) maxOf(constraints.maxWidth, maxContentPx) else constraints.maxWidth
                     val rowWidth = with(density) { rowWidthPx.toDp() }
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .horizontalScroll(hScroll)
+                        modifier = if (nameScrolls) Modifier.fillMaxHeight().horizontalScroll(hScroll)
+                        else Modifier.fillMaxHeight()
                     ) {
                         items(visibleNodes, key = { it.path }) { node ->
                             val selState = selectionStateOf(node)
@@ -1829,8 +1834,9 @@ private fun FileTreeActionSheet(
 }
 
 /** 文件树的一行：按 [FileTreeNode.depth] 缩进，目录带展开箭头。
- * 所有行取统一的 [rowWidth]（与外层 horizontalScroll 配合），横向滑动时整树一起平移，
- * 名称不截断、不换行。着色优先级：读取失败 > .gitignore 命中（橙）> dotfile（弱化）> 常规。 */
+ * 仅「单行横向滚动」档所有行取统一的 [rowWidth]（与外层 horizontalScroll 配合），横向滑动时整树一起平移，
+ * 名称不截断、不换行；其余档位行宽取容器宽度，按档位换行（最多两行）或省略号截断。
+ * 着色优先级：读取失败 > .gitignore 命中（橙）> dotfile（弱化）> 常规。 */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileTreeRow(
