@@ -114,6 +114,7 @@ import com.aiverse.feature.agent.domain.tool.question.UserQuestionAnswer
 import com.aiverse.feature.agent.presentation.AgentUIMessage
 import com.aiverse.feature.agent.presentation.AgentUIState
 import com.aiverse.feature.agent.presentation.AIAgentViewModel
+import com.aiverse.feature.agent.presentation.AgentAttachment
 import com.aiverse.feature.agent.presentation.MessageRole
 import com.aiverse.feature.agent.presentation.QueuedRequest
 import com.aiverse.feature.agent.presentation.hasVisibleContent
@@ -717,9 +718,15 @@ fun AIChatPanel(
     onOpenSearchProviders: () -> Unit = {},
     /** MCP 图标 → MCP 服务器设置页。 */
     onOpenMcp: () -> Unit = {},
+    /** 附件「应用内预览」：打开编辑器并直接进预览模式（容器路径）。 */
+    onOpenInEditor: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val agentState by viewModel.agentState.collectAsStateWithLifecycle()
+    // Issue #55：失败错误作为消息流的一部分渲染，而非悬浮在输入框上方。
+    // messageErrors 按失败回复的助手消息 id 关联；unattachedErrors 按会话关联（失败发生在任何助手内容产出前）。
+    val messageErrors by viewModel.messageErrors.collectAsStateWithLifecycle()
+    val unattachedErrors by viewModel.unattachedErrors.collectAsStateWithLifecycle()
     val messagesState by viewModel.messagesState.collectAsStateWithLifecycle()
     val messages = messagesState.messages
     val pendingScroll by viewModel.pendingScrollMessage.collectAsStateWithLifecycle()
@@ -1591,10 +1598,16 @@ fun AIChatPanel(
         chatImageLoader(viewModel.fileAccess, viewerDecodeSpec.maxEdge, viewerDecodeSpec.maxPixels)
     }
 
-    // 文件卡片点击用系统 app 打开：重取/拷贝需要在 IO 线程跑（远程模式要下载），故由这里注入协程。
+    // 文件卡片点击：可预览文档（md / html / txt 等）弹「预览 / 用其他应用打开」；
+    // 其余非图片直接系统打开。重取/拷贝需要在 IO 线程跑（远程模式要下载），故由这里注入协程。
+    var attachmentSheet by remember { mutableStateOf<AgentAttachment?>(null) }
     val attachmentOpener = remember(viewModel.fileAccess, context) {
         AttachmentOpener { attachment ->
-            scope.launch { openSentAttachment(context, attachment, viewModel.fileAccess) }
+            if (isChatPreviewableDocument(attachment.fileName, attachment.mimeType)) {
+                attachmentSheet = attachment
+            } else {
+                scope.launch { openSentAttachment(context, attachment, viewModel.fileAccess) }
+            }
         }
     }
 
@@ -1688,6 +1701,15 @@ fun AIChatPanel(
                     turnUsage = turnUsages[message.id],
                     entryDelayMs = messageEntryDelays[message.id]
                 )
+                // Issue #55：失败错误落在对应助手回复下方（仅分块末块渲染一次），随消息流滚动。
+                if (item.isChunkFooter) {
+                    messageErrors[message.id]?.let { errorText ->
+                        ErrorBubble(
+                            message = errorText,
+                            onDismiss = { viewModel.dismissMessageError(message.id) }
+                        )
+                    }
+                }
                 }
                 }
             }
@@ -1709,6 +1731,17 @@ fun AIChatPanel(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
+            // 顶栏滚动时轻微变淡（与输入框悬浮层一致），不再整块实心挡住消息层次。
+            val headerAlpha by animateFloatAsState(
+                targetValue = if (listState.isScrollInProgress) 0.4f else 1f,
+                animationSpec = tween(200),
+                label = "chat-header-alpha"
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { alpha = headerAlpha }
+            ) {
             ChatHeader(
                 sessionTitle = sessionTitle,
                 modelName = activeProvider?.effectiveModel,
@@ -1743,6 +1776,7 @@ fun AIChatPanel(
                 onCompactContext = { viewModel.compactCurrentSession() },
                 onOpenMessageTimeline = { showMessageTimeline = true }
             )
+            }
         }
     ) { padding ->
         Box(
@@ -1763,6 +1797,12 @@ fun AIChatPanel(
             // 消息流常驻子代理状态行（issue #43）：当前会话有子代理时始终可见，
             // 不随「N 次工具调用」分组折叠；与工具详情卡片复用同一份状态数据。
             if (currentSubAgentStates.isNotEmpty()) {
+                // 子代理状态行与顶栏/输入框一致：滚动时轻微变淡，透出下方消息层次。
+                val subAgentAlpha by animateFloatAsState(
+                    targetValue = if (listState.isScrollInProgress) 0.4f else 1f,
+                    animationSpec = tween(200),
+                    label = "sub-agent-row-alpha"
+                )
                 SubAgentStatusRow(
                     states = currentSubAgentStates,
                     onOpen = { id -> viewModel.selectSession(id) },
@@ -1770,6 +1810,7 @@ fun AIChatPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = Spacing.lg, vertical = Spacing.xs)
+                        .graphicsLayer { alpha = subAgentAlpha }
                 )
             }
             Box(modifier = Modifier.weight(1f)) {
@@ -1820,6 +1861,27 @@ fun AIChatPanel(
                     ) {
                         itemsIndexed(chatItems, key = { _, item -> item.key }, contentType = { _, item -> item.contentType }) { _, item ->
                             RenderChatItem(item)
+                        }
+                        // 无法关联到具体回复的失败（失败发生在任何助手内容产出前，如鉴权/连接失败）：
+                        // 渲染在当前会话消息流末尾，同样可折叠/复制/关闭（Issue #55）。
+                        // item 恒久挂载、内容用 AnimatedVisibility 增删，避免 totalItemsCount 突变导致视口上跳。
+                        val unattachedErrorText = unattachedErrors[currentSessionId]
+                        item(key = "__error_trailing__", contentType = "trailingError") {
+                            val lastErrorText = rememberLastNonNull(unattachedErrorText)
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = unattachedErrorText != null,
+                                enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+                                exit = fadeOut(tween(160)) + shrinkVertically(tween(180))
+                            ) {
+                                lastErrorText?.let { text ->
+                                    ErrorBubble(
+                                        message = text,
+                                        onDismiss = {
+                                            currentSessionId?.let { viewModel.dismissUnattachedError(it) }
+                                        }
+                                    )
+                                }
+                            }
                         }
                         // 阻塞式确认面板内嵌进会话流：权限 / askUserQuestion / 计划审批三类必须等用户确认
                         // 才能继续的面板，渲染在最后一条消息之后、尾巴 item 之前，作为可滚动内容的一部分。
@@ -1975,9 +2037,6 @@ fun AIChatPanel(
                     // 实测悬浮层实际高度作为滚动留白，横幅/面板/输入框任何形态都不遮挡最后一条
                     .onGloballyPositioned { if (it.size.height > 0) floatingLayerHeightPx = it.size.height }
             ) {
-            Box(modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = floatingPanelAlpha }) {
-                StatusBanner(state = agentState)
-            }
 
             // 退场动画期间 uploadingCount 已归零，直接读会淡出一个「正在上传 0 个文件」，
             // 与 StatusBanner 同样用非空记忆值兜住退场。
@@ -2063,6 +2122,7 @@ fun AIChatPanel(
                 onOpenProviders = onOpenProviders,
                 onOpenSearchProviders = onOpenSearchProviders,
                 onOpenMcp = onOpenMcp,
+                onOpenInEditor = onOpenInEditor,
                 // 主页模型弹层的「测试」按钮：直接复用设置页的连通性测试链路，状态由弹层自己持有。
                 onRunModelTest = settingsViewModel?.let { svm -> { p, m -> svm.runModelTest(p, m) } },
                 inputBarPrefs = inputBarPrefs,
@@ -2171,6 +2231,16 @@ fun AIChatPanel(
                     showMessageTimeline = false
                     if (sid != null) viewModel.locateMessage(sid, message.id)
                 }
+            )
+        }
+        attachmentSheet?.let { attachment ->
+            AttachmentOpenSheet(
+                fileName = attachment.fileName,
+                onPreview = { onOpenInEditor(attachment.containerPath.ifBlank { attachment.localPath }) },
+                onOpenExternal = {
+                    scope.launch { openSentAttachment(context, attachment, viewModel.fileAccess) }
+                },
+                onDismiss = { attachmentSheet = null }
             )
         }
         ImageViewerHost(state = imageViewerState, load = chatImageLoad)

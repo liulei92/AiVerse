@@ -38,6 +38,7 @@ internal fun WorkbenchPaneContent(
     kind: WorkbenchPaneKind,
     editorPath: String,
     editorLine: Int,
+    editorPreview: Boolean = false,
     onClose: () -> Unit,
     onOpenFile: ((String) -> Unit)? = null,
     editorLeaveGuard: EditorLeaveGuard? = null,
@@ -50,6 +51,7 @@ internal fun WorkbenchPaneContent(
             WorkbenchPaneKind.EDITOR -> CodeEditorScreen(
                 path = editorPath,
                 initialLine = editorLine,
+                startInPreview = editorPreview,
                 onBack = onClose,
                 embedded = true,
                 leaveGuard = editorLeaveGuard

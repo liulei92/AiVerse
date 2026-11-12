@@ -281,7 +281,8 @@ private val QueueRowHeight = 36.dp
 @Composable
 internal fun PendingAttachmentPreviewList(
     attachments: List<PendingUploadAttachment>,
-    onRemoveAttachment: (Int) -> Unit
+    onRemoveAttachment: (Int) -> Unit,
+    onOpenInEditor: (String) -> Unit = {}
 ) {
     if (attachments.isEmpty()) return
 
@@ -295,7 +296,8 @@ internal fun PendingAttachmentPreviewList(
         attachments.forEachIndexed { index, attachment ->
             PendingAttachmentPreviewItem(
                 attachment = attachment,
-                onRemove = { onRemoveAttachment(index) }
+                onRemove = { onRemoveAttachment(index) },
+                onOpenInEditor = onOpenInEditor
             )
         }
     }
@@ -304,11 +306,13 @@ internal fun PendingAttachmentPreviewList(
 @Composable
 private fun PendingAttachmentPreviewItem(
     attachment: PendingUploadAttachment,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    onOpenInEditor: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val fileAccess = LocalChatFileAccess.current
+    var showOpenSheet by remember { mutableStateOf(false) }
     Surface(
         shape = RoundedCornerShape(Radius.md),
         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
@@ -328,16 +332,14 @@ private fun PendingAttachmentPreviewItem(
                         }
                 )
             } else if (isChatPreviewableDocument(attachment.fileName, attachment.mimeType)) {
-                // 待发送的 md/html：与其它非图片附件一致，用系统 app 打开
+                // 待发送的可预览文档（md/html/txt 等）：点击弹「预览 / 用其他应用打开」
                 val openLabel = stringResource(R.string.chat_attachment_open, attachment.fileName)
                 FileAttachmentPreview(
                     attachment = attachment,
                     modifier = Modifier
                         .fillMaxSize()
                         .clickable(onClickLabel = openLabel) {
-                            scope.launch {
-                                openSentAttachment(context, attachment.toAgentAttachment(), fileAccess)
-                            }
+                            showOpenSheet = true
                         }
                 )
             } else {
@@ -363,6 +365,16 @@ private fun PendingAttachmentPreviewItem(
                 }
             }
         }
+    }
+    if (showOpenSheet) {
+        AttachmentOpenSheet(
+            fileName = attachment.fileName,
+            onPreview = { onOpenInEditor(attachment.containerPath.ifBlank { attachment.localPath }) },
+            onOpenExternal = {
+                scope.launch { openSentAttachment(context, attachment.toAgentAttachment(), fileAccess) }
+            },
+            onDismiss = { showOpenSheet = false }
+        )
     }
 }
 

@@ -113,6 +113,8 @@ fun CodeEditorScreen(
     initialLine: Int = 0,
     embedded: Boolean = false,
     leaveGuard: EditorLeaveGuard? = null,
+    /** 打开即进预览模式（附件「应用内预览」），md / html 等可预览文档有效。 */
+    startInPreview: Boolean = false,
     viewModel: CodeEditorViewModel = hiltViewModel()
 ) {
     LaunchedEffect(path) { viewModel.load(path) }
@@ -131,12 +133,19 @@ fun CodeEditorScreen(
     var pendingLeave by remember { mutableStateOf<PendingLeave?>(null) }
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
-    var previewMode by remember { mutableStateOf(false) }
+    var previewMode by remember { mutableStateOf(startInPreview) }
     var cursorLine by remember { mutableStateOf(1) }
     var cursorColumn by remember { mutableStateOf(1) }
     val isMarkdown = remember(path) {
         path.substringAfterLast('.', "").lowercase() in setOf("md", "markdown")
     }
+    val isHtmlDoc = remember(path) {
+        path.substringAfterLast('.', "").lowercase() in setOf("html", "htm")
+    }
+    val isTxtDoc = remember(path) {
+        path.substringAfterLast('.', "").lowercase() == "txt"
+    }
+    val isPreviewableDoc = isMarkdown || isHtmlDoc || isTxtDoc
     var editorBackground by remember { mutableStateOf<Color?>(null) }
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val saving by viewModel.saving.collectAsStateWithLifecycle()
@@ -149,7 +158,7 @@ fun CodeEditorScreen(
         pendingLeave = null
         cursorLine = 1
         cursorColumn = 1
-        previewMode = false
+        previewMode = startInPreview
     }
 
     // 大屏右栏宿主（点文件树 / 点聊天里的路径链接）要换文件时，先过这里：无脏数据直接放行，
@@ -251,7 +260,7 @@ fun CodeEditorScreen(
                     },
                     actions = {
                         val editable = state is EditorUiState.Success
-                        if (isMarkdown && editable) {
+                        if (isPreviewableDoc && editable) {
                             IconButton(onClick = { previewMode = !previewMode }) {
                                 Icon(
                                     if (previewMode) FeatherIcons.Code else FeatherIcons.Eye,
@@ -366,6 +375,7 @@ fun CodeEditorScreen(
                     MarkdownPreviewWebView(
                         text = previewText,
                         path = path,
+                        html = if (isHtmlDoc) previewText else null,
                         onExitPreview = { previewMode = false },
                         modifier = Modifier
                             .fillMaxSize()

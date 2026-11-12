@@ -606,6 +606,8 @@ fun AppNavigation(
     var paneKind by rememberSaveable { mutableStateOf(WorkbenchPaneKind.NONE) }
     var paneEditorPath by rememberSaveable { mutableStateOf("") }
     var paneEditorLine by rememberSaveable { mutableIntStateOf(0) }
+    // 附件「应用内预览」从右栏进入时直接开预览；文件树正常打开则回源码模式。
+    var paneEditorPreview by rememberSaveable { mutableStateOf(false) }
     var paneSplit by rememberSaveable { mutableFloatStateOf(DEFAULT_PANE_SPLIT) }
     // 右栏编辑器有未保存修改时，换文件前先弹保存提示（窄窗全屏编辑器由返回键拦截，不经过这里）。
     val editorLeaveGuard = remember { EditorLeaveGuard() }
@@ -624,6 +626,7 @@ fun AppNavigation(
             val apply = {
                 paneEditorPath = filePath
                 paneEditorLine = line
+                paneEditorPreview = false
                 paneKind = WorkbenchPaneKind.EDITOR
             }
             // 重复点同一个文件：内容不换，只是重新走到目标行（交给编辑器的行定位 effect），
@@ -640,6 +643,30 @@ fun AppNavigation(
             scope.launch { drawerState.close() }
             navController.navigate(
                 "editor?path=${android.net.Uri.encode(filePath)}&line=$line&drawer=$fromDrawer"
+            )
+        }
+    }
+
+    // 附件「应用内预览」：大屏进右栏编辑器并直接进预览模式，窄窗跳全屏编辑器预览页。
+    val openFilePreview: (String) -> Unit = { filePath ->
+        if (expanded) {
+            val apply = {
+                paneEditorPath = filePath
+                paneEditorLine = 0
+                paneEditorPreview = true
+                paneKind = WorkbenchPaneKind.EDITOR
+            }
+            // 与 openFile 一致：右栏编辑器有未保存修改时先弹保存提示，确认后再切换。
+            if (paneKind == WorkbenchPaneKind.EDITOR && paneEditorPath == filePath) {
+                apply()
+            } else {
+                editorLeaveGuard.requestLeave(apply)
+            }
+            if (!permanentDrawer) scope.launch { drawerState.close() }
+        } else {
+            scope.launch { drawerState.close() }
+            navController.navigate(
+                "editor?path=${android.net.Uri.encode(filePath)}&line=0&drawer=false&preview=true"
             )
         }
     }
@@ -891,7 +918,8 @@ fun AppNavigation(
                                     },
                                     onOpenMcp = {
                                         navController.navigate("settings?section=mcp&from=chat")
-                                    }
+                                    },
+                                    onOpenInEditor = openFilePreview
                                 )
                             }
                         }
@@ -901,6 +929,7 @@ fun AppNavigation(
                                 kind = paneKind,
                                 editorPath = paneEditorPath,
                                 editorLine = paneEditorLine,
+                                editorPreview = paneEditorPreview,
                                 onClose = { paneKind = WorkbenchPaneKind.NONE },
                                 onOpenFile = { path -> openFile(path, 0, false) },
                                 // rc5 的平板右栏脏状态确认：主分支把调用重构进了 if (paneOpen)，
@@ -1054,7 +1083,7 @@ fun AppNavigation(
                 )
             }
             composable(
-                route = "editor?path={path}&line={line}&drawer={drawer}",
+                route = "editor?path={path}&line={line}&drawer={drawer}&preview={preview}",
                 arguments = listOf(
                     navArgument("path") {
                         type = NavType.StringType
@@ -1067,6 +1096,10 @@ fun AppNavigation(
                     navArgument("drawer") {
                         type = NavType.BoolType
                         defaultValue = false
+                    },
+                    navArgument("preview") {
+                        type = NavType.BoolType
+                        defaultValue = false
                     }
                 )
             ) { entry ->
@@ -1076,6 +1109,7 @@ fun AppNavigation(
                 CodeEditorScreen(
                     path = entry.arguments?.getString("path").orEmpty(),
                     initialLine = entry.arguments?.getInt("line") ?: 0,
+                    startInPreview = entry.arguments?.getBoolean("preview") ?: false,
                     onBack = {
                         navController.popBackStack()
                         if (openDrawerOnBack && !expanded) scope.launch { drawerState.open() }

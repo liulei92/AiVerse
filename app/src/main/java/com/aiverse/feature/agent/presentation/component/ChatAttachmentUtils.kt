@@ -44,10 +44,10 @@ internal data class PendingUploadAttachment(
 internal val PendingUploadAttachment.isImage: Boolean
     get() = image != null
 
-/** 是否为 Markdown / HTML 文档（用于决定 md/html 附件走哪种打开方式）。 */
+/** 是否为应用内可预览文档（md / html / txt 等文本类，用于决定附件点击是否弹「预览 / 用其他应用打开」）。 */
 internal fun isChatPreviewableDocument(fileName: String, mimeType: String = ""): Boolean {
     val ext = fileName.substringAfterLast('.', "").lowercase()
-    return ext in setOf("md", "markdown", "html", "htm") ||
+    return ext in setOf("md", "markdown", "html", "htm", "txt") ||
         mimeType.equals("text/html", ignoreCase = true) ||
         mimeType.equals("text/markdown", ignoreCase = true)
 }
