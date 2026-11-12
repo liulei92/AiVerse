@@ -49,6 +49,7 @@ import compose.icons.FeatherIcons
 import compose.icons.feathericons.CheckSquare
 import compose.icons.feathericons.ChevronDown
 import compose.icons.feathericons.ChevronUp
+import compose.icons.feathericons.X
 
 /**
  * 位于输入框上方的待办任务常驻面板：
@@ -69,6 +70,8 @@ fun TodoDashboardBar(
 
     // 按会话隔离记忆展开状态，新会话默认收起
     var isExpanded by rememberSaveable(sessionId) { mutableStateOf(false) }
+    // 手动关闭（issue #54）：点 × 整条收起，本会话内不再显示，直到有新待办活动。
+    var dismissed by rememberSaveable(sessionId) { mutableStateOf(false) }
 
     // 键盘弹出时自动收起一次，避免输入框被挤压；但不持续压制——收起后用户仍可点箭头展开查看
     // 完整任务列表（展开列表已 heightIn 限高，不会顶开输入框）。此前用 effectiveExpanded =
@@ -83,7 +86,20 @@ fun TodoDashboardBar(
 
     val totalCount = items.size
     val completedCount = items.count { it.status == TodoStatus.COMPLETED }
+    // 全部完成 → 自动收成一行「全部完成」摘要；有未完成项 → 视为活动状态。
+    val allDone = totalCount > 0 && completedCount == totalCount
     val inProgressItem = items.firstOrNull { it.status == TodoStatus.IN_PROGRESS }
+    // 全部完成时自动收起（issue #54）：只在完成瞬间收一次，不覆盖用户后续手动展开。
+    LaunchedEffect(allDone) {
+        if (allDone) isExpanded = false
+    }
+    // 关闭后出现新的活动待办（未完成项）→ 自动恢复显示。
+    LaunchedEffect(items) {
+        if (items.any { it.status != TodoStatus.COMPLETED }) {
+            dismissed = false
+        }
+    }
+    if (dismissed) return
 
     val cardBgColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
     val borderColor = MaterialTheme.colorScheme.outlineVariant
@@ -159,6 +175,18 @@ fun TodoDashboardBar(
                 } else {
                     Spacer(Modifier.weight(1f))
                 }
+
+                // 手动关闭入口（issue #54）：点 × 整条收起，本会话内不再显示，直到新待办活动。
+                Icon(
+                    imageVector = FeatherIcons.X,
+                    contentDescription = stringResource(R.string.common_close),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clip(RoundedCornerShape(Radius.xs))
+                        .clickable { dismissed = true }
+                )
+                Spacer(Modifier.width(Spacing.xs))
 
                 ExpandableChevronIcon(
                     expanded = isExpanded,

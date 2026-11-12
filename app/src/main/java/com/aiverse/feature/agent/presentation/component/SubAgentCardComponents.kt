@@ -546,13 +546,21 @@ internal fun SubAgentStatusRow(
     }
     if (visibleStates.isEmpty()) return
     val runningCount = visibleStates.count { it.status == SubAgentCardStatus.RUNNING }
+    // 全部子代理已结束（成功/失败/停止都算）→ 视为收尾态，标题收成一行摘要。
+    val allFinished = runningCount == 0
     // 折叠开关：默认展开，用户点过则以选择为准；状态行本身常驻，只有明细可收合。
     var expanded by remember { mutableStateOf(true) }
+    // 全部结束后自动收成摘要行（issue #54）：只在状态从「有运行中」变为「全部结束」这一跳触发收起，
+    // 不覆盖用户的后续手动展开——点开看明细后不会被强行再收。
+    LaunchedEffect(allFinished) {
+        if (allFinished) expanded = false
+    }
 
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(Radius.sm),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        // 内外统一成同一底色（与条目卡一致），不再「外层半透明 + 内层不透明」叠加成实心。
+        color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
     ) {
         Column(
@@ -586,7 +594,12 @@ internal fun SubAgentStatusRow(
                 }
                 Spacer(Modifier.width(Spacing.sm))
                 Text(
-                    text = stringResource(R.string.subagent_status_row_title),
+                    // 收起态且全部结束 → 一行摘要「N 个子代理已完成，点开查看」；展开或仍在运行 → 原标题。
+                    text = if (allFinished && !expanded) {
+                        stringResource(R.string.subagent_status_row_all_done, visibleStates.size)
+                    } else {
+                        stringResource(R.string.subagent_status_row_title)
+                    },
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold
