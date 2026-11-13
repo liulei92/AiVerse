@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,12 +35,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aiverse.R
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.Radius
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.ui.BatchDeleteConfirmDialog
 import com.aiverse.core.ui.ListSelectionState
 import com.aiverse.core.ui.SelectionActionBar
+import com.aiverse.core.ui.selectionActionBarHeight
 import com.aiverse.core.ui.SelectionActionButton
 import com.aiverse.core.ui.SelectionActionIconButton
 import com.aiverse.core.ui.SwipeToDeleteRow
@@ -70,6 +74,7 @@ internal fun SubAgentsSection(
     onBatchDelete: (List<SubAgentUiEntry>) -> Unit,
     onBatchSetEnabled: (List<SubAgentUiEntry>, Boolean) -> Unit
 ) {
+    val t = LocalUIDensityTokens.current
     // 只在数据变化时分组，避免每次重组都产生两份新 List。
     val (projectAgents, globalAgents) = remember(entries) {
         entries.filter { it.scope == AgentDefinitionScope.PROJECT } to
@@ -131,37 +136,8 @@ internal fun SubAgentsSection(
     val allSelected = selection.selectedCount > 0 && selection.selectedCount == allKeys.size
     val selectedEntries: List<SubAgentUiEntry> = selection.selectedKeys.mapNotNull { keyToEntry[it] }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        if (selection.isActive) {
-            val enabled = selection.selectedCount > 0
-            SelectionActionBar(
-                selectedCount = selection.selectedCount,
-                allSelected = allSelected,
-                onToggleSelectAll = {
-                    if (allSelected) selection.clear() else selection.replaceAll(allKeys)
-                },
-                onExit = { selection.exit() }
-            ) {
-                SelectionActionButton(
-                    text = stringResource(R.string.common_batch_enable),
-                    enabled = enabled,
-                    onClick = { onBatchSetEnabled(selectedEntries, true) }
-                )
-                SelectionActionButton(
-                    text = stringResource(R.string.common_batch_disable),
-                    enabled = enabled,
-                    onClick = { onBatchSetEnabled(selectedEntries, false) }
-                )
-                SelectionActionIconButton(
-                    icon = FeatherIcons.Trash2,
-                    contentDescription = stringResource(R.string.common_batch_delete),
-                    enabled = enabled,
-                    onClick = { showBatchDeleteConfirm = true },
-                    tint = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-
+    Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
+        Column(modifier = Modifier.fillMaxSize()) {
         // 批量删除期间给一行文字提示：远程模式下逐条删除可能持续数秒，没有反馈会以为没生效。
         if (deletingInProgress) {
             Text(
@@ -176,8 +152,8 @@ internal fun SubAgentsSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.xl + selectionActionBarHeight()),
+            verticalArrangement = Arrangement.spacedBy(t.listCellGap)
         ) {
             item(key = "project-header", contentType = "header") {
                 CollapsibleGroupHeader(
@@ -247,6 +223,37 @@ internal fun SubAgentsSection(
                 }
             }
         }
+        }
+        if (selection.isActive) {
+            val enabled = selection.selectedCount > 0
+            SelectionActionBar(
+                selectedCount = selection.selectedCount,
+                allSelected = allSelected,
+                onToggleSelectAll = {
+                    if (allSelected) selection.clear() else selection.replaceAll(allKeys)
+                },
+                onExit = { selection.exit() },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                SelectionActionButton(
+                    text = stringResource(R.string.common_batch_enable),
+                    enabled = enabled,
+                    onClick = { onBatchSetEnabled(selectedEntries, true) }
+                )
+                SelectionActionButton(
+                    text = stringResource(R.string.common_batch_disable),
+                    enabled = enabled,
+                    onClick = { onBatchSetEnabled(selectedEntries, false) }
+                )
+                SelectionActionIconButton(
+                    icon = FeatherIcons.Trash2,
+                    contentDescription = stringResource(R.string.common_batch_delete),
+                    enabled = enabled,
+                    onClick = { showBatchDeleteConfirm = true },
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
     }
 
     if (showBatchDeleteConfirm) {
@@ -276,6 +283,7 @@ private fun SubAgentRow(
     selected: Boolean = false,
     onToggleSelect: () -> Unit = {}
 ) {
+    val t = LocalUIDensityTokens.current
     // 行背景由 SwipeToDeleteRow 提供，这里不再重复画一层。
     SwipeToDeleteRow(
         onDelete = onDelete,
@@ -287,7 +295,7 @@ private fun SubAgentRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = Spacing.lg, end = Spacing.xs, top = 11.dp, bottom = 11.dp),
+                .padding(start = Spacing.lg, end = Spacing.xs, top = t.listCellPaddingVertical, bottom = t.listCellPaddingVertical),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(

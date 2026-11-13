@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,11 +43,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.ui.BatchDeleteConfirmDialog
 import com.aiverse.core.ui.ListSelectionState
 import com.aiverse.core.ui.SelectionActionBar
+import com.aiverse.core.ui.selectionActionBarHeight
 import com.aiverse.core.ui.SelectionActionButton
 import com.aiverse.core.ui.SelectionActionIconButton
 import com.aiverse.core.ui.SwipeToDeleteRow
@@ -75,6 +79,7 @@ internal fun ProvidersSection(
     onBatchDelete: (Set<String>) -> Unit,
     onBatchSetEnabled: (Set<String>, Boolean) -> Unit
 ) {
+    val t = LocalUIDensityTokens.current
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
     val allKeys = remember(providers) { providers.map { it.id } }
 
@@ -95,45 +100,15 @@ internal fun ProvidersSection(
     val hapticFeedback = LocalHapticFeedback.current
     val allSelected = selection.selectedCount > 0 && selection.selectedCount == allKeys.size
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        if (selection.isActive) {
-            SelectionActionBar(
-                selectedCount = selection.selectedCount,
-                allSelected = allSelected,
-                onToggleSelectAll = {
-                    if (allSelected) selection.clear() else selection.replaceAll(allKeys)
-                },
-                onExit = { selection.exit() }
-            ) {
-                val enabled = selection.selectedCount > 0
-                SelectionActionButton(
-                    text = stringResource(R.string.common_batch_enable),
-                    enabled = enabled,
-                    onClick = { onBatchSetEnabled(selection.selectedKeys.toSet(), true) }
-                )
-                SelectionActionButton(
-                    text = stringResource(R.string.common_batch_disable),
-                    enabled = enabled,
-                    onClick = { onBatchSetEnabled(selection.selectedKeys.toSet(), false) }
-                )
-                SelectionActionIconButton(
-                    icon = FeatherIcons.Trash2,
-                    contentDescription = stringResource(R.string.common_batch_delete),
-                    enabled = enabled,
-                    onClick = { showBatchDeleteConfirm = true },
-                    tint = MaterialTheme.colorScheme.error
-                )
-            }
-        }
+    Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
         LazyColumn(
             state = lazyListState,
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
-                .padding(horizontal = Spacing.lg)
-                .padding(bottom = Spacing.xl),
-            contentPadding = PaddingValues(top = Spacing.sm),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxHeight()
+                .padding(horizontal = Spacing.lg),
+            contentPadding = PaddingValues(top = Spacing.sm, bottom = Spacing.xl + selectionActionBarHeight()),
+            verticalArrangement = Arrangement.spacedBy(t.listCellGap)
         ) {
             itemsIndexed(
                 items = providers,
@@ -190,6 +165,36 @@ internal fun ProvidersSection(
                 }
             }
         }
+        if (selection.isActive) {
+            SelectionActionBar(
+                selectedCount = selection.selectedCount,
+                allSelected = allSelected,
+                onToggleSelectAll = {
+                    if (allSelected) selection.clear() else selection.replaceAll(allKeys)
+                },
+                onExit = { selection.exit() },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                val enabled = selection.selectedCount > 0
+                SelectionActionButton(
+                    text = stringResource(R.string.common_batch_enable),
+                    enabled = enabled,
+                    onClick = { onBatchSetEnabled(selection.selectedKeys.toSet(), true) }
+                )
+                SelectionActionButton(
+                    text = stringResource(R.string.common_batch_disable),
+                    enabled = enabled,
+                    onClick = { onBatchSetEnabled(selection.selectedKeys.toSet(), false) }
+                )
+                SelectionActionIconButton(
+                    icon = FeatherIcons.Trash2,
+                    contentDescription = stringResource(R.string.common_batch_delete),
+                    enabled = enabled,
+                    onClick = { showBatchDeleteConfirm = true },
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
     }
 
     if (showBatchDeleteConfirm) {
@@ -239,6 +244,7 @@ fun ProviderItem(
     selected: Boolean = false,
     onToggleSelect: () -> Unit = {}
 ) {
+    val t = LocalUIDensityTokens.current
     val sortDescription = stringResource(R.string.provider_sort_long_press)
     // 状态色与 MCP 行一致：启用用主题 tertiary（绿调），停用用 outline（灰）。
     val statusColor = if (provider.isEnabled) MaterialTheme.semanticColors.success else MaterialTheme.colorScheme.outline
@@ -253,7 +259,7 @@ fun ProviderItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.lg, vertical = 12.dp),
+                .padding(horizontal = Spacing.lg, vertical = t.listCellPaddingVertical),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(

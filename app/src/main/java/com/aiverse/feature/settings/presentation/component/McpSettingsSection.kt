@@ -8,17 +8,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -38,11 +41,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.Radius
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.ui.BatchDeleteConfirmDialog
 import com.aiverse.core.ui.ListSelectionState
 import com.aiverse.core.ui.SelectionActionBar
+import com.aiverse.core.ui.selectionActionBarHeight
 import com.aiverse.core.ui.SelectionActionButton
 import com.aiverse.core.ui.SelectionActionIconButton
 import com.aiverse.core.ui.SwipeToDeleteRow
@@ -81,6 +86,7 @@ internal fun McpSection(
     onBatchSetEnabled: (List<Pair<String, McpScope>>, Boolean) -> Unit,
     onBatchReconnect: (List<String>) -> Unit
 ) {
+    val t = LocalUIDensityTokens.current
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
 
     if (entries.isEmpty()) {
@@ -124,50 +130,13 @@ internal fun McpSection(
     LaunchedEffect(visibleKeys) { selection.retainOnly(visibleKeys.toSet()) }
     val allSelected = selection.selectedCount > 0 && selection.selectedCount == visibleKeys.size
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        if (selection.isActive) {
-            SelectionActionBar(
-                selectedCount = selection.selectedCount,
-                allSelected = allSelected,
-                onToggleSelectAll = {
-                    if (allSelected) selection.clear() else selection.replaceAll(visibleKeys)
-                },
-                onExit = { selection.exit() }
-            ) {
-                val enabled = selection.selectedCount > 0
-                val targets = selection.selectedKeys.mapNotNull { keyToTarget[it] }
-                SelectionActionButton(
-                    text = stringResource(R.string.common_batch_enable),
-                    enabled = enabled,
-                    onClick = { onBatchSetEnabled(targets, true) }
-                )
-                SelectionActionButton(
-                    text = stringResource(R.string.common_batch_disable),
-                    enabled = enabled,
-                    onClick = { onBatchSetEnabled(targets, false) }
-                )
-                SelectionActionIconButton(
-                    icon = FeatherIcons.RefreshCw,
-                    contentDescription = stringResource(R.string.common_batch_reconnect),
-                    enabled = enabled,
-                    onClick = { onBatchReconnect(targets.map { it.first }) }
-                )
-                SelectionActionIconButton(
-                    icon = FeatherIcons.Trash2,
-                    contentDescription = stringResource(R.string.common_batch_delete),
-                    enabled = enabled,
-                    onClick = { showBatchDeleteConfirm = true },
-                    tint = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-
+    Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
-            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+                .fillMaxHeight(),
+            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.xl + selectionActionBarHeight()),
+            verticalArrangement = Arrangement.spacedBy(t.listCellGap)
         ) {
             if (entries.size >= 3) {
                 item(key = "search", contentType = "search") {
@@ -227,6 +196,54 @@ internal fun McpSection(
                 }
             }
         }
+        if (selection.isActive) {
+            SelectionActionBar(
+                selectedCount = selection.selectedCount,
+                allSelected = allSelected,
+                onToggleSelectAll = {
+                    if (allSelected) selection.clear() else selection.replaceAll(visibleKeys)
+                },
+                onExit = { selection.exit() },
+                modifier = Modifier.align(Alignment.BottomCenter),
+                moreActions = {
+                    val targets = selection.selectedKeys.mapNotNull { keyToTarget[it] }
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    FeatherIcons.RefreshCw,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(Spacing.sm))
+                                Text(stringResource(R.string.common_batch_reconnect))
+                            }
+                        },
+                        onClick = { onBatchReconnect(targets.map { it.first }) }
+                    )
+                }
+            ) {
+                val enabled = selection.selectedCount > 0
+                val targets = selection.selectedKeys.mapNotNull { keyToTarget[it] }
+                SelectionActionButton(
+                    text = stringResource(R.string.common_batch_enable),
+                    enabled = enabled,
+                    onClick = { onBatchSetEnabled(targets, true) }
+                )
+                SelectionActionButton(
+                    text = stringResource(R.string.common_batch_disable),
+                    enabled = enabled,
+                    onClick = { onBatchSetEnabled(targets, false) }
+                )
+                SelectionActionIconButton(
+                    icon = FeatherIcons.Trash2,
+                    contentDescription = stringResource(R.string.common_batch_delete),
+                    enabled = enabled,
+                    onClick = { showBatchDeleteConfirm = true },
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
     }
 
     if (showBatchDeleteConfirm) {
@@ -261,6 +278,7 @@ internal fun McpServerRow(
     selected: Boolean = false,
     onToggleSelect: () -> Unit = {}
 ) {
+    val t = LocalUIDensityTokens.current
     val isConnected = server.enabled && status?.state == McpServerStatus.State.CONNECTED
     val light = MaterialTheme.colorScheme.background.luminance() > 0.5f
 
@@ -309,7 +327,7 @@ internal fun McpServerRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.lg, vertical = 12.dp),
+                .padding(horizontal = Spacing.lg, vertical = t.listCellPaddingVertical),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 左侧容器图标

@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,6 +53,7 @@ import com.aiverse.core.ui.AppSwitch
 import com.aiverse.core.ui.BatchDeleteConfirmDialog
 import com.aiverse.core.ui.ListSelectionState
 import com.aiverse.core.ui.SelectionActionBar
+import com.aiverse.core.ui.selectionActionBarHeight
 import com.aiverse.core.ui.SelectionActionIconButton
 import com.aiverse.core.ui.SwipeToDeleteRow
 import com.aiverse.feature.agent.domain.prompt.PromptFragment
@@ -111,7 +114,8 @@ internal fun PromptsSection(
 
     val allSelected = selection.selectedCount > 0 && selection.selectedCount == selectableKeys.size
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
+        Column(modifier = Modifier.fillMaxSize()) {
         SettingsGroup(
             modifier = Modifier
                 .padding(horizontal = Spacing.lg)
@@ -153,26 +157,6 @@ internal fun PromptsSection(
             )
         }
 
-        if (selection.isActive) {
-            SelectionActionBar(
-                selectedCount = selection.selectedCount,
-                allSelected = allSelected,
-                onToggleSelectAll = {
-                    if (allSelected) selection.clear() else selection.replaceAll(selectableKeys)
-                },
-                onExit = { selection.exit() }
-            ) {
-                val enabled = selection.selectedCount > 0
-                SelectionActionIconButton(
-                    icon = FeatherIcons.Trash2,
-                    contentDescription = stringResource(R.string.common_batch_delete),
-                    enabled = enabled,
-                    onClick = { showBatchDeleteConfirm = true },
-                    tint = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-
         if (state.fragments.isEmpty()) {
             Text(
                 text = stringResource(R.string.prompts_empty),
@@ -190,6 +174,28 @@ internal fun PromptsSection(
                 onToggleFragmentEnabled = onToggleFragmentEnabled,
                 modifier = Modifier.weight(1f)
             )
+        }
+        }
+        if (selection.isActive) {
+            val enabled = selection.selectedCount > 0
+            SelectionActionBar(
+                selectedCount = selection.selectedCount,
+                allSelected = allSelected,
+                onToggleSelectAll = {
+                    if (allSelected) selection.clear() else selection.replaceAll(selectableKeys)
+                },
+                onExit = { selection.exit() },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                val enabled = selection.selectedCount > 0
+                SelectionActionIconButton(
+                    icon = FeatherIcons.Trash2,
+                    contentDescription = stringResource(R.string.common_batch_delete),
+                    enabled = enabled,
+                    onClick = { showBatchDeleteConfirm = true },
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
         }
     }
 
@@ -309,7 +315,7 @@ private fun PromptList(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = Spacing.lg)
-            .padding(bottom = Spacing.xl),
+            .padding(bottom = Spacing.xl + selectionActionBarHeight()),
         contentPadding = PaddingValues(top = Spacing.xs),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {

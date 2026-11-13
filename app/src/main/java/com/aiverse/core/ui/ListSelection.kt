@@ -1,22 +1,29 @@
 package com.aiverse.core.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,13 +38,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aiverse.R
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.Spacing
+import com.aiverse.core.theme.semanticColors
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.CheckSquare
-import compose.icons.feathericons.X
+import compose.icons.feathericons.MoreHorizontal
 
 /**
  * 列表多选状态。key 由各页面自定义（提供商 id / `作用域:名称` / 提示词编号 / 镜像 id），
@@ -121,10 +131,29 @@ fun SelectionToggleAction(selection: ListSelectionState, enabled: Boolean = true
 }
 
 /**
- * 列表顶部操作条：左侧「已选 N 项」，中间「全选 / 取消全选」，右侧页面自己的批量动作，最右退出。
+ * 底部浮动多选操作栏的内容高度（不含底部安全区）。由密度令牌换算（标准档 ≈ 60dp），
+ * 供浮动栏自身与各页列表 contentPadding 底部留白共用，避免最后一项被浮动栏遮住。
+ */
+@Composable
+fun selectionActionBarHeight(): Dp = LocalUIDensityTokens.current.fieldHeight + Spacing.sm
+
+/**
+ * 底部浮动多选操作栏（原「列表顶部内联操作条」改为固定在屏幕底部的浮动栏）。
  *
- * 与模型页（ProviderEditorScreen 的模型 Tab）视觉一致：13sp 主色计数、labelMedium 文本按钮、36dp 图标按钮。
- * [actions] 里的按钮建议用 [SelectionActionButton] 保持同一套尺寸与配色。
+ * 布局：左侧「已选 N 项」，中间常用动作（[primaryActions] 平铺外露），右侧「⋯」更多菜单
+ * （全选/取消全选 + [moreActions] 追加的低频动作）。底部空间充足，「已选 N 项」用
+ * [TextOverflow.Ellipsis] 不换行，窄屏也不会再被动作挤折行。
+ *
+ * 调用约定：
+ * - 放在 Box 内并用 `Modifier.align(Alignment.BottomCenter)` 贴底；外层 Box 负责底部安全区
+ *   （`navigationBarsPadding()`）。
+ * - 全选/取消全选默认收进「⋯」菜单第一项；低频动作（重连、分享等）经 [moreActions] 追加，
+ *   菜单项建议用图标+文字（遵循项目「溢出收纳 ⋯ 菜单」约定）。
+ * - 退出多选：顶栏多选开关（[SelectionToggleAction]）/ 返回键（[BackHandler]）即可，底部栏不再单设退出。
+ *
+ * [primaryActions] 里的动作建议用 [SelectionActionButton]（文字）与 [SelectionActionIconButton]（图标），
+ * 保持同一套尺寸与配色；危险动作（删除）用 `tint = MaterialTheme.colorScheme.error` 并配合
+ * [BatchDeleteConfirmDialog] 二次确认。
  */
 @Composable
 fun SelectionActionBar(
@@ -133,53 +162,88 @@ fun SelectionActionBar(
     onToggleSelectAll: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
-    actions: @Composable RowScope.() -> Unit = {}
+    moreActions: @Composable ColumnScope.() -> Unit = {},
+    primaryActions: @Composable RowScope.() -> Unit = {}
 ) {
-    // 操作条只在多选模式出现：顺手把返回键接管成「退出多选」，与模型页行为一致。
+    // 浮动栏只在多选模式出现：顺手把返回键接管成「退出多选」，与模型页行为一致。
     BackHandler { onExit() }
 
-    Row(
+    val t = LocalUIDensityTokens.current
+    var moreExpanded by remember { mutableStateOf(false) }
+
+    Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = Spacing.md, end = Spacing.xs, top = Spacing.sm, bottom = Spacing.sm),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = Spacing.lg)
+            .height(selectionActionBarHeight()),
+        shape = RoundedCornerShape(t.rLg),
+        color = MaterialTheme.semanticColors.cardSurface,
+        shadowElevation = 8.dp,
+        tonalElevation = 2.dp
     ) {
-        Text(
-            text = stringResource(R.string.common_selected_count, selectedCount),
-            style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        TextButton(
-            onClick = onToggleSelectAll,
-            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = 0.dp),
-            modifier = Modifier.height(36.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(
-                    if (allSelected) R.string.common_deselect_all else R.string.common_select_all
-                ),
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1
+                text = stringResource(R.string.common_selected_count, selectedCount),
+                style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
-        }
-        actions()
-        IconButton(onClick = onExit, modifier = Modifier.size(36.dp)) {
-            Icon(
-                FeatherIcons.X,
-                contentDescription = stringResource(R.string.common_cancel),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
-            )
+            primaryActions()
+            // 「⋯」更多：全选/取消全选 + 页面低频动作（重连、分享等）
+            Box {
+                IconButton(
+                    onClick = { moreExpanded = true },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        FeatherIcons.MoreHorizontal,
+                        contentDescription = stringResource(R.string.common_more),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                DropdownMenu(
+                    expanded = moreExpanded,
+                    onDismissRequest = { moreExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    FeatherIcons.CheckSquare,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(Spacing.sm))
+                                Text(
+                                    stringResource(
+                                        if (allSelected) R.string.common_deselect_all else R.string.common_select_all
+                                    )
+                                )
+                            }
+                        },
+                        onClick = {
+                            moreExpanded = false
+                            onToggleSelectAll()
+                        }
+                    )
+                    moreActions()
+                }
+            }
         }
     }
 }
 
 /**
- * 操作条上的紧凑动作按钮。窄屏要在一行里放下「全选 + 两三个动作 + 退出」，
- * 所以内边距压到 [Spacing.sm]、文字用 labelMedium、图标 16dp。
+ * 底部浮动操作栏上的紧凑动作按钮。常用动作（启用/停用/删除等）在 [SelectionActionBar]
+ * 的 primaryActions 里平铺外露，内边距压到 [Spacing.sm]、文字用 labelMedium、图标 16dp。
  */
 @Composable
 fun SelectionActionButton(
@@ -206,8 +270,8 @@ fun SelectionActionButton(
 }
 
 /**
- * 操作条上的图标按钮：动作多于两个时（如 MCP 的启用/停用/重连/删除），
- * 全部用文字会在窄屏上挤掉计数与全选，所以次要动作用图标并配 contentDescription。
+ * 底部浮动操作栏上的图标按钮：危险/次要动作（如删除）用图标并配 contentDescription，
+ * 与 [SelectionActionButton] 保持同一套 36dp 尺寸与配色。
  */
 @Composable
 fun SelectionActionIconButton(
