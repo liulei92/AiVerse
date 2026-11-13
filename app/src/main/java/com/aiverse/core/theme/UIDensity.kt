@@ -61,7 +61,11 @@ data class UIDensityTokens(
     /** chip / 小按钮基准高度。 */
     val chipHeight: Dp,
     /** 底部悬浮 Tab 栏容器高度（含 6dp 底部留白）。 */
-    val tabBarHeight: Dp
+    val tabBarHeight: Dp,
+    /** 设置页列表 cell 行内垂直内边距（基准 11dp，对齐普通 SettingsRow）。 */
+    val listCellPaddingVertical: Dp,
+    /** 设置页列表 cell 卡片间距（基准 8dp）。 */
+    val listCellGap: Dp
 ) {
     /** 按语义取卡片圆角 Shape。 */
     val cardShape get() = RoundedCornerShape(cardCorner)
@@ -116,7 +120,9 @@ data class UIDensityTokens(
                 touchTarget = (48 * s).dp,
                 fieldHeight = (52 * s).dp,
                 chipHeight = (32 * s).dp,
-                tabBarHeight = (68 * s).dp
+                tabBarHeight = (68 * s).dp,
+                listCellPaddingVertical = (11 * s).dp,
+                listCellGap = (8 * s).dp
             )
         }
     }
