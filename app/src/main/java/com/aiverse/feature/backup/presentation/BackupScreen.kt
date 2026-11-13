@@ -524,17 +524,6 @@ private fun LocalBackupTab(
             )
             SettingsDivider()
             SettingsRow(
-                title = stringResource(R.string.backup_data_workspace),
-                trailing = {
-                    AppSwitch(
-                        checked = exportOptions.workspaceFiles,
-                        onCheckedChange = { onUpdateOptions(exportOptions.copy(workspaceFiles = it)) }
-                    )
-                }
-            )
-            WorkspaceBackupHint()
-            SettingsDivider()
-            SettingsRow(
                 title = stringResource(R.string.backup_data_memories),
                 trailing = {
                     AppSwitch(
@@ -563,6 +552,17 @@ private fun LocalBackupTab(
                     )
                 }
             )
+            SettingsDivider()
+            SettingsRow(
+                title = stringResource(R.string.backup_data_workspace),
+                trailing = {
+                    AppSwitch(
+                        checked = exportOptions.workspaceFiles,
+                        onCheckedChange = { onUpdateOptions(exportOptions.copy(workspaceFiles = it)) }
+                    )
+                }
+            )
+            WorkspaceBackupHint()
         }
 
         SettingsGroupHeader(text = stringResource(R.string.backup_actions))
