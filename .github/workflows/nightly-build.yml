@@ -6,7 +6,10 @@ name: Nightly Build
 # 签名校验生效，但测试包不参与检查更新（见 SettingsViewModel.isTestPackage），不会把测试机导向正式包。
 on:
   schedule:
-    - cron: '0 */6 * * *'  # 每 6 小时（UTC 0/6/12/18 整点，对应北京时间 8/14/20/2 点）
+    # 北京时间 6:00 / 12:00 / 18:00（= UTC 前一天22:00 / 当天4:00 / 10:00）
+    - cron: '0 22 * * *'  # 北京 6:00
+    - cron: '0 4 * * *'   # 北京 12:00
+    - cron: '0 10 * * *'  # 北京 18:00
   workflow_dispatch:
 
 permissions:
