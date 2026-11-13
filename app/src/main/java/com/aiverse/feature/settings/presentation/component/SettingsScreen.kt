@@ -33,6 +33,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -107,6 +109,7 @@ import com.aiverse.feature.phonecontrol.presentation.UnlockScreen
 import com.aiverse.feature.settings.presentation.SkillImportState
 import com.aiverse.feature.settings.presentation.SkillUiEntry
 import com.aiverse.feature.agent.domain.skill.SkillImportError
+import com.aiverse.feature.agent.domain.skill.SkillParser
 import com.aiverse.feature.agent.domain.skill.SkillScope
 import com.aiverse.feature.settings.presentation.SubAgentUiEntry
 import compose.icons.FeatherIcons
@@ -129,6 +132,8 @@ import compose.icons.feathericons.Lock
 import compose.icons.feathericons.Moon
 import compose.icons.feathericons.MessageSquare
 import compose.icons.feathericons.Edit2
+import compose.icons.feathericons.MoreHorizontal
+import compose.icons.feathericons.Share2
 import compose.icons.feathericons.PieChart
 import compose.icons.feathericons.Plus
 import compose.icons.feathericons.RefreshCw
@@ -356,6 +361,45 @@ fun SettingsScreen(
     var showTerminalSettingsSheet by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    // 技能分享/导出公共入口（顶栏 ⋯ 菜单与批量底部栏共用同一份，避免各自创建 launcher）。
+    val skillShareExport = rememberSkillShareExport()
+
+    // 批量分享选中技能：打包单个 zip 后走系统分享（FileProvider 授权）。
+    fun shareSkillEntries(targets: List<SkillUiEntry>) {
+        if (targets.isEmpty()) return
+        viewModel.buildSkillExportZip(targets.map { it.name to it.scope }) { bytes ->
+            if (bytes == null) {
+                Toast.makeText(context, context.getString(R.string.skills_share_failed), Toast.LENGTH_SHORT).show()
+            } else {
+                skillShareExport.shareZip(
+                    bytes,
+                    "skills.zip",
+                    context.getString(R.string.skills_share_chooser)
+                ) { ok ->
+                    if (!ok) Toast.makeText(context, context.getString(R.string.skills_share_failed), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // 批量导出选中技能：打包单个 zip 后用 SAF 存到本地。
+    fun exportSkillEntries(targets: List<SkillUiEntry>) {
+        if (targets.isEmpty()) return
+        viewModel.buildSkillExportZip(targets.map { it.name to it.scope }) { bytes ->
+            if (bytes == null) {
+                Toast.makeText(context, context.getString(R.string.skills_export_failed), Toast.LENGTH_SHORT).show()
+            } else {
+                skillShareExport.exportZip(bytes, "skills.zip") { ok ->
+                    Toast.makeText(
+                        context,
+                        context.getString(if (ok) R.string.skills_export_success else R.string.skills_export_failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
     val currentLanguageDisplayName = if (languageTag.isNullOrBlank()) {
         stringResource(R.string.language_follow_system)
     } else {
@@ -541,6 +585,19 @@ fun SettingsScreen(
     // 有上一层时系统返回键先回上一层；没有则交还给上层导航。
     BackHandler(enabled = parentSection != null) {
         parentSection?.let { section = it }
+    }
+
+    // 离开某个列表分区时清理其多选状态：分区切换后对「上一个分区」退出多选并清空勾选，
+    // 否则再次进入同一列表分区时仍停留多选态、之前勾选项残留（issue #77）。
+    // 只在「分区真正切换」这一时机清理——弹编辑对话框（如 MCP 点编辑是弹窗、section 不变）
+    // 与点行进详情（Skills/Prompts/SubAgents 进详情前已自行 exit）都不会走到这里。
+    val lastListSection = remember { mutableStateOf<SettingsSection?>(null) }
+    LaunchedEffect(section) {
+        val previous = lastListSection.value
+        if (previous != null && previous != section) {
+            listSelections[previous]?.exit()
+        }
+        lastListSection.value = section
     }
 
     // settingsViewModel 为 Activity 级共享实例，每次进入设置页重新扫描技能，反映磁盘增删改。
@@ -900,17 +957,66 @@ fun SettingsScreen(
                             }
                         }
                         SettingsSection.SkillDetail -> selectedSkill?.let { entry ->
-                            IconButton(onClick = {
-                                editingSkill = entry
-                                skillEditorReturn = SettingsSection.SkillDetail
-                                section = SettingsSection.SkillEditor
-                            }) {
-                                Icon(
-                                    FeatherIcons.Edit2,
-                                    contentDescription = stringResource(R.string.skills_edit),
-                                    tint = MaterialTheme.colorScheme.onBackground,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                            Box {
+                                var skillMoreExpanded by remember { mutableStateOf(false) }
+                                IconButton(onClick = { skillMoreExpanded = true }) {
+                                    Icon(
+                                        FeatherIcons.MoreHorizontal,
+                                        contentDescription = stringResource(R.string.common_more),
+                                        tint = MaterialTheme.colorScheme.onBackground,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = skillMoreExpanded,
+                                    onDismissRequest = { skillMoreExpanded = false }
+                                ) {
+                                    // 编辑：进入技能编辑页（保持原有行为）
+                                    DropdownMenuItem(
+                                        text = { SkillMenuRow(FeatherIcons.Edit2, stringResource(R.string.skills_edit)) },
+                                        onClick = {
+                                            skillMoreExpanded = false
+                                            editingSkill = entry
+                                            skillEditorReturn = SettingsSection.SkillDetail
+                                            section = SettingsSection.SkillEditor
+                                        }
+                                    )
+                                    // 分享：把技能完整 markdown（含 frontmatter）发出去，朋友可直接重新导入
+                                    DropdownMenuItem(
+                                        text = { SkillMenuRow(FeatherIcons.Share2, stringResource(R.string.skills_share)) },
+                                        onClick = {
+                                            skillMoreExpanded = false
+                                            val text = SkillParser.serialize(
+                                                name = entry.name,
+                                                description = entry.description,
+                                                requiredTools = entry.requiredTools,
+                                                instructions = entry.instructions,
+                                                fileWhitelist = entry.fileWhitelist
+                                            )
+                                            skillShareExport.shareText(text, context.getString(R.string.skills_share_chooser))
+                                        }
+                                    )
+                                    // 导出：把技能目录打包 zip，用 SAF 存到本地
+                                    DropdownMenuItem(
+                                        text = { SkillMenuRow(FeatherIcons.Download, stringResource(R.string.skills_export)) },
+                                        onClick = {
+                                            skillMoreExpanded = false
+                                            viewModel.buildSkillExportZip(listOf(entry.name to entry.scope)) { bytes ->
+                                                if (bytes == null) {
+                                                    Toast.makeText(context, context.getString(R.string.skills_export_failed), Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    skillShareExport.exportZip(bytes, "${entry.name}.zip") { ok ->
+                                                        Toast.makeText(
+                                                            context,
+                                                            context.getString(if (ok) R.string.skills_export_success else R.string.skills_export_failed),
+                                                            Toast.LENGTH_SHORT
+                                                        ).show()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
                         SettingsSection.SubAgents -> {
@@ -1177,7 +1283,9 @@ fun SettingsScreen(
                     },
                     onBatchSetEnabled = { targets, enabled ->
                         viewModel.setSkillsEnabled(targets.map { it.name to it.scope }, enabled)
-                    }
+                    },
+                    onBatchShare = { targets -> shareSkillEntries(targets) },
+                    onBatchExport = { targets -> exportSkillEntries(targets) }
                 )
                 SettingsSection.Prompts -> {
                     val promptsViewModel: com.aiverse.feature.settings.presentation.PromptsViewModel =
