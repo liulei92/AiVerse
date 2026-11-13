@@ -1,10 +1,13 @@
 package com.aiverse.feature.browser.presentation
 
+import android.content.Context
 import android.content.Intent
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -87,7 +90,10 @@ import com.aiverse.core.ui.SwipeToDeleteRow
 import com.aiverse.core.ui.dialogTextFieldColors
 import com.aiverse.core.util.FileLogger
 import com.aiverse.feature.agent.domain.tool.browser.BrowserDialog
+import com.aiverse.feature.agent.domain.tool.browser.BrowserBookmark
+import com.aiverse.feature.agent.domain.tool.browser.BrowserHistoryEntry
 import com.aiverse.feature.agent.domain.tool.browser.BrowserManager
+import com.aiverse.feature.agent.domain.tool.browser.BrowserScreenshotResult
 import com.aiverse.feature.agent.domain.tool.browser.BrowserTabState
 import com.aiverse.feature.agent.domain.tool.browser.BrowserUserAgentPreset
 import com.aiverse.feature.settings.presentation.component.SettingsDivider
@@ -95,9 +101,12 @@ import com.aiverse.feature.settings.presentation.component.SettingsGroup
 import com.aiverse.feature.settings.presentation.component.SettingsRow
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.ArrowLeft
+import compose.icons.feathericons.Bookmark
+import compose.icons.feathericons.Camera
 import compose.icons.feathericons.Check
 import compose.icons.feathericons.ChevronLeft
 import compose.icons.feathericons.ChevronRight
+import compose.icons.feathericons.Clock
 import compose.icons.feathericons.Code
 import compose.icons.feathericons.Globe
 import compose.icons.feathericons.Menu
@@ -109,7 +118,9 @@ import compose.icons.feathericons.Sliders
 import compose.icons.feathericons.Smartphone
 import compose.icons.feathericons.Sun
 import compose.icons.feathericons.Tablet
+import compose.icons.feathericons.Trash2
 import compose.icons.feathericons.X
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -193,6 +204,12 @@ fun BrowserScreen(
     var showMenuSheet by rememberSaveable { mutableStateOf(false) }
     val menuSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // 书签 / 历史 / 主页：菜单打开时从 BrowserManager 读取快照，操作后手动刷新
+    var bookmarks by remember { mutableStateOf(browserManager.listBookmarks()) }
+    var history by remember { mutableStateOf(browserManager.getHistory()) }
+    var homepage by remember { mutableStateOf(browserManager.homepage) }
+    var showClearHistoryConfirm by rememberSaveable { mutableStateOf(false) }
+
     var showCustomUaDialog by rememberSaveable { mutableStateOf(false) }
 
     var isEditingAddress by rememberSaveable { mutableStateOf(false) }
@@ -248,7 +265,13 @@ fun BrowserScreen(
                 onGoForward = { scope.launchBrowserOp { browserManager.goForward() } },
                 onNewTab = { scope.launchBrowserOp { browserManager.newTab() } },
                 onOpenTabs = { showTabsSheet = true },
-                onOpenMenu = { showMenuSheet = true }
+                onOpenMenu = {
+                    // 打开菜单前刷新书签/历史/主页快照
+                    bookmarks = browserManager.listBookmarks()
+                    history = browserManager.getHistory()
+                    homepage = browserManager.homepage
+                    showMenuSheet = true
+                }
             )
         }
     ) { padding ->
@@ -407,7 +430,7 @@ fun BrowserScreen(
         }
     }
 
-    // 更多设置与工具抽屉（夜间模式、调试工具、浏览器 UA）
+    // 更多设置与工具抽屉（夜间模式、调试工具、浏览器 UA、截图、书签、历史、主页）
     if (showMenuSheet) {
         BrowserMenuSheet(
             sheetState = menuSheetState,
@@ -415,6 +438,10 @@ fun BrowserScreen(
             devToolsOpen = state.devToolsOpen,
             userAgentPreset = state.userAgentPreset,
             customUserAgent = state.customUserAgent,
+            bookmarks = bookmarks,
+            history = history,
+            homepage = homepage,
+            currentUrl = state.url,
             onDismiss = { showMenuSheet = false },
             onToggleNightMode = { browserManager.toggleNightMode() },
             onToggleDevTools = {
@@ -431,6 +458,82 @@ fun BrowserScreen(
                         browserManager.setUserAgent(preset, reloadCurrent = true)
                     }
                     showMenuSheet = false
+                }
+            },
+            onCaptureScreenshot = {
+                showMenuSheet = false
+                scope.launchBrowserOp {
+                    val result = browserManager.captureScreenshotToWorkspace(state.activeTabId)
+                    if (result != null) {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.browser_screenshot_saved, result.containerPath),
+                            Toast.LENGTH_LONG
+                        ).show()
+                        shareBrowserScreenshot(context, result)
+                    } else {
+                        Toast.makeText(context, context.getString(R.string.browser_screenshot_failed), Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            onAddBookmark = {
+                val url = state.url
+                if (url.isNotBlank()) {
+                    browserManager.addBookmark(url, state.title.ifBlank { url })
+                    bookmarks = browserManager.listBookmarks()
+                    Toast.makeText(context, context.getString(R.string.browser_bookmarks_added), Toast.LENGTH_SHORT).show()
+                }
+            },
+            onOpenBookmark = { bm ->
+                showMenuSheet = false
+                scope.launchBrowserOp { browserManager.navigate(bm.url) }
+            },
+            onDeleteBookmark = { bm ->
+                browserManager.removeBookmark(bm.url)
+                bookmarks = browserManager.listBookmarks()
+            },
+            onOpenHistory = { entry ->
+                showMenuSheet = false
+                scope.launchBrowserOp { browserManager.navigate(entry.url) }
+            },
+            onClearHistory = {
+                // 危险操作：先弹确认弹窗（见主函数 showClearHistoryConfirm）
+                showClearHistoryConfirm = true
+            },
+            onSetHomepageCurrent = {
+                val url = state.url
+                if (url.isNotBlank()) {
+                    browserManager.setHomepage(url)
+                    homepage = browserManager.homepage
+                    Toast.makeText(context, context.getString(R.string.browser_homepage_set_toast), Toast.LENGTH_SHORT).show()
+                }
+            },
+            onClearHomepage = {
+                browserManager.clearHomepage()
+                homepage = browserManager.homepage
+                Toast.makeText(context, context.getString(R.string.browser_homepage_cleared_toast), Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    // 清空历史确认弹窗
+    if (showClearHistoryConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearHistoryConfirm = false },
+            title = { Text(text = stringResource(R.string.browser_history_clear_confirm_title)) },
+            text = { Text(text = stringResource(R.string.browser_history_clear_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearHistoryConfirm = false
+                    browserManager.clearHistory()
+                    history = browserManager.getHistory()
+                }) {
+                    Text(stringResource(R.string.browser_history_clear))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearHistoryConfirm = false }) {
+                    Text(stringResource(R.string.common_cancel))
                 }
             }
         )
@@ -804,13 +907,33 @@ private fun BrowserMenuSheet(
     devToolsOpen: Boolean,
     userAgentPreset: BrowserUserAgentPreset,
     customUserAgent: String,
+    bookmarks: List<BrowserBookmark>,
+    history: List<BrowserHistoryEntry>,
+    homepage: String,
+    currentUrl: String,
     onDismiss: () -> Unit,
     onToggleNightMode: () -> Unit,
     onToggleDevTools: () -> Unit,
-    onSelectUaPreset: (BrowserUserAgentPreset) -> Unit
+    onSelectUaPreset: (BrowserUserAgentPreset) -> Unit,
+    onCaptureScreenshot: () -> Unit,
+    onAddBookmark: () -> Unit,
+    onOpenBookmark: (BrowserBookmark) -> Unit,
+    onDeleteBookmark: (BrowserBookmark) -> Unit,
+    onOpenHistory: (BrowserHistoryEntry) -> Unit,
+    onClearHistory: () -> Unit,
+    onSetHomepageCurrent: () -> Unit,
+    onClearHomepage: () -> Unit
 ) {
-    // 菜单层级：0 = 一级主菜单，1 = 二级 UA 场景选择菜单
+    // 菜单层级：0 = 一级主菜单，1 = 二级 UA 场景，2 = 二级书签，3 = 二级历史，4 = 二级主页设置
     var menuLevel by rememberSaveable { mutableStateOf(0) }
+
+    val sheetTitleRes = when (menuLevel) {
+        1 -> R.string.browser_ua_section
+        2 -> R.string.browser_bookmarks_title
+        3 -> R.string.browser_history_title
+        4 -> R.string.browser_homepage_title
+        else -> R.string.browser_menu_title
+    }
 
     AdaptiveModalBottomSheet(
         onDismissRequest = {
@@ -834,7 +957,7 @@ private fun BrowserMenuSheet(
                     .padding(bottom = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (menuLevel == 1) {
+                if (menuLevel != 0) {
                     IconButton(
                         onClick = { menuLevel = 0 },
                         modifier = Modifier.size(32.dp)
@@ -849,136 +972,323 @@ private fun BrowserMenuSheet(
                     Spacer(Modifier.width(Spacing.xs))
                 }
                 Text(
-                    text = stringResource(
-                        if (menuLevel == 1) R.string.browser_ua_section else R.string.browser_menu_title
-                    ),
+                    text = stringResource(sheetTitleRes),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
-            if (menuLevel == 0) {
-                // 一级菜单：单行按钮列表（夜间模式、开发者工具、浏览器标识）
-                val uaIcon: ImageVector = when (userAgentPreset) {
-                    BrowserUserAgentPreset.DEFAULT -> FeatherIcons.Globe
-                    BrowserUserAgentPreset.ANDROID_PHONE -> FeatherIcons.Smartphone
-                    BrowserUserAgentPreset.ANDROID_TABLET -> FeatherIcons.Tablet
-                    BrowserUserAgentPreset.DESKTOP_PC -> FeatherIcons.Monitor
-                    BrowserUserAgentPreset.IPHONE -> FeatherIcons.Smartphone
-                    BrowserUserAgentPreset.IPAD -> FeatherIcons.Tablet
-                    BrowserUserAgentPreset.CUSTOM -> FeatherIcons.Sliders
-                }
+            when (menuLevel) {
+                0 -> {
+                    // 一级菜单：单行按钮列表（夜间模式、开发者工具、浏览器标识、截图、书签、历史、主页）
+                    val uaIcon: ImageVector = when (userAgentPreset) {
+                        BrowserUserAgentPreset.DEFAULT -> FeatherIcons.Globe
+                        BrowserUserAgentPreset.ANDROID_PHONE -> FeatherIcons.Smartphone
+                        BrowserUserAgentPreset.ANDROID_TABLET -> FeatherIcons.Tablet
+                        BrowserUserAgentPreset.DESKTOP_PC -> FeatherIcons.Monitor
+                        BrowserUserAgentPreset.IPHONE -> FeatherIcons.Smartphone
+                        BrowserUserAgentPreset.IPAD -> FeatherIcons.Tablet
+                        BrowserUserAgentPreset.CUSTOM -> FeatherIcons.Sliders
+                    }
 
-                SettingsGroup {
-                    // 1. 夜间模式
-                    SettingsRow(
-                        icon = if (nightMode) FeatherIcons.Moon else FeatherIcons.Sun,
-                        title = stringResource(R.string.browser_night_mode_title),
-                        trailing = {
-                            AppSwitch(
-                                checked = nightMode,
-                                onCheckedChange = { onToggleNightMode() }
-                            )
-                        }
-                    )
-
-                    SettingsDivider()
-
-                    // 2. 开发者工具
-                    SettingsRow(
-                        icon = FeatherIcons.Code,
-                        title = stringResource(R.string.browser_devtools_title),
-                        trailing = {
-                            AppSwitch(
-                                checked = devToolsOpen,
-                                onCheckedChange = { onToggleDevTools() }
-                            )
-                        }
-                    )
-
-                    SettingsDivider()
-
-                    // 3. 浏览器标识 (UA) - 单行按钮，点击展开二级菜单
-                    SettingsRow(
-                        icon = uaIcon,
-                        title = stringResource(R.string.browser_ua_section),
-                        trailing = {
-                            Text(
-                                text = stringResource(userAgentPreset.titleRes),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        onClick = { menuLevel = 1 }
-                    )
-                }
-            } else {
-                // 二级菜单：选择 User-Agent 场景
-                SettingsGroup {
-                    val presets = BrowserUserAgentPreset.entries
-                    presets.forEachIndexed { index, preset ->
-                        if (index > 0) SettingsDivider()
-                        val selected = preset == userAgentPreset
-                        val icon: ImageVector = when (preset) {
-                            BrowserUserAgentPreset.DEFAULT -> FeatherIcons.Globe
-                            BrowserUserAgentPreset.ANDROID_PHONE -> FeatherIcons.Smartphone
-                            BrowserUserAgentPreset.ANDROID_TABLET -> FeatherIcons.Tablet
-                            BrowserUserAgentPreset.DESKTOP_PC -> FeatherIcons.Monitor
-                            BrowserUserAgentPreset.IPHONE -> FeatherIcons.Smartphone
-                            BrowserUserAgentPreset.IPAD -> FeatherIcons.Tablet
-                            BrowserUserAgentPreset.CUSTOM -> FeatherIcons.Sliders
-                        }
-                        val subtitle = if (preset == BrowserUserAgentPreset.CUSTOM && customUserAgent.isNotBlank()) {
-                            customUserAgent
-                        } else {
-                            stringResource(preset.descRes)
-                        }
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    menuLevel = 0
-                                    onSelectUaPreset(preset)
-                                }
-                                .padding(horizontal = Spacing.lg, vertical = 11.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(Spacing.md))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(preset.titleRes),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    SettingsGroup {
+                        // 1. 夜间模式
+                        SettingsRow(
+                            icon = if (nightMode) FeatherIcons.Moon else FeatherIcons.Sun,
+                            title = stringResource(R.string.browser_night_mode_title),
+                            trailing = {
+                                AppSwitch(
+                                    checked = nightMode,
+                                    onCheckedChange = { onToggleNightMode() }
                                 )
+                            }
+                        )
+
+                        SettingsDivider()
+
+                        // 2. 开发者工具
+                        SettingsRow(
+                            icon = FeatherIcons.Code,
+                            title = stringResource(R.string.browser_devtools_title),
+                            trailing = {
+                                AppSwitch(
+                                    checked = devToolsOpen,
+                                    onCheckedChange = { onToggleDevTools() }
+                                )
+                            }
+                        )
+
+                        SettingsDivider()
+
+                        // 3. 浏览器标识 (UA) - 单行按钮，点击展开二级菜单
+                        SettingsRow(
+                            icon = uaIcon,
+                            title = stringResource(R.string.browser_ua_section),
+                            trailing = {
                                 Text(
-                                    text = subtitle,
+                                    text = stringResource(userAgentPreset.titleRes),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            onClick = { menuLevel = 1 }
+                        )
+
+                        SettingsDivider()
+
+                        // 4. 截图（免权限保存到工作区 + 分享）
+                        SettingsRow(
+                            icon = FeatherIcons.Camera,
+                            title = stringResource(R.string.browser_screenshot),
+                            onClick = { onCaptureScreenshot() }
+                        )
+
+                        SettingsDivider()
+
+                        // 5. 书签 - 点击展开二级书签列表
+                        SettingsRow(
+                            icon = FeatherIcons.Bookmark,
+                            title = stringResource(R.string.browser_bookmarks_title),
+                            trailing = {
+                                Text(
+                                    text = bookmarks.size.toString(),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            onClick = { menuLevel = 2 }
+                        )
+
+                        SettingsDivider()
+
+                        // 6. 历史记录 - 点击展开二级历史列表
+                        SettingsRow(
+                            icon = FeatherIcons.Clock,
+                            title = stringResource(R.string.browser_history_title),
+                            trailing = {
+                                Text(
+                                    text = history.size.toString(),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            onClick = { menuLevel = 3 }
+                        )
+
+                        SettingsDivider()
+
+                        // 7. 主页 - 点击展开二级主页设置
+                        SettingsRow(
+                            icon = FeatherIcons.Globe,
+                            title = stringResource(R.string.browser_homepage_title),
+                            trailing = {
+                                Text(
+                                    text = if (homepage.isNotBlank()) homepage else stringResource(R.string.browser_homepage_unset),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                            },
+                            onClick = { menuLevel = 4 }
+                        )
+                    }
+                }
+
+                1 -> {
+                    // 二级菜单：选择 User-Agent 场景
+                    SettingsGroup {
+                        val presets = BrowserUserAgentPreset.entries
+                        presets.forEachIndexed { index, preset ->
+                            if (index > 0) SettingsDivider()
+                            val selected = preset == userAgentPreset
+                            val icon: ImageVector = when (preset) {
+                                BrowserUserAgentPreset.DEFAULT -> FeatherIcons.Globe
+                                BrowserUserAgentPreset.ANDROID_PHONE -> FeatherIcons.Smartphone
+                                BrowserUserAgentPreset.ANDROID_TABLET -> FeatherIcons.Tablet
+                                BrowserUserAgentPreset.DESKTOP_PC -> FeatherIcons.Monitor
+                                BrowserUserAgentPreset.IPHONE -> FeatherIcons.Smartphone
+                                BrowserUserAgentPreset.IPAD -> FeatherIcons.Tablet
+                                BrowserUserAgentPreset.CUSTOM -> FeatherIcons.Sliders
                             }
-                            if (selected) {
-                                Spacer(Modifier.width(Spacing.sm))
+                            val subtitle = if (preset == BrowserUserAgentPreset.CUSTOM && customUserAgent.isNotBlank()) {
+                                customUserAgent
+                            } else {
+                                stringResource(preset.descRes)
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        menuLevel = 0
+                                        onSelectUaPreset(preset)
+                                    }
+                                    .padding(horizontal = Spacing.lg, vertical = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Icon(
-                                    imageVector = FeatherIcons.Check,
+                                    imageVector = icon,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
+                                    tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(Spacing.md))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(preset.titleRes),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = subtitle,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                if (selected) {
+                                    Spacer(Modifier.width(Spacing.sm))
+                                    Icon(
+                                        imageVector = FeatherIcons.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                2 -> {
+                    // 二级菜单：书签（添加当前页 + 列表，左滑删除）
+                    SettingsGroup {
+                        SettingsRow(
+                            icon = FeatherIcons.Plus,
+                            title = stringResource(R.string.browser_bookmarks_add_current),
+                            enabled = currentUrl.isNotBlank(),
+                            onClick = { onAddBookmark() }
+                        )
+                        if (bookmarks.isEmpty()) {
+                            SettingsDivider()
+                            Text(
+                                text = stringResource(R.string.browser_bookmarks_empty),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = Spacing.lg, vertical = 16.dp)
+                            )
+                        } else {
+                            bookmarks.forEach { bookmark ->
+                                SettingsDivider()
+                                BrowserBookmarkItemRow(
+                                    bookmark = bookmark,
+                                    onClick = { onOpenBookmark(bookmark) },
+                                    onDelete = { onDeleteBookmark(bookmark) }
                                 )
                             }
                         }
                     }
                 }
+
+                3 -> {
+                    // 二级菜单：历史记录（列表 + 清空）
+                    SettingsGroup {
+                        SettingsRow(
+                            icon = FeatherIcons.Trash2,
+                            title = stringResource(R.string.browser_history_clear),
+                            enabled = history.isNotEmpty(),
+                            onClick = { onClearHistory() }
+                        )
+                        if (history.isEmpty()) {
+                            SettingsDivider()
+                            Text(
+                                text = stringResource(R.string.browser_history_empty),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = Spacing.lg, vertical = 16.dp)
+                            )
+                        } else {
+                            history.forEach { entry ->
+                                SettingsDivider()
+                                SettingsRow(
+                                    icon = FeatherIcons.Clock,
+                                    title = entry.title.ifBlank { entry.url },
+                                    subtitle = entry.url,
+                                    onClick = { onOpenHistory(entry) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                4 -> {
+                    // 二级菜单：主页设置
+                    SettingsGroup {
+                        SettingsRow(
+                            icon = FeatherIcons.Globe,
+                            title = stringResource(R.string.browser_homepage_set_current),
+                            subtitle = if (currentUrl.isNotBlank()) currentUrl else stringResource(R.string.browser_homepage_unset),
+                            enabled = currentUrl.isNotBlank(),
+                            onClick = { onSetHomepageCurrent() }
+                        )
+                        SettingsDivider()
+                        SettingsRow(
+                            icon = FeatherIcons.X,
+                            title = stringResource(R.string.browser_homepage_clear),
+                            enabled = homepage.isNotBlank(),
+                            onClick = { onClearHomepage() }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowserBookmarkItemRow(
+    bookmark: BrowserBookmark,
+    onClick: () -> Unit,
+    onDelete: () -> Unit
+) {
+    SwipeToDeleteRow(
+        onDelete = onDelete,
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.lg, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = FeatherIcons.Bookmark,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+
+            Spacer(Modifier.width(Spacing.md))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = bookmark.title.ifBlank { bookmark.url },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = bookmark.url,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -1164,4 +1474,52 @@ private fun BrowserJsDialog(
             }
         }
     )
+}
+
+/**
+ * 截图分享：FileProvider 授权 URI 走系统分享（ACTION_SEND）。
+ * 截图保存在工作区目录（filesDir 内，通常可直接授权）；外部目录/远程临时副本无法直接授权时
+ * 复制进 cacheDir 再授权（cache-path 已在 file_paths.xml 声明）。不申请存储权限。
+ */
+private fun shareBrowserScreenshot(context: Context, result: BrowserScreenshotResult) {
+    val file = result.localFile
+    if (file == null || !file.isFile) {
+        Toast.makeText(context, context.getString(R.string.browser_share_failed), Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    val authority = "${context.packageName}.fileprovider"
+    var uri = runCatching { FileProvider.getUriForFile(context, authority, file) }.getOrNull()
+    var shareFile = file
+    if (uri == null) {
+        // 无法直接授权（外部本地目录/远程副本）：复制进 cacheDir 再授权
+        shareFile = runCatching {
+            val dir = File(File(context.cacheDir, "browser_share"), file.absolutePath.hashCode().toString())
+            dir.mkdirs()
+            val target = File(dir, file.name)
+            file.copyTo(target, overwrite = true)
+            target
+        }.getOrNull() ?: run {
+            Toast.makeText(context, context.getString(R.string.browser_share_failed), Toast.LENGTH_SHORT).show()
+            return
+        }
+        uri = runCatching { FileProvider.getUriForFile(context, authority, shareFile) }.getOrNull()
+    }
+
+    if (uri == null) {
+        Toast.makeText(context, context.getString(R.string.browser_share_failed), Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "image/jpeg"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_TEXT, shareFile.name)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    try {
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.browser_share)))
+    } catch (e: Exception) {
+        Toast.makeText(context, context.getString(R.string.browser_share_failed), Toast.LENGTH_SHORT).show()
+    }
 }

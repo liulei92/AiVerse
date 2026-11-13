@@ -153,11 +153,18 @@ data class BrowserConsoleEntry(
     val source: String
 )
 
+/** 浏览器截图保存结果：容器路径 + 宿主真实文件（供 UI 分享）。 */
+data class BrowserScreenshotResult(
+    val containerPath: String,
+    val localFile: File?
+)
+
 @Singleton
 class BrowserManager @Inject constructor(
     @param:ApplicationContext private val appContext: Context,
     private val fileAccess: FileAccessProvider,
-    private val pathHomeResolver: PathHomeResolver
+    private val pathHomeResolver: PathHomeResolver,
+    private val dataStore: BrowserDataStore
 ) {
 
     companion object {
@@ -179,7 +186,11 @@ class BrowserManager @Inject constructor(
         private const val HEADLESS_HEIGHT_DP = 915
         private const val MAX_CONSOLE_LOGS = 200
         private const val DIALOG_TIMEOUT_MS = 30_000L
-        const val MAX_TABS = 10
+        /** 标签页上限：每 tab 一个 WebView，放宽到 20 需防 OOM，勿再调高。 */
+        const val MAX_TABS = 20
+
+        /** 截图落盘目录（容器路径，与 Agent 工具的 browser screenshot 一致）。 */
+        private const val SCREENSHOT_DIR = "~/workspace/.aiverse/browser-screenshots"
 
         /** 地址栏输入不像网址时，作为关键词交给该搜索引擎（Bing）。 */
         private const val SEARCH_ENGINE_URL = "https://www.bing.com/search?q="
@@ -387,11 +398,14 @@ class BrowserManager @Inject constructor(
                     publishState()
                 }
                 if (view == null) {
+                    recordVisit(url.orEmpty(), "")
                     finish()
                 } else {
                     view.evaluateJavascript("(function(){return document.title})()") { result ->
                         val title = result?.trim()?.trim('"') ?: ""
                         tab.title = title
+                        // 页面加载完成即记为一次访问（去重、限条数，见 BrowserDataStore）
+                        recordVisit(url.orEmpty(), title)
                         finish()
                     }
                 }
@@ -669,6 +683,17 @@ class BrowserManager @Inject constructor(
 
         publishState()
         updateContainerView()
+        // 未显式指定初始 url 且配置了主页时自动加载主页（fire-and-forget，不阻塞创建、不抛异常）。
+        // 覆盖首次打开、关闭全部标签后的自动重建等所有新建空标签页场景。
+        if (initialUrl.isNullOrBlank() && homepage.isNotBlank()) {
+            try {
+                tab.webView.loadUrl(homepage)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                FileLogger.w(TAG, "加载主页失败: $homepage", e)
+            }
+        }
         FileLogger.i(TAG, "Tab created: $id (initialUrl=$initialUrl)")
         return tab
     }
@@ -1064,6 +1089,7 @@ class BrowserManager @Inject constructor(
         }
         val id = "tab-${tabSeq++}"
         val tab = createTabInternal(id, url)
+        // 显式指定的 url 正常导航；未指定时由 createTabInternal 处理主页/空白页
         if (!url.isNullOrBlank()) {
             navigate(url, id)
         }
@@ -1875,6 +1901,57 @@ class BrowserManager @Inject constructor(
 
     suspend fun screenshotIfVisible(tabId: String? = null): AgentImage? =
         if (isVisible(tabId)) screenshot(tabId) else null
+
+    /**
+     * UI 截图入口：截图并免权限保存到工作区目录（与 Agent 工具截图同一目录），
+     * 返回容器路径与宿主真实文件（供分享）。不申请 WRITE_EXTERNAL_STORAGE、不用 MediaStore。
+     */
+    suspend fun captureScreenshotToWorkspace(tabId: String? = null): BrowserScreenshotResult? =
+        withContext(Dispatchers.Main) {
+            val image = screenshot(tabId) ?: return@withContext null
+            val resolvedTabId = tabId ?: activeTabId
+            val timestamp = System.currentTimeMillis()
+            val savePath = "$SCREENSHOT_DIR/screenshot_${timestamp}_$resolvedTabId.jpg"
+            try {
+                val bytes = Base64.decode(image.base64Data, Base64.DEFAULT)
+                fileAccess.writeBytes(savePath, bytes, overwrite = true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                FileLogger.e(TAG, "保存截图到工作区失败: $savePath", e)
+                return@withContext null
+            }
+            val localFile = runCatching { fileAccess.copyToLocal(savePath) }.getOrNull()
+            BrowserScreenshotResult(containerPath = savePath, localFile = localFile)
+        }
+
+    // ================= 书签 / 历史 / 主页（轻量存储） =================
+
+    /** 记录一次访问：页面加载完成时调用，去重、限条数，见 [BrowserDataStore]。 */
+    private fun recordVisit(url: String, title: String) {
+        if (url.isBlank()) return
+        dataStore.recordHistory(url, title)
+    }
+
+    fun listBookmarks(): List<BrowserBookmark> = dataStore.listBookmarks()
+
+    fun addBookmark(url: String, title: String): Boolean = dataStore.addBookmark(url, title)
+
+    fun removeBookmark(url: String): Boolean = dataStore.removeBookmark(url)
+
+    fun isBookmarked(url: String): Boolean = dataStore.isBookmarked(url)
+
+    fun getHistory(): List<BrowserHistoryEntry> = dataStore.getHistory()
+
+    fun clearHistory() = dataStore.clearHistory()
+
+    /** 当前配置的主页（空串表示未设置）。 */
+    val homepage: String get() = dataStore.getHomepage()
+
+    fun setHomepage(url: String) = dataStore.setHomepage(url)
+
+    fun clearHomepage() = dataStore.clearHomepage()
+
 
     suspend fun getViewportInfo(tabId: String? = null): String = withContext(Dispatchers.Main) {
         val tab = resolveTab(tabId)
