@@ -133,23 +133,30 @@ class SkillRepository @Inject constructor(
     }
 
     /**
+     * 导出指定技能目录的全部文件（单个技能分享/导出打包用）。
+     * 找不到该作用域下的技能、目录不存在或读取失败时返回 null。
+     */
+    fun exportSkill(name: String, scope: SkillScope): SkillExportBundle? {
+        val entry = listAllSkills().firstOrNull {
+            it.skill.name.equals(name, ignoreCase = true) && it.scope == scope
+        } ?: return null
+        val dir = entry.skill.dirPath ?: return null
+        if (!fileAccess.isDirectory(dir)) return null
+        val root = dir.trimEnd('/')
+        val files = fileAccess.listFilesRecursive(root, MAX_SKILL_TREE_DEPTH)
+            .associateWith { rel -> runCatching { fileAccess.readBytes("$root/$rel") }.getOrNull() }
+            .filterValues { it != null }
+            .mapValues { it.value!! }
+        if (files.isEmpty()) return null
+        return SkillExportBundle(entry.skill.name, entry.scope, files)
+    }
+
+    /**
      * 导出全部技能（含全局与项目级，跟随当前执行环境）：每个技能目录下所有文件的相对路径与字节。
      * 供备份导出使用；目录不存在或读取失败时跳过该技能。
      */
-    fun exportAllSkills(): List<SkillExportBundle> {
-        val bundles = mutableListOf<SkillExportBundle>()
-        listAllSkills().forEach { entry ->
-            val dir = entry.skill.dirPath ?: return@forEach
-            if (!fileAccess.isDirectory(dir)) return@forEach
-            val root = dir.trimEnd('/')
-            val files = fileAccess.listFilesRecursive(root, MAX_SKILL_TREE_DEPTH)
-                .associateWith { rel -> runCatching { fileAccess.readBytes("$root/$rel") }.getOrNull() }
-                .filterValues { it != null }
-                .mapValues { it.value!! }
-            if (files.isNotEmpty()) bundles += SkillExportBundle(entry.skill.name, entry.scope, files)
-        }
-        return bundles
-    }
+    fun exportAllSkills(): List<SkillExportBundle> =
+        listAllSkills().mapNotNull { exportSkill(it.skill.name, it.scope) }
 
     /**
      * 还原一个技能目录（备份还原用）：写入 `skillsRoot(scope)/name/` 下所有文件，同名技能覆盖。

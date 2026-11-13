@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -16,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,12 +36,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aiverse.R
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.Radius
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.ui.BatchDeleteConfirmDialog
 import com.aiverse.core.ui.ListSelectionState
 import com.aiverse.core.ui.SelectionActionBar
+import com.aiverse.core.ui.selectionActionBarHeight
 import com.aiverse.core.ui.SelectionActionButton
 import com.aiverse.core.ui.SelectionActionIconButton
 import com.aiverse.core.ui.SwipeToDeleteRow
@@ -47,6 +52,8 @@ import com.aiverse.feature.settings.presentation.SkillUiEntry
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Book
 import compose.icons.feathericons.ChevronRight
+import compose.icons.feathericons.Download
+import compose.icons.feathericons.Share2
 import compose.icons.feathericons.Trash2
 
 /**
@@ -68,8 +75,11 @@ internal fun SkillsSection(
     onDelete: (SkillUiEntry) -> Unit,
     onOpenDetail: (SkillUiEntry) -> Unit,
     onBatchDelete: (List<SkillUiEntry>) -> Unit,
-    onBatchSetEnabled: (List<SkillUiEntry>, Boolean) -> Unit
+    onBatchSetEnabled: (List<SkillUiEntry>, Boolean) -> Unit,
+    onBatchShare: (List<SkillUiEntry>) -> Unit,
+    onBatchExport: (List<SkillUiEntry>) -> Unit
 ) {
+    val t = LocalUIDensityTokens.current
     // 只在数据变化时分组，避免每次重组都产生两份新 List。
     val (projectSkills, globalSkills) = remember(entries) {
         entries.filter { it.scope == SkillScope.PROJECT } to entries.filter { it.scope == SkillScope.GLOBAL }
@@ -130,37 +140,8 @@ internal fun SkillsSection(
     val allSelected = selection.selectedCount > 0 && selection.selectedCount == allKeys.size
     val selectedEntries: List<SkillUiEntry> = selection.selectedKeys.mapNotNull { keyToEntry[it] }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        if (selection.isActive) {
-            val enabled = selection.selectedCount > 0
-            SelectionActionBar(
-                selectedCount = selection.selectedCount,
-                allSelected = allSelected,
-                onToggleSelectAll = {
-                    if (allSelected) selection.clear() else selection.replaceAll(allKeys)
-                },
-                onExit = { selection.exit() }
-            ) {
-                SelectionActionButton(
-                    text = stringResource(R.string.common_batch_enable),
-                    enabled = enabled,
-                    onClick = { onBatchSetEnabled(selectedEntries, true) }
-                )
-                SelectionActionButton(
-                    text = stringResource(R.string.common_batch_disable),
-                    enabled = enabled,
-                    onClick = { onBatchSetEnabled(selectedEntries, false) }
-                )
-                SelectionActionIconButton(
-                    icon = FeatherIcons.Trash2,
-                    contentDescription = stringResource(R.string.common_batch_delete),
-                    enabled = enabled,
-                    onClick = { showBatchDeleteConfirm = true },
-                    tint = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-
+    Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
+        Column(modifier = Modifier.fillMaxSize()) {
         // 批量删除期间给一行文字提示：远程模式下逐条 SFTP 递归删可能持续数秒，没有反馈会以为没生效。
         if (deletingInProgress) {
             Text(
@@ -175,8 +156,8 @@ internal fun SkillsSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, bottom = Spacing.xl + selectionActionBarHeight()),
+            verticalArrangement = Arrangement.spacedBy(t.listCellGap)
         ) {
             item(key = "project-header", contentType = "header") {
                 CollapsibleGroupHeader(
@@ -246,6 +227,49 @@ internal fun SkillsSection(
                 }
             }
         }
+        }
+        if (selection.isActive) {
+            val enabled = selection.selectedCount > 0
+            SelectionActionBar(
+                selectedCount = selection.selectedCount,
+                allSelected = allSelected,
+                onToggleSelectAll = {
+                    if (allSelected) selection.clear() else selection.replaceAll(allKeys)
+                },
+                onExit = { selection.exit() },
+                modifier = Modifier.align(Alignment.BottomCenter),
+                moreActions = {
+                    DropdownMenuItem(
+                        text = { SkillMenuRow(FeatherIcons.Share2, stringResource(R.string.skills_share)) },
+                        enabled = enabled,
+                        onClick = { onBatchShare(selectedEntries) }
+                    )
+                    DropdownMenuItem(
+                        text = { SkillMenuRow(FeatherIcons.Download, stringResource(R.string.skills_export)) },
+                        enabled = enabled,
+                        onClick = { onBatchExport(selectedEntries) }
+                    )
+                }
+            ) {
+                SelectionActionButton(
+                    text = stringResource(R.string.common_batch_enable),
+                    enabled = enabled,
+                    onClick = { onBatchSetEnabled(selectedEntries, true) }
+                )
+                SelectionActionButton(
+                    text = stringResource(R.string.common_batch_disable),
+                    enabled = enabled,
+                    onClick = { onBatchSetEnabled(selectedEntries, false) }
+                )
+                SelectionActionIconButton(
+                    icon = FeatherIcons.Trash2,
+                    contentDescription = stringResource(R.string.common_batch_delete),
+                    enabled = enabled,
+                    onClick = { showBatchDeleteConfirm = true },
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
     }
 
     if (showBatchDeleteConfirm) {
@@ -275,6 +299,7 @@ private fun SkillRow(
     selected: Boolean = false,
     onToggleSelect: () -> Unit = {}
 ) {
+    val t = LocalUIDensityTokens.current
     // 行背景由 SwipeToDeleteRow 提供，这里不再重复画一层，省一次整行绘制。
     SwipeToDeleteRow(
         onDelete = onDelete,
@@ -286,7 +311,7 @@ private fun SkillRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = Spacing.lg, end = Spacing.xs, top = 11.dp, bottom = 11.dp),
+                .padding(start = Spacing.lg, end = Spacing.xs, top = t.listCellPaddingVertical, bottom = t.listCellPaddingVertical),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(

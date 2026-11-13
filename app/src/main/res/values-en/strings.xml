@@ -1767,6 +1767,14 @@
     <string name="skills_import_error_unsupported_file">unsupported file type</string>
     <string name="skills_import_error_io">failed to write the skill file</string>
 
+    <!-- Skill share / export -->
+    <string name="skills_share">Share</string>
+    <string name="skills_export">Export</string>
+    <string name="skills_share_failed">Share failed: could not read the skill files</string>
+    <string name="skills_export_failed">Export failed</string>
+    <string name="skills_export_success">Skill exported</string>
+    <string name="skills_share_chooser">Share skill</string>
+
     <!-- Subagent Settings -->
     <string name="settings_subagents">Subagents</string>
     <string name="subagents_empty">No custom subagents yet</string>
@@ -2421,6 +2429,30 @@
     <string name="browser_ua_custom_dialog_title">Custom User-Agent</string>
     <string name="browser_ua_custom_input_hint">Enter full User-Agent string</string>
     <string name="browser_ua_applied_toast">User-Agent updated, page reloaded</string>
+    <!-- Browser screenshot -->
+    <string name="browser_screenshot">Screenshot</string>
+    <string name="browser_screenshot_saved">Screenshot saved: %1$s</string>
+    <string name="browser_screenshot_failed">Screenshot failed</string>
+    <string name="browser_share">Share</string>
+    <string name="browser_share_failed">Share failed</string>
+    <!-- Browser bookmarks -->
+    <string name="browser_bookmarks_title">Bookmarks</string>
+    <string name="browser_bookmarks_add_current">Add current page</string>
+    <string name="browser_bookmarks_empty">No bookmarks yet</string>
+    <string name="browser_bookmarks_added">Added to bookmarks</string>
+    <!-- Browser history -->
+    <string name="browser_history_title">History</string>
+    <string name="browser_history_empty">No history yet</string>
+    <string name="browser_history_clear">Clear</string>
+    <string name="browser_history_clear_confirm_title">Clear history?</string>
+    <string name="browser_history_clear_confirm_message">This will delete all history and cannot be undone.</string>
+    <!-- Browser homepage -->
+    <string name="browser_homepage_title">Homepage</string>
+    <string name="browser_homepage_set_current">Set current page</string>
+    <string name="browser_homepage_clear">Clear homepage</string>
+    <string name="browser_homepage_unset">Not set</string>
+    <string name="browser_homepage_set_toast">Homepage set</string>
+    <string name="browser_homepage_cleared_toast">Homepage cleared</string>
     <string name="sig_invalid_title">Signature Verification Failed</string>
     <string name="sig_invalid_message">Signature mismatch. Please download from the official source.</string>
     <string name="sig_invalid_button">Go to official site</string>

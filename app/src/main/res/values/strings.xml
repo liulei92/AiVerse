@@ -1767,6 +1767,14 @@
     <string name="skills_import_error_network">从 GitHub 拉取失败，请检查网络后重试</string>
     <string name="skills_import_error_io">写入技能文件失败</string>
 
+    <!-- 技能分享 / 导出 -->
+    <string name="skills_share">分享</string>
+    <string name="skills_export">导出</string>
+    <string name="skills_share_failed">分享失败，无法读取技能文件</string>
+    <string name="skills_export_failed">导出失败</string>
+    <string name="skills_export_success">技能已导出</string>
+    <string name="skills_share_chooser">分享技能</string>
+
     <!-- Subagent Settings -->
     <string name="settings_subagents">子代理</string>
     <string name="subagents_empty">还没有自定义子代理</string>
@@ -2420,6 +2428,30 @@
     <string name="browser_ua_custom_dialog_title">自定义 User-Agent</string>
     <string name="browser_ua_custom_input_hint">输入完整的 User-Agent 字符串</string>
     <string name="browser_ua_applied_toast">已切换浏览器标识并刷新页面</string>
+    <!-- 浏览器截图 -->
+    <string name="browser_screenshot">截图</string>
+    <string name="browser_screenshot_saved">截图已保存：%1$s</string>
+    <string name="browser_screenshot_failed">截图失败</string>
+    <string name="browser_share">分享</string>
+    <string name="browser_share_failed">分享失败</string>
+    <!-- 浏览器书签 -->
+    <string name="browser_bookmarks_title">书签</string>
+    <string name="browser_bookmarks_add_current">添加当前页</string>
+    <string name="browser_bookmarks_empty">暂无书签</string>
+    <string name="browser_bookmarks_added">已添加到书签</string>
+    <!-- 浏览器历史 -->
+    <string name="browser_history_title">历史记录</string>
+    <string name="browser_history_empty">暂无历史记录</string>
+    <string name="browser_history_clear">清空</string>
+    <string name="browser_history_clear_confirm_title">清空历史记录？</string>
+    <string name="browser_history_clear_confirm_message">将删除全部历史记录，此操作无法撤销。</string>
+    <!-- 浏览器主页 -->
+    <string name="browser_homepage_title">主页</string>
+    <string name="browser_homepage_set_current">设为当前页</string>
+    <string name="browser_homepage_clear">清除主页</string>
+    <string name="browser_homepage_unset">未设置</string>
+    <string name="browser_homepage_set_toast">已设置主页</string>
+    <string name="browser_homepage_cleared_toast">已清除主页</string>
     <string name="sig_invalid_title">签名校验失败</string>
     <string name="sig_invalid_message">签名不对，请在正规平台下载</string>
     <string name="sig_invalid_button">前往官网</string>

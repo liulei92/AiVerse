@@ -18,6 +18,7 @@ import com.aiverse.core.ui.overlay.OverlayBallService
 import com.aiverse.core.util.ApkInstaller
 import com.aiverse.core.util.FileLogger
 import com.aiverse.core.util.LogLevel
+import com.aiverse.core.util.buildZip
 import com.aiverse.feature.agent.data.local.dao.LlmCallRecordDao
 import com.aiverse.feature.agent.data.local.dao.RecentCallRecord
 import com.aiverse.feature.agent.data.local.entity.LlmCallRecordEntity
@@ -1771,6 +1772,31 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * 把若干技能打包为单个 zip 字节流（每个技能一个子目录，zip 内路径为 `技能名/相对路径`）。
+     * 任一技能目录读取失败时整体失败（onResult(null)），避免导出一个残缺的包。
+     */
+    fun buildSkillExportZip(targets: List<Pair<String, SkillScope>>, onResult: (ByteArray?) -> Unit) {
+        if (targets.isEmpty()) {
+            onResult(null)
+            return
+        }
+        viewModelScope.launch {
+            val bytes = withContext(Dispatchers.IO) {
+                val bundles = targets.mapNotNull { (name, scope) -> skillRepository.exportSkill(name, scope) }
+                if (bundles.size != targets.size) return@withContext null
+                // 同名技能可能同时存在于全局与项目作用域并被同时选中：仅当存在名称冲突时
+                // 才在 zip 里加作用域前缀消歧，避免两个技能写到同一个目录互相覆盖（静默丢一个）。
+                buildZip(bundles.flatMap { bundle ->
+                    val collide = bundles.count { it.name.equals(bundle.name, ignoreCase = true) } > 1
+                    val prefix = if (collide) "${bundle.scope.name.lowercase()}/" else ""
+                    bundle.files.map { (rel, bytes) -> "$prefix${bundle.name}/$rel" to bytes }
+                })
+            }
+            onResult(bytes)
         }
     }
 
