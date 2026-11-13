@@ -85,7 +85,7 @@ AiVerse 是运行在 Android 上的通用 AI Coding Agent，把一套完整的 L
 | 项目 | 说明 |
 |------|------|
 | 系统要求 | Android 8.0+（API 26），arm64-v8a / x86_64 |
-| 下载地址 | [GitHub Releases](https://github.com/yhdmgf/AiVerse/releases/latest)：真机选 `armsolo`、模拟器选 `x86solo`、通用选 `universal` 包 |
+| 下载地址 | **[官网下载](https://aivapp.cn/download)**（推荐，优先）：提供最新稳定版与历史版本<br>[GitHub Releases](https://github.com/yhdmgf/AiVerse/releases/latest)：真机选 `armsolo`、模拟器选 `x86solo`、通用选 `universal` 包 |
 | 快速上手 | 「设置 → AI 供应商」配模型 →「容器与镜像」选本地或 SSH → 新建会话开始对话 |
 | 更新记录 | [Releases](https://github.com/yhdmgf/AiVerse/releases)（历史版本与更新说明） |
 | 使用指南 | [在线文档](https://aivapp.cn)：快速上手、使用手册与进阶教程（与 App 内置文档同源） |

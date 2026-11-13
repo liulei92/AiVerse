@@ -85,7 +85,7 @@ There is nothing to set up beforehand: install the app, configure a model under 
 | Item | Description |
 |------|-------------|
 | System requirements | Android 8.0+ (API 26), arm64-v8a / x86_64 |
-| Download | [GitHub Releases](https://github.com/yhdmgf/AiVerse/releases/latest): pick `armsolo` for real devices, `x86solo` for emulators, `universal` for both |
+| Download | **[Official site](https://aivapp.cn/download)** (recommended, primary): latest stable & archived releases<br>[GitHub Releases](https://github.com/yhdmgf/AiVerse/releases/latest): pick `armsolo` for real devices, `x86solo` for emulators, `universal` for both |
 | Quick start | Settings → AI Vendors to add a model → Container & Images to pick local or SSH → new session and chat |
 | Changelog | [Releases](https://github.com/yhdmgf/AiVerse/releases) (all versions & notes) |
 | User guide | [Online docs](https://aivapp.cn): quick start, user manual and advanced guides (same content as the in-app docs) |
