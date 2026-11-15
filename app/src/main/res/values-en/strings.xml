@@ -697,6 +697,9 @@
     <string name="common_cut">Cut</string>
     <string name="common_paste">Paste</string>
     <string name="common_allow">Allow</string>
+    <string name="common_deny">Deny</string>
+    <string name="common_later">Not now</string>
+    <string name="common_recommended">Recommended</string>
     <string name="common_close">Close</string>
     <string name="common_clear">Clear</string>
     <string name="common_more">More</string>
@@ -978,6 +981,7 @@
     <string name="backup_data_roles">Roles (New Role System)</string>
     <string name="backup_data_custom_prompts">Custom Prompts</string>
     <string name="backup_data_media_files">Custom Icons &amp; Chat Background</string>
+    <string name="backup_data_git_credentials">Git Credentials</string>
     <string name="backup_workspace_git_hint">Workspace files are best backed up via Git; the export here is only a fallback</string>
     <string name="backup_password_label">Password (optional)</string>
     <string name="backup_processing">Processing</string>
@@ -999,6 +1003,7 @@
     <string name="backup_stat_roles">· Roles: %1$s</string>
     <string name="backup_stat_custom_prompts">· Custom Prompts: %1$s</string>
     <string name="backup_stat_media_files">· Custom Icons &amp; Background: %1$s</string>
+    <string name="backup_stat_git_credentials">· Git Credentials: %1$s</string>
     <string name="backup_settings_covered">Theme, keepalive, logging, vision, and sync preferences covered</string>
     <string name="backup_restore_workspaces_title">Restore workspaces</string>
     <string name="backup_restore_workspaces_warning">Files in local workspaces with the same name will be overwritten and cannot be undone. Select carefully.</string>
@@ -1010,6 +1015,23 @@
     <string name="backup_export_failed">Export failed</string>
     <string name="backup_wrong_password">Wrong backup password, or the encrypted backup file is corrupted</string>
     <string name="backup_import_failed">Import failed</string>
+
+    <!-- Data handoff between the beta and the release build (issue #97) -->
+    <string name="auth_grant_title">AiVerse Beta Requests Backup Authorization</string>
+    <string name="auth_grant_risk_header">Channel Safety</string>
+    <string name="auth_grant_channel_file_provider">Temporary grant in the private directory</string>
+    <string name="auth_grant_channel_http">Local loopback HTTP service</string>
+    <string name="auth_grant_risk_file_provider">The backup file stays inside the release build\'s private directory. The beta build only gets a one-time read grant that is revoked right after it is read; no other app can ever touch this file.</string>
+    <string name="auth_grant_risk_http">The backup file is transferred over 127.0.0.1 on the local loopback interface, never over a network. The service lives only for this transfer and shuts itself down once it is done.</string>
+    <string name="auth_grant_channel_header">Choose a transfer channel</string>
+    <string name="auth_grant_data_header">Data to be shared</string>
+    <string name="auth_grant_data_git_credentials">Git credentials</string>
+    <string name="auth_grant_fallback_header">Prefer the traditional way?</string>
+    <string name="auth_grant_fallback">Just use export &amp; import instead</string>
+    <string name="auth_grant_fallback_hint">Skip the temporary grant and open the existing backup screen to export and import manually</string>
+    <string name="auth_grant_allow">Allow &amp; share</string>
+    <string name="beta_handoff_prompt_title">Import data from the release build</string>
+    <string name="beta_handoff_prompt_body">The release build of AiVerse is already installed on this device. You can authorize it to hand its data straight to the beta build, without exporting a file and importing it by hand.</string>
 
     <!-- 网络备份 -->
     <string name="backup_net_section">Cloud backup</string>

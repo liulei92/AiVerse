@@ -74,7 +74,15 @@ data class BackupOptions(
     /** 新角色系统：Room roles 表数据（会话 roleId 随聊天记录导出）。 */
     val roles: Boolean = true,
     /** 媒体文件：新对话快捷入口自定义图标 + 聊天背景图目录。 */
-    val mediaFiles: Boolean = true
+    val mediaFiles: Boolean = true,
+    /**
+     * git 凭据：`filesDir/aiverse/git-credentials`（容器内 `/root/.aiverse/git-credentials`）。
+     *
+     * 不走 KeystoreCipher（密钥按 applicationId 隔离，跨包不可解），以 git-credential-store
+     * 原始格式随备份导出，导入端再按目标包重加密落盘；跨包迁移（正式版 → 测试版）因此免重填。
+     * 属敏感数据，默认关闭，需用户显式勾选。
+     */
+    val gitCredentials: Boolean = false
 )
 
 data class RestoreStats(
@@ -93,7 +101,8 @@ data class RestoreStats(
     val plugins: Int = 0,
     val roles: Int = 0,
     val customPrompts: Int = 0,
-    val mediaFiles: Int = 0
+    val mediaFiles: Int = 0,
+    val gitCredentials: Int = 0
 ) {
     operator fun plus(other: RestoreStats) = RestoreStats(
         providers = providers + other.providers,
@@ -111,6 +120,7 @@ data class RestoreStats(
         plugins = plugins + other.plugins,
         roles = roles + other.roles,
         customPrompts = customPrompts + other.customPrompts,
-        mediaFiles = mediaFiles + other.mediaFiles
+        mediaFiles = mediaFiles + other.mediaFiles,
+        gitCredentials = gitCredentials + other.gitCredentials
     )
 }

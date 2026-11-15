@@ -25,6 +25,17 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- beta ↔ 正式版交接（issue #97）：正式版用 setPackage("com.aiverse.beta")、beta 用
+             setPackage("com.aiverse") 定向拉起，Android 11+ 包可见性需在此声明对方包的 intent 过滤器。
+             同时让「打开方式」不会弹系统选择器。 -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="aiverse" android:host="auth" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="aiverse" android:host="backup" />
+        </intent>
     </queries>
 
     <application
@@ -60,6 +71,35 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:theme="@style/Theme.AICode" />
+
+        <!-- beta 通过协议打开正式版：正式版接收授权请求，弹页面让用户确认。
+             同时接收 beta 导入完成后的 aiverse://auth/confirmed 回传确认。 -->
+        <activity
+            android:name=".feature.backup.presentation.AuthGrantActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.AICode">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="aiverse" android:host="auth" android:path="/grant-backup" />
+                <data android:scheme="aiverse" android:host="auth" android:path="/confirmed" />
+            </intent-filter>
+        </activity>
+
+        <!-- beta 接收正式版传回的备份数据（通道 1：FileProvider URI；通道 2：HTTP 服务）。 -->
+        <activity
+            android:name=".feature.backup.presentation.BackupHandoffActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AICode">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="aiverse" android:host="backup" android:path="/import" />
+            </intent-filter>
+        </activity>
 
         <provider
             android:name=".feature.workspace.data.provider.WorkspaceDocumentsProvider"

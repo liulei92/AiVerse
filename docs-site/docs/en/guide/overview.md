@@ -61,6 +61,7 @@ Entries marked with a version (e.g. "since 1.0.0") were introduced in that versi
 | Token stats | Usage, cost estimation, call details |
 | Storage | Per-category usage of chats, containers, workspaces, and cleanup of temporary data |
 | Backup & restore | Encrypted export/import of configuration and workspaces |
+| [Import data from the stable app](https://aivapp.cn/md/en/guide/handoff-from-release.md) | On the first launch of the beta build, import skills, MCP configuration, roles, permission rules, app settings, providers and Git credentials from the stable build (beta only) |
 | About | Version info and update checks; separate User Agreement and Privacy Policy entries open in the system browser |
 | [User Agreement](https://aivapp.cn/md/en/terms.md) | Usage rules, AI and operational risks, third-party fees, and open-source rights |
 | [Privacy Policy](https://aivapp.cn/md/en/privacy.md) | Data storage, network transfers, logs, backups, and deletion |

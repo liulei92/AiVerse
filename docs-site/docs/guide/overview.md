@@ -72,6 +72,7 @@
 | Token 统计 | 用量、费用估算、调用明细 → [文档](https://aivapp.cn/md/guide/token-stats.md) |
 | 存储空间 | 按类别看聊天、容器、工作区等占用，并清理临时数据（1.0.0 起）→ [文档](https://aivapp.cn/md/guide/storage.md) |
 | 备份与还原 | 加密导出导入配置与工作区 → [文档](https://aivapp.cn/md/guide/backup.md) |
+| 从正式版导入数据 | 测试版首次启动时从正式版导入技能、MCP 配置、角色、授权规则、应用设置、模型供应商与 Git 凭据（测试版新增）→ [文档](https://aivapp.cn/md/guide/handoff-from-release.md) |
 | 日志 | 查看运行日志、崩溃报告 → [文档](https://aivapp.cn/md/guide/logs.md) |
 | 常见错误提示 | 重试气泡分类含义、常见 HTTP 错误码与排查 → [文档](https://aivapp.cn/md/guide/error-codes.md) |
 

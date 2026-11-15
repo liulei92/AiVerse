@@ -112,6 +112,7 @@ import com.aiverse.feature.agent.presentation.component.chatImageLoader
 import com.aiverse.feature.agent.presentation.component.mediaFileResolver
 import com.aiverse.feature.agent.presentation.component.openSentAttachment
 import com.aiverse.feature.agreement.presentation.AgreementGate
+import com.aiverse.feature.backup.presentation.BetaHandoffPromptHost
 import com.aiverse.feature.editor.presentation.CodeEditorScreen
 import com.aiverse.feature.editor.presentation.EditorLeaveGuard
 import com.aiverse.feature.browser.presentation.BrowserScreen
@@ -201,6 +202,10 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var agreementRepository: com.aiverse.feature.agreement.data.AgreementRepository
+
+    /** 测试版与正式版并存时的数据接引导（beta 侧引导卡，issue #97）。 */
+    @Inject
+    lateinit var betaHandoffRepository: com.aiverse.feature.backup.data.BetaHandoffRepository
 
     @Inject
     lateinit var browserManager: com.aiverse.feature.agent.domain.tool.browser.BrowserManager
@@ -400,6 +405,10 @@ class MainActivity : ComponentActivity() {
                                 com.aiverse.feature.credentials.presentation.component.GlobalCredentialDialogHost(
                                     bridge = credentialRequestBridge
                                 )
+                            }
+                            if (agreementAccepted) {
+                                // 测试版包 + 本机已装正式版 + 自身无数据时，引导从正式版导入数据（issue #97）。
+                                BetaHandoffPromptHost(repository = betaHandoffRepository)
                             }
                         }
                         // beta 包全局水印，置于最上层，不拦截触摸。

@@ -697,6 +697,9 @@
     <string name="common_cut">剪切</string>
     <string name="common_paste">粘贴</string>
     <string name="common_allow">允许</string>
+    <string name="common_deny">拒绝</string>
+    <string name="common_later">暂不</string>
+    <string name="common_recommended">推荐</string>
     <string name="common_close">关闭</string>
     <string name="common_clear">清除</string>
     <string name="common_more">更多</string>
@@ -978,6 +981,7 @@
     <string name="backup_data_roles">角色（新角色系统）</string>
     <string name="backup_data_custom_prompts">自定义提示词</string>
     <string name="backup_data_media_files">自定义图标与聊天背景图</string>
+    <string name="backup_data_git_credentials">Git 凭据</string>
     <string name="backup_workspace_git_hint">工作区文件建议通过 Git 提交备份，导出备份仅作备用</string>
     <string name="backup_password_label">口令（可选）</string>
     <string name="backup_processing">处理中</string>
@@ -999,6 +1003,7 @@
     <string name="backup_stat_roles">· 角色 %1$s 个</string>
     <string name="backup_stat_custom_prompts">· 自定义提示词 %1$s 个</string>
     <string name="backup_stat_media_files">· 自定义图标与背景图 %1$s 个</string>
+    <string name="backup_stat_git_credentials">· Git 凭据 %1$s 条</string>
     <string name="backup_settings_covered">主题、保活、日志、识图、同步偏好已覆盖</string>
     <string name="backup_restore_workspaces_title">恢复工作区</string>
     <string name="backup_restore_workspaces_warning">将直接覆盖本地同名工作区中的文件，且无法撤销，请谨慎勾选</string>
@@ -1010,6 +1015,23 @@
     <string name="backup_export_failed">导出失败</string>
     <string name="backup_wrong_password">备份口令错误，或加密备份文件已损坏</string>
     <string name="backup_import_failed">导入失败</string>
+
+    <!-- 测试版与正式版并存时的数据接授权（issue #97） -->
+    <string name="auth_grant_title">AiVerse 测试版请求备份授权</string>
+    <string name="auth_grant_risk_header">传输通道安全说明</string>
+    <string name="auth_grant_channel_file_provider">私有目录临时授权</string>
+    <string name="auth_grant_channel_http">本机回环 HTTP 服务</string>
+    <string name="auth_grant_risk_file_provider">备份文件全程留在正式版的私有目录里，只给测试版一次性的读取授权，读完立即收回；其他应用始终碰不到这个文件。</string>
+    <string name="auth_grant_risk_http">备份文件经 127.0.0.1 本机回环地址传输，不经过网络；服务仅存活到本次传输结束，用完自动关闭。</string>
+    <string name="auth_grant_channel_header">选择传输通道</string>
+    <string name="auth_grant_data_header">将共享的数据</string>
+    <string name="auth_grant_data_git_credentials">Git 凭据</string>
+    <string name="auth_grant_fallback_header">更习惯传统方式？</string>
+    <string name="auth_grant_fallback">建议还是直接导入导出</string>
+    <string name="auth_grant_fallback_hint">不启用临时授权，打开现有备份页手动导出/导入</string>
+    <string name="auth_grant_allow">允许并共享</string>
+    <string name="beta_handoff_prompt_title">从正式版导入数据</string>
+    <string name="beta_handoff_prompt_body">本机已安装 AiVerse 正式版。可以授权正式版把数据直接交给测试版，无需先导出文件再手动导入。</string>
 
     <!-- 网络备份 -->
     <string name="backup_net_section">网络备份</string>
