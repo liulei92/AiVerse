@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -135,7 +136,7 @@ internal fun SubAgentsSection(
     val allSelected = selection.selectedCount > 0 && selection.selectedCount == allKeys.size
     val selectedEntries: List<SubAgentUiEntry> = selection.selectedKeys.mapNotNull { keyToEntry[it] }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
         Column(modifier = Modifier.fillMaxSize()) {
         // 批量删除期间给一行文字提示：远程模式下逐条删除可能持续数秒，没有反馈会以为没生效。
         if (deletingInProgress) {

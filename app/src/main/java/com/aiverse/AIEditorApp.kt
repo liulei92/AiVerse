@@ -257,13 +257,9 @@ class AIEditorApp : Application(), Configuration.Provider {
     @Inject
     lateinit var pluginManager: com.aiverse.feature.plugins.domain.PluginManager
 
-    /** 插件 AI 工具运行时：启动即监听 plugins 流，把生效插件声明的工具注册进 ToolRegistry。 */
+    /** 插件仓库更新检查：启动即异步拉取 index 比较本地版本，产出可更新集合。 */
     @Inject
-    lateinit var pluginToolManager: com.aiverse.feature.plugins.runtime.PluginToolManager
-
-    /** 插件 hook 分发器：启动即分发 app.started 等运行时事件，供声明了 hook 的插件监听。 */
-    @Inject
-    lateinit var pluginHookDispatcher: com.aiverse.feature.plugins.runtime.PluginHookDispatcher
+    lateinit var pluginUpdateChecker: com.aiverse.feature.plugins.domain.PluginUpdateChecker
 
     /** 长驻作用域：持续把持久化的日志等级同步到 FileLogger。 */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -317,14 +313,9 @@ class AIEditorApp : Application(), Configuration.Provider {
         appScope.launch {
             pluginManager.syncEnabled()
         }
-        // 插件 AI 工具：启动即监听 plugins 流，把生效插件声明的工具注册进同一个 ToolRegistry。
-        pluginToolManager.start(appScope)
-        // 插件启动事件：声明 app.started 的插件在此拉起进程；runtime.resident 的进程不参与空闲回收。
+        // 启动即异步检查插件仓库更新（拉 index 比较本地版本，失败静默；不阻塞首屏）。
         appScope.launch {
-            val appVersion = runCatching {
-                packageManager.getPackageInfo(packageName, 0).versionName
-            }.getOrNull().orEmpty()
-            pluginHookDispatcher.dispatchAppStarted(appVersion)
+            pluginUpdateChecker.check()
         }
         // 启动即释放内置子代理定义（Explore）到 ~/.aiverse/agents/；已存在不覆盖，用户改过或删掉都不会被升级拉回。
         appScope.launch {

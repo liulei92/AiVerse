@@ -76,14 +76,6 @@ import com.aiverse.core.theme.AppThemePreset
 import com.aiverse.core.theme.ChatBubbleStyle
 import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.Spacing
-import com.aiverse.feature.plugins.domain.PluginUiSlots
-import com.aiverse.feature.plugins.domain.newmodel.PluginPage
-import com.aiverse.feature.plugins.presentation.PluginPageHost
-import com.aiverse.feature.plugins.presentation.PluginSettingsSection
-import com.aiverse.feature.plugins.presentation.PluginsViewModel
-import com.aiverse.feature.plugins.presentation.currentLanguageTag
-import com.aiverse.feature.plugins.presentation.displayName
-import com.aiverse.feature.plugins.presentation.pluginPageIcon
 import com.aiverse.core.theme.isDynamicColorSupported
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.ui.AppSwitch
@@ -162,11 +154,9 @@ import com.aiverse.feature.onboarding.domain.OnboardingStep
 import com.aiverse.feature.onboarding.presentation.onboardingTarget
 import com.aiverse.feature.settings.data.local.ProviderPreset
 import com.aiverse.feature.terminal.data.repository.TerminalSettings
+import com.aiverse.feature.plugins.presentation.PluginListSection
+import com.aiverse.feature.plugins.presentation.PluginRepoSection
 import com.aiverse.feature.terminal.presentation.component.TerminalSettingsSheet
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
 
 /** 使用手册在线文档站地址。 */
 private const val USER_GUIDE_DOCS_URL = "https://aivapp.cn"
@@ -223,7 +213,6 @@ internal enum class SettingsSection(@param:StringRes val titleRes: Int) {
     Plugins(R.string.settings_plugins),
     Tts(R.string.settings_tts),
     PluginRepo(R.string.plugins_repo_title),
-    PluginPage(R.string.settings_title),
     SearchProvider(R.string.settings_search_provider),
     SearchProviderDetail(R.string.settings_search_provider),
     PhoneControl(R.string.phone_control_title),
@@ -462,21 +451,6 @@ fun SettingsScreen(
     }
     var logReturnSection by remember { mutableStateOf(SettingsSection.Menu) }
     var phoneControlGrantReturn by remember { mutableStateOf(SettingsSection.PhoneControl) }
-    // 插件入口页：设置页里打开的插件 HTML 页面（contributes.uiEntries 的 page 贡献）。
-    // 直接从插件快照算入口，不走 PluginManager.ensureLoaded：组合期间不能同步读盘。
-    val pluginsViewModel: PluginsViewModel = androidx.hilt.navigation.compose.hiltViewModel()
-    val plugins by pluginsViewModel.plugins.collectAsStateWithLifecycle()
-    val pluginLanguageTag = currentLanguageTag()
-    val pluginPages = remember(plugins, pluginLanguageTag) {
-        plugins.filter { it.isActive }
-            .sortedBy { it.displayName(pluginLanguageTag) }
-            .flatMap { plugin ->
-                plugin.content?.uiEntries.orEmpty().mapNotNull { entry ->
-                    entry.page?.copy(pluginVersion = plugin.record.version)
-                }
-            }
-    }
-    var activePluginPage by remember { mutableStateOf<PluginPage?>(null) }
     // 各列表页的多选状态：顶栏「多选」开关在本页 Scaffold 里，所以状态必须提到这里统一持有。
     // 用普通 map（非 snapshot）新建容器，避免在组合期写快照状态；Compose 状态在 ListSelectionState 内部。
     val listSelections = remember { mutableMapOf<SettingsSection, ListSelectionState>() }
@@ -708,12 +682,6 @@ fun SettingsScreen(
     // 滚动位置必须提到 AnimatedContent 之外持有：菜单页作为分区分支被切走时会被 dispose，
     // 内部 rememberScrollState 一并丢弃，从二级页返回就跳回顶部。
     val menuScrollState = rememberScrollState()
-    // 记忆「假插件」开关：默认开启。开启时设置页显示记忆入口且 AI 可调用记忆；
-    // 关闭时隐藏记忆入口（菜单行不可点击进入记忆管理）且 MemoryTool 禁用。
-    // 用 hiltViewModel 复用 MemoryViewModel（与 MemorySection 同一实例，避免重复实例化）。
-    val memoryViewModel: com.aiverse.feature.settings.presentation.MemoryViewModel =
-        androidx.hilt.navigation.compose.hiltViewModel()
-    val memoryEnabled by memoryViewModel.memoryEnabled.collectAsStateWithLifecycle()
     // 同理：一级 / 详情页整块内容切走后会被 AnimatedContent dispose，内部 rememberScrollState、
     // rememberLazyListState 一并丢失，从下一级页面返回就跳回顶部（供应商、技能、MCP 等所有列表都中招）。
     // 用 SaveableStateHolder 按分区名接住这些 rememberSaveable 状态；编辑类页面不走这一步
@@ -724,8 +692,6 @@ fun SettingsScreen(
             scrollState = menuScrollState,
             themeMode = themeMode,
             terminalSettings = terminalSettings,
-            memoryEnabled = memoryEnabled,
-            onToggleMemory = { memoryViewModel.setMemoryEnabled(it) },
             currentLanguageDisplayName = currentLanguageDisplayName,
             welcomeEntries = welcomeEntries,
             onOpenWelcomeEntriesSheet = { showWelcomeEntriesSheet = true },
@@ -737,11 +703,6 @@ fun SettingsScreen(
                 )
             },
             onRerunOnboarding = onRerunOnboarding,
-            pluginPages = pluginPages,
-            onOpenPluginPage = { page ->
-                activePluginPage = page
-                section = SettingsSection.PluginPage
-            },
             onOpen = {
                 if (it == SettingsSection.Log) {
                     logReturnSection = SettingsSection.Menu
@@ -905,26 +866,6 @@ fun SettingsScreen(
                     onNavigateBack = { section = SettingsSection.Menu }
                 )
 
-            current == SettingsSection.PluginPage -> {
-                val page = activePluginPage
-                if (page == null) {
-                    // 移动端退出插件页时 old 分支还在退场动画里，此时 activePluginPage 已清空；
-                    // 不渲染大屏「从左侧选择」占位，避免返回瞬间闪一下空态。
-                    if (expanded) SettingsDetailPlaceholder()
-                } else {
-                    PluginPageHost(
-                        page = page,
-                        languageTag = pluginLanguageTag,
-                        pluginsViewModel = pluginsViewModel,
-                        onClose = {
-                            activePluginPage = null
-                            section = SettingsSection.Menu
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-
             else -> {
             // 用分区名接住本页内部的滚动位置等 rememberSaveable 状态，返回时原样恢复（详见 sectionStateHolder）。
             // 详情页要带上条目身份：换成另一个技能 / 子代理 / 提示词进来，不能继承上一条的滚动位置。
@@ -964,10 +905,7 @@ fun SettingsScreen(
                 ),
                 navigationIcon = {
                     // 大屏一级分区页不给返回箭头：左栏菜单随时可切，退出设置的入口在左栏顶部。
-                    // 插件分区由 PluginSettingsSection 自管返回（详情回列表 / 列表回菜单），不再显示共享返回箭头，避免双返回。
-                    if (current != SettingsSection.Plugins && current != SettingsSection.PluginRepo &&
-                        (!expanded || parentSection != null)
-                    ) {
+                    if (!expanded || parentSection != null) {
                         IconButton(onClick = {
                             val parent = parentSection
                             if (parent != null) section = parent else onNavigateBack()
@@ -1753,34 +1691,25 @@ fun SettingsScreen(
                 SettingsSection.RemoteServers -> {} // 已在上方 early return 处理
                 SettingsSection.Backup -> {} // 已在上方 early return 处理
                 SettingsSection.Memory -> {
-                    // 防御：记忆开关关闭时该入口行已整行隐藏，此处兜底不渲染记忆管理内容。
-                    if (memoryEnabled) {
-                        MemorySection(viewModel = memoryViewModel)
-                    }
+                    val memoryViewModel: com.aiverse.feature.settings.presentation.MemoryViewModel =
+                        androidx.hilt.navigation.compose.hiltViewModel()
+                    MemorySection(viewModel = memoryViewModel)
                 }
-                SettingsSection.PluginPage -> {
-                    val page = activePluginPage
-                    if (page != null) {
-                        PluginPageHost(
-                            page = page,
-                            languageTag = pluginLanguageTag,
-                            pluginsViewModel = pluginsViewModel,
-                            onClose = {
-                                activePluginPage = null
-                                section = SettingsSection.Menu
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else if (expanded) {
-                        SettingsDetailPlaceholder()
-                    }
+                SettingsSection.Plugins -> {
+                    val pluginsViewModel: com.aiverse.feature.plugins.presentation.PluginListViewModel =
+                        androidx.hilt.navigation.compose.hiltViewModel()
+                    PluginListSection(
+                        viewModel = pluginsViewModel,
+                        onOpenRepo = { section = SettingsSection.PluginRepo }
+                    )
                 }
-                SettingsSection.Plugins -> PluginSettingsSection(
-                    onNavigateBack = { section = SettingsSection.Menu }
-                )
-                SettingsSection.PluginRepo -> PluginSettingsSection(
-                    onNavigateBack = { section = SettingsSection.Plugins }
-                )
+                SettingsSection.PluginRepo -> {
+                    val pluginsViewModel: com.aiverse.feature.plugins.presentation.PluginListViewModel =
+                        androidx.hilt.navigation.compose.hiltViewModel()
+                    PluginRepoSection(
+                        viewModel = pluginsViewModel
+                    )
+                }
                 SettingsSection.SearchProvider -> {
                     val searchVm: com.aiverse.feature.search.presentation.SearchProviderViewModel =
                         androidx.hilt.navigation.compose.hiltViewModel()
@@ -2281,8 +2210,6 @@ internal fun SettingsMenu(
     scrollState: ScrollState,
     themeMode: AppThemeMode,
     terminalSettings: TerminalSettings,
-    memoryEnabled: Boolean,
-    onToggleMemory: (Boolean) -> Unit,
     currentLanguageDisplayName: String,
     welcomeEntries: List<WelcomeEntry>,
     onOpenWelcomeEntriesSheet: () -> Unit,
@@ -2290,11 +2217,8 @@ internal fun SettingsMenu(
     onOpenLanguageSheet: () -> Unit,
     onOpenManual: () -> Unit,
     onRerunOnboarding: () -> Unit,
-    pluginPages: List<PluginPage>,
-    onOpenPluginPage: (PluginPage) -> Unit,
     onOpen: (SettingsSection) -> Unit
 ) {
-    val pluginLanguageTag = currentLanguageTag()
     val t = LocalUIDensityTokens.current
     Column(
         modifier = Modifier
@@ -2356,7 +2280,6 @@ internal fun SettingsMenu(
                     )
                 }
             )
-            PluginSettingsRows(pluginPages, PluginUiSlots.SETTINGS_GENERAL, pluginLanguageTag, onOpenPluginPage)
         }
 
         // ── AI 配置 ──
@@ -2416,16 +2339,12 @@ internal fun SettingsMenu(
                 title = stringResource(SettingsSection.Roles.titleRes),
                 onClick = { onOpen(SettingsSection.Roles) }
             )
-            // 记忆开启时显示此入口行（右侧 chevron，纯导航进管理页）；关闭后整行隐藏。启/停开关只在插件页记忆卡片。
-            if (memoryEnabled) {
-                SettingsDivider()
-                SettingsRow(
-                    icon = FeatherIcons.Database,
-                    title = stringResource(SettingsSection.Memory.titleRes),
-                    onClick = { onOpen(SettingsSection.Memory) }
-                )
-            }
-            PluginSettingsRows(pluginPages, PluginUiSlots.SETTINGS_AI, pluginLanguageTag, onOpenPluginPage)
+            SettingsDivider()
+            SettingsRow(
+                icon = FeatherIcons.Database,
+                title = stringResource(SettingsSection.Memory.titleRes),
+                onClick = { onOpen(SettingsSection.Memory) }
+            )
         }
 
         // ── 运行环境 ──
@@ -2460,7 +2379,6 @@ internal fun SettingsMenu(
                 title = stringResource(SettingsSection.SearchProvider.titleRes),
                 onClick = { onOpen(SettingsSection.SearchProvider) }
             )
-            PluginSettingsRows(pluginPages, PluginUiSlots.SETTINGS_ENVIRONMENT, pluginLanguageTag, onOpenPluginPage)
         }
 
         // ── 权限与后台 ──
@@ -2490,7 +2408,6 @@ internal fun SettingsMenu(
                 subtitle = stringResource(R.string.phone_control_enabled_desc),
                 onClick = { onOpen(SettingsSection.PhoneControl) }
             )
-            PluginSettingsRows(pluginPages, PluginUiSlots.SETTINGS_PERMISSIONS, pluginLanguageTag, onOpenPluginPage)
         }
 
         // ── 数据与诊断 ──
@@ -2519,7 +2436,6 @@ internal fun SettingsMenu(
                 title = stringResource(SettingsSection.Log.titleRes),
                 onClick = { onOpen(SettingsSection.Log) }
             )
-            PluginSettingsRows(pluginPages, PluginUiSlots.SETTINGS_DATA, pluginLanguageTag, onOpenPluginPage)
         }
 
         // ── 帮助与关于 ──
@@ -2542,29 +2458,9 @@ internal fun SettingsMenu(
                 title = stringResource(SettingsSection.About.titleRes),
                 onClick = { onOpen(SettingsSection.About) }
             )
-            PluginSettingsRows(pluginPages, PluginUiSlots.SETTINGS_HELP, pluginLanguageTag, onOpenPluginPage)
         }
     }
 
-}
-
-/** 插件槽位入口行：按槽位追加到对应分组末尾，副标题标明来源。 */
-@Composable
-private fun PluginSettingsRows(
-    pages: List<PluginPage>,
-    slot: String,
-    languageTag: String,
-    onOpen: (PluginPage) -> Unit
-) {
-    pages.filter { it.slot == slot }.forEach { page ->
-        SettingsDivider()
-        SettingsRow(
-            icon = pluginPageIcon(page.icon),
-            title = page.title.resolve(languageTag),
-            subtitle = stringResource(R.string.plugins_ext_entry_subtitle, page.pluginId),
-            onClick = { onOpen(page) }
-        )
-    }
 }
 
 /** 导入结果弹窗：导入中显示转圈；完成时展示成功数量与逐个跳过原因（整体失败则直接报错误）。 */

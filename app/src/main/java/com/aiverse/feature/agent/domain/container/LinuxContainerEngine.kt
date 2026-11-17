@@ -672,10 +672,9 @@ class LinuxContainerEngine @Inject constructor(
         programArgs: List<String>,
         projectPath: String?,
         extraEnv: Map<String, String> = emptyMap(),
-        profile: ContainerProfile = currentProfile,
-        workingDir: String? = null
+        profile: ContainerProfile = currentProfile
     ): Process {
-        val invocation = buildStdioInvocation(program, programArgs, projectPath, extraEnv, profile, workingDir)
+        val invocation = buildStdioInvocation(program, programArgs, projectPath, extraEnv, profile)
         val pb = buildProcessBuilder(invocation)
         // 刻意不 redirectErrorStream：stdout 留给 JSON-RPC，stderr 由调用方单独消费。
         // 同样刻意不重定向 stdin：这里的 stdin 就是 JSON-RPC 的请求通道，接 /dev/null 会让 server 立刻收到 EOF 退出。
@@ -691,10 +690,9 @@ class LinuxContainerEngine @Inject constructor(
         programArgs: List<String>,
         projectPath: String?,
         extraEnv: Map<String, String>,
-        profile: ContainerProfile,
-        workingDir: String? = null
+        profile: ContainerProfile
     ): ProotInvocation {
-        val argv = buildBaseProotArgv(projectPath, profile, workingDir)
+        val argv = buildBaseProotArgv(projectPath, profile)
         argv.add("/bin/sh")
         argv.add("-c")
         argv.add("exec \"\$0\" \"\$@\"")
@@ -720,11 +718,7 @@ class LinuxContainerEngine @Inject constructor(
      * 构造 PRoot 调用的公共前缀 argv：proot 二进制 + rootfs + 标准绑定 + 伪 root + 工作区绑定，
      * 但**不含**最终的客户机命令（由各调用方自行追加 `/bin/sh -c …` 或 `exec` 形式）。
      */
-    private fun buildBaseProotArgv(
-        projectPath: String?,
-        profile: ContainerProfile,
-        workingDir: String? = null
-    ): MutableList<String> {
+    private fun buildBaseProotArgv(projectPath: String?, profile: ContainerProfile): MutableList<String> {
         val rootfs = containerInstaller.rootfsDirFor(profile).absolutePath
         val prootBin = containerInstaller.prootBin.absolutePath
         if (!containerInstaller.prootBin.exists()) {
@@ -742,16 +736,12 @@ class LinuxContainerEngine @Inject constructor(
             "-0"              // 伪 root，apk 等需要
         )
 
-        // 把当前工作区目录绑定到容器内 ~/workspace（即 /root/workspace），使命令与文件工具作用于同一目录。
-        // workingDir 非空时（如插件进程）不需要工作区绑定，只把 cwd 指向自己的容器内目录。
+        // 把当前工作区目录绑定到容器内 ~/workspace（即 /root/workspace），使命令与文件工具作用于同一目录
         if (projectPath != null) {
             argv.add("-b")
             argv.add("$projectPath:/root/workspace")
             argv.add("-w")
-            argv.add(workingDir ?: "/root/workspace")
-        } else if (workingDir != null) {
-            argv.add("-w")
-            argv.add(workingDir)
+            argv.add("/root/workspace")
         }
 
         // 把 AI 配置目录绑定到容器内 /root/.aiverse（读写）：内含 skills/（load_skill 读到的指令常引用

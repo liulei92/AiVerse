@@ -26,7 +26,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aiverse.R
-import com.aiverse.core.theme.Spacing
 import com.aiverse.core.ui.AppTextField
 import com.aiverse.core.ui.SwipeToDeleteRow
 import com.aiverse.feature.search.domain.SearchServiceOptions
@@ -57,7 +56,7 @@ fun SearchProviderSection(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = Spacing.md, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         LazyColumn(
             state = listState,

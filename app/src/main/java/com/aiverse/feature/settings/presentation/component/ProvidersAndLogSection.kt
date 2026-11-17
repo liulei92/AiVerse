@@ -4,7 +4,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -43,7 +43,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.aiverse.core.theme.LocalSurfaceGlassStyle
 import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
@@ -65,8 +64,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 
 /**
  * 提供商二级页：列表 + 空态提示。新增/编辑由顶栏「+」与点击触发 [ProviderEditorScreen]，左滑删除。
- * 每行一张独立圆角卡片（圆角 / 阴影与 [SettingsGroup] 分组卡同源），
- * 长按内容区域可调整提供商顺序（持久化到 sortOrder）。
+ * 每行为一组圆角卡片，长按内容区域可调整提供商顺序（持久化到 sortOrder）。
  *
  * 顶栏右上角「多选」进入批量模式（[selection] 由 SettingsScreen 持有）：勾选后可批量启用 / 停用 / 删除。
  * 多选模式下拖拽排序停用、整行点击改为勾选（与模型页一致）。
@@ -100,12 +98,9 @@ internal fun ProvidersSection(
         onReorder(from.index, to.index)
     }
     val hapticFeedback = LocalHapticFeedback.current
-    // 非拖拽态阴影跟随 SettingsGroup 规则（浅色玻璃 0 / 否则 elevationSm），拖拽态升到 elevationMd。
-    val dark = isSystemInDarkTheme()
-    val restElevation = if (LocalSurfaceGlassStyle.current && !dark) 0.dp else t.elevationSm
     val allSelected = selection.selectedCount > 0 && selection.selectedCount == allKeys.size
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
         LazyColumn(
             state = lazyListState,
             modifier = Modifier
@@ -130,12 +125,12 @@ internal fun ProvidersSection(
                         label = "providerDragScale"
                     )
                     val dragElevation by animateDpAsState(
-                        targetValue = if (isDragging) t.elevationMd else restElevation,
+                        targetValue = if (isDragging) 8.dp else 0.dp,
                         animationSpec = tween(durationMillis = if (isDragging) 120 else 220),
                         label = "providerDragElevation"
                     )
                     Surface(
-                        shape = t.cardShape,
+                        shape = RoundedCornerShape(14.dp),
                         color = MaterialTheme.semanticColors.cardSurface,
                         shadowElevation = dragElevation,
                         modifier = Modifier

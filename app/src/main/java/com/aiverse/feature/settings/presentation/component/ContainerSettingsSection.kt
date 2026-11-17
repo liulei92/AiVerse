@@ -183,7 +183,7 @@ internal fun ContainerSection(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = Spacing.md)
+                .padding(horizontal = Spacing.lg)
                 .padding(bottom = Spacing.xl),
             contentPadding = PaddingValues(top = Spacing.sm),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm)

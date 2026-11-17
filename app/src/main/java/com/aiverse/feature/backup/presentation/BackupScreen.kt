@@ -595,16 +595,6 @@ private fun LocalBackupTab(
             )
             SettingsDivider()
             SettingsRow(
-                title = stringResource(R.string.backup_data_git_credentials),
-                trailing = {
-                    AppSwitch(
-                        checked = exportOptions.gitCredentials,
-                        onCheckedChange = { onUpdateOptions(exportOptions.copy(gitCredentials = it)) }
-                    )
-                }
-            )
-            SettingsDivider()
-            SettingsRow(
                 title = stringResource(R.string.backup_data_workspace),
                 trailing = {
                     AppSwitch(
@@ -1013,6 +1003,5 @@ private fun buildImportSummary(context: android.content.Context, stats: RestoreS
     if (stats.roles > 0) appendLine(context.getString(R.string.backup_stat_roles, stats.roles))
     if (stats.customPrompts > 0) appendLine(context.getString(R.string.backup_stat_custom_prompts, stats.customPrompts))
     if (stats.mediaFiles > 0) appendLine(context.getString(R.string.backup_stat_media_files, stats.mediaFiles))
-    if (stats.gitCredentials > 0) appendLine(context.getString(R.string.backup_stat_git_credentials, stats.gitCredentials))
     append(context.getString(R.string.backup_settings_covered))
 }

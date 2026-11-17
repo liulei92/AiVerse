@@ -11,7 +11,6 @@ import com.aiverse.feature.agent.domain.memory.MemoryScope
 import com.aiverse.feature.agent.domain.model.AgentContext
 import com.aiverse.feature.agent.domain.prompt.SystemPromptProvider
 import com.aiverse.feature.agent.domain.tool.AbstractContextualTool
-import com.aiverse.feature.settings.data.repository.MemoryToggleRepository
 import com.aiverse.feature.agent.domain.tool.ParameterType
 import com.aiverse.feature.agent.domain.tool.ToolCapability
 import com.aiverse.feature.agent.domain.tool.ToolParameter
@@ -28,7 +27,6 @@ import javax.inject.Inject
 
 class MemoryTool @Inject constructor(
     private val memoryRepository: MemoryRepository,
-    private val memoryToggleRepository: MemoryToggleRepository,
     @param:ApplicationContext private val appContext: Context,
     private val systemPromptProvider: SystemPromptProvider
 ) : AbstractContextualTool() {
@@ -119,13 +117,7 @@ class MemoryTool @Inject constructor(
     ): ToolResult {
         val action = args["action"]?.jsonPrimitive?.contentOrNull?.trim()
             ?: return ToolResult.Error("缺少必需参数：action", "MISSING_ACTION")
-
-        // 记忆开关关闭时禁用工具：返回明确的「记忆已关闭」错误，不执行任何读写，
-        // 也不触碰 ~/.aiverse/memory 与项目 .aiverse/memory 的既有记忆文件。
-        if (!memoryToggleRepository.isEnabled()) {
-            return ToolResult.Error(appContext.getString(R.string.memory_disabled_error), "MEMORY_DISABLED")
-        }
-
+        
         val memoryName = args["name"]?.jsonPrimitive?.contentOrNull?.trim()
         val scopeStr = args["scope"]?.jsonPrimitive?.contentOrNull?.trim()?.lowercase()
         val scope = if (scopeStr == "global") MemoryScope.GLOBAL else MemoryScope.PROJECT

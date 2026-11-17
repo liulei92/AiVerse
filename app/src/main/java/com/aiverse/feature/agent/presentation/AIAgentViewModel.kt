@@ -108,9 +108,6 @@ import com.aiverse.feature.agent.domain.tool.mode.PlanApprovalRequest
 import com.aiverse.feature.agent.domain.tool.question.AskUserQuestionManager
 import com.aiverse.feature.agent.domain.tool.question.PendingUserQuestion
 import com.aiverse.feature.agent.domain.tool.question.UserQuestionAnswer
-import com.aiverse.feature.agent.domain.session.AgentChatRequest
-import com.aiverse.feature.agent.domain.session.AgentChatRequestBus
-import com.aiverse.feature.agent.domain.session.AgentRunStateStore
 import com.aiverse.feature.agent.domain.session.SessionUseCase
 import com.aiverse.feature.agent.domain.session.MessagePersistenceUseCase
 import kotlinx.coroutines.flow.Flow
@@ -186,8 +183,6 @@ class AIAgentViewModel @Inject constructor(
     private val containerEngine: LinuxContainerEngine,
     private val sessionUseCase: SessionUseCase,
     private val messagePersistenceUseCase: MessagePersistenceUseCase,
-    private val agentChatRequestBus: AgentChatRequestBus,
-    private val agentRunStateStore: AgentRunStateStore,
     private val planApprovalManager: PlanApprovalManager,
     private val terminalSessionManager: TerminalSessionManager,
     private val terminalSessionProvider: TerminalSessionProvider,
@@ -223,9 +218,6 @@ class AIAgentViewModel @Inject constructor(
 ) : ViewModel(), SlashCommandContext {
 
     private val sessionJobs = mutableMapOf<String, Job>()
-
-    /** 插件会话请求的消费者标识；重复 attach/detach 保持幂等。 */
-    private val chatRequestConsumerId = UUID.randomUUID().toString()
 
     /**
      * goal 自主循环的「连续空回合」计数：自动续跑回合若既无工具调用也无可见正文，
@@ -1904,26 +1896,6 @@ class AIAgentViewModel @Inject constructor(
     }
 
     init {
-        // 插件通过宿主 API 创建会话后，发送消息/停止/切换仍交给聊天页执行，
-        // 复用这里的授权、运行状态、通知与队列逻辑。
-        agentChatRequestBus.attach(chatRequestConsumerId)
-        viewModelScope.launch {
-            try {
-                while (true) {
-                    val request = agentChatRequestBus.receive()
-                    try {
-                        handleAgentChatRequest(request)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        FileLogger.w(TAG, "处理插件会话请求失败: $request", e)
-                    }
-                }
-            } finally {
-                agentChatRequestBus.detach(chatRequestConsumerId)
-            }
-        }
-
         // 冷启动收尾：上次进程被杀时残留的「执行中」工具回填为「已中断」。在后台执行，不阻塞首屏与会话展示。
         viewModelScope.launch(Dispatchers.IO) {
             sessionUseCase.initColdStartCleanup()
@@ -2581,40 +2553,6 @@ class AIAgentViewModel @Inject constructor(
         }
     }
 
-    /** 消费插件会话请求：发送走与手动输入相同的入队/执行路径，停止与切换复用现有动作。 */
-    private suspend fun handleAgentChatRequest(request: AgentChatRequest) {
-        when (request) {
-            is AgentChatRequest.Send -> {
-                if (sessionUseCase.getSessionById(request.sessionId) == null) return
-                enqueueAgentRequest(
-                    request = request.text,
-                    projectRoot = request.workspacePath,
-                    targetSessionId = request.sessionId
-                )
-            }
-            is AgentChatRequest.Stop -> stopAgentSession(request.sessionId)
-            is AgentChatRequest.Select -> selectSession(request.sessionId)
-            is AgentChatRequest.SetDraft -> {
-                val target = request.sessionId ?: _currentSessionId.value ?: ensureSession()
-                if (target.isBlank() || sessionUseCase.getSessionById(target) == null) return
-                _currentSessionId.value = target
-                val next = if (request.append) {
-                    val existing = _inputDrafts.value[target].orEmpty()
-                    if (existing.isBlank()) request.text else existing.trimEnd() + "\n\n" + request.text
-                } else {
-                    request.text
-                }
-                updateInputDraft(next)
-            }
-            is AgentChatRequest.Delete -> deleteSession(request.sessionId)
-        }
-    }
-
-    override fun onCleared() {
-        agentChatRequestBus.detach(chatRequestConsumerId)
-        super.onCleared()
-    }
-
     fun executeAgentRequestStream(
         request: String,
         modelRequest: String = request,
@@ -2683,10 +2621,7 @@ class AIAgentViewModel @Inject constructor(
         // 渲染在触发它的用户消息下方；仅当本轮用户消息已落库时才设置（内部续跑轮不落库，
         // 保持 null 走会话末尾兜底）。声明在 try 外：catch 分支也需要读取。
         var lastUserMsgId: String? = null
-        var runStatus = "success"
-        var runError: String? = null
         try {
-            agentRunStateStore.started(sessionId)
             var failed = false
             // 必须在插入本次用户消息之前读取历史：workflow 会自己 add(userRequest)，避免重复。
             val historyStartedNs = System.nanoTime()
@@ -3074,13 +3009,10 @@ class AIAgentViewModel @Inject constructor(
                     runCatching { sessionUseCase.updateGoalStatus(sessionId, GoalStatus.PAUSED) }
                 }
             }
-            runStatus = "cancelled"
             throw e
         } catch (e: Exception) {
              FileLogger.e(TAG, "executeAgentRequestStream 失败: request=$request", e)
              val errorText = e.toUserMessage(context)
-             runStatus = "error"
-             runError = errorText
              setAgentState(sessionId, AgentUIState.Error(errorText))
              recordTurnError(sessionId, errorText, lastAssistantMsgId, lastUserMsgId)
              _completedSessions.value = _completedSessions.value - sessionId
@@ -3123,17 +3055,6 @@ class AIAgentViewModel @Inject constructor(
                 _reasoningTimings.value = _reasoningTimings.value +
                     (sessionId to (timing.first to System.currentTimeMillis()))
             }
-
-            // 先发布本轮终态，再 flush/处理队列；否则接替的新 job 会先 started，
-            // 这里再 finished 会把新轮次误标成已结束。
-            val finishState = _agentStates.value[sessionId]
-            val finishStatus = when {
-                runStatus != "success" -> runStatus
-                finishState is AgentUIState.Error -> "error"
-                else -> "success"
-            }
-            val finishError = runError ?: (finishState as? AgentUIState.Error)?.message
-            agentRunStateStore.finished(sessionId, finishStatus, finishError)
 
             // 本轮未能搭车送达的后台通知：本轮结束且 job 已移除后，合并成一条发送
             // 补送在落库前失败或被取消时保留队列，避免立即反复重启同一失败请求。

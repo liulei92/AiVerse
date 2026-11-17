@@ -4,7 +4,3 @@
 
 ## 官方文档
 用户咨询 AiVerse 功能、设置、日志等问题时，查阅 `~/.aiverse/docs/`：`guide/` 是功能与设置说明（`guide/overview.md` 为索引），`advanced/` 是容器内编译 Android、自定义镜像与面板、常见问题等进阶内容。
-
-编写 AiVerse 插件时，先用 `webfetch` 抓取官方插件开发文档 `https://www.aivapp.cn/advanced/plugin-dev` 了解清单字段与 contributes 规范，再动手写，不要凭记忆编造字段。
-
-仅当用户明确提到「AiVerse」「本 APP」「这款软件」等指代本应用并询问其用法、功能、设置时，才用 `webfetch` 查阅官网 `https://www.aivapp.cn`；其它话题不要主动抓取本官网，避免对站点造成无谓请求。
