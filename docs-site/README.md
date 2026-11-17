@@ -79,7 +79,7 @@
 
 ### 4.2 前端（`/store/`）
 
-- 登录页：用户名 + 密码 + **6 位 TOTP 动态码** + **滑动人机验证**（四重要素，表单提交，Session Cookie 鉴权）；
+- 登录页：用户名 + 密码 + **6 位 TOTP 动态码** + **算术人机验证**（四重要素，表单提交，Session Cookie 鉴权）；
 - 流程说明：**上传插件 → 人工审核 → 发布上架**；
 - 审核列表：待审核 / 已处理两个 Tab，展示插件名、版本、作者、大小、时间；
 - 操作：查看清单、下载包、通过、拒绝（需填原因）；
@@ -91,9 +91,9 @@
 | 接口 | 方法 | 说明 | 鉴权 |
 |------|------|------|------|
 | `/api/upload` | POST | 上传插件包（multipart，字段 `file`，上限 10MB） | IP 限流 |
-| `/api/captcha/challenge` | GET | 下发滑动验证挑战 `{id,bg,totp_required}` | 无 |
-| `/api/captcha/verify` | POST | 校验滑动落点，签发一次性 token | 无 |
-| `/api/login` | POST | 管理员登录（需 `captcha_token` + `totp`），返回 Session Cookie | 滑动验证 + TOTP + IP/账号双维度限流 |
+| `/api/captcha/challenge` | GET | 下发算术题挑战 `{id,question,totp_required}` | 无 |
+| `/api/captcha/verify` | POST | 校验算术题答案，签发一次性 token | 无 |
+| `/api/login` | POST | 管理员登录（需 `captcha_token` + `totp`），返回 Session Cookie | 算术验证 + TOTP + IP/账号双维度限流 |
 | `/api/queue` | GET | 审核队列（待审核 + 已处理） | 需要 |
 | `/api/approve` | POST | 通过并发布到 GitHub 仓库 | 需要 |
 | `/api/reject` | POST | 拒绝（需填原因） | 需要 |
@@ -123,11 +123,11 @@
 
 审核后台登录在三重验证之上，全部本地实现、不依赖第三方/Cloudflare：
 
-1. **滑动人机验证**：登录前先完成拼图滑块（`/api/captcha/challenge` → `/api/captcha/verify`），通过后获得 60s 一次性 token，防脚本撞库；
+1. **算术人机验证**：登录前先完成算术题（`/api/captcha/challenge` → `/api/captcha/verify`），通过后获得 60s 一次性 token，防脚本撞库；
 2. **TOTP 动态码**：配置 `STORE_ADMIN_TOTP_SECRET` 后登录必须附 6 位动态码（RFC 6238，步长 60s，±1 时间窗容错；未配密钥时自动降级跳过）。用认证器 App 扫后台二维码绑定；
 3. **失败锁定（IP + 账号 双维度）**：1 分钟内登录失败 3 次，对来源 IP（`ipban.json`）和尝试的账号名（`accountban.json`）各锁 30 分钟；**输对密码+TOTP 同时清零两维度并解锁**。nginx 以覆盖式 `$remote_addr` 传真实 IP，后端凭 `STORE_TRUST_PROXY=1` 采信，防 XFF 伪造绕过。
 
-> 滑块坐标、锁定响应（429 + `locked`/`locked_until`）、session 均绑定安全属性（HttpOnly/Secure/SameSite=Strict）。
+> 算术答案、锁定响应（429 + `locked`/`locked_until`）、session 均绑定安全属性（HttpOnly/Secure/SameSite=Strict）。
 
 ---
 
