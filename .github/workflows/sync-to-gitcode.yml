@@ -47,7 +47,7 @@ jobs:
       - name: 同步 Release 公告与附件到 GitCode
         env:
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: yhdmgf/AiVerse
           GITCODE_OWNER: qldwi
           GITCODE_REPO: aiverse
