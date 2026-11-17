@@ -2747,10 +2747,11 @@ class AIAgentViewModel @Inject constructor(
             }
 
             // 角色身份：会话绑定角色（roleId 为 null 视为默认角色）的 identityPrompt 注入提示词最前。
-            // 默认角色身份来自 Room（RoleSeeder 迁入），不硬编码；角色被禁用或查不到时不注入。
+            // 默认角色身份来自 Room（RoleSeeder 迁入），不硬编码；默认角色始终注入（不提供启停），
+            // 自定义角色被禁用或查不到时不注入。
             val roleIdentity = withContext(Dispatchers.IO) {
                 val role = roleDao.getById(sessionEntity?.roleId ?: Role.DEFAULT_ROLE_ID)?.toDomain()
-                role?.takeIf { it.enabled }?.identityPrompt?.trim()?.takeIf { it.isNotEmpty() }
+                role?.takeIf { it.isBuiltin || it.enabled }?.identityPrompt?.trim()?.takeIf { it.isNotEmpty() }
             }
 
             val agentContext = AgentContext(

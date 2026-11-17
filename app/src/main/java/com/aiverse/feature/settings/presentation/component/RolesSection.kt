@@ -200,7 +200,7 @@ private fun RoleList(
     }
 }
 
-/** 单条角色行：头像 + 名称·描述 + 内置徽章 + 启停开关；左滑删除（内置不可删），点击进详情。 */
+/** 单条角色行：头像 + 名称·描述 + 内置徽章 + 启停开关（内置角色不显示开关）；左滑删除（内置不可删），点击进详情。 */
 @Composable
 private fun RoleRow(
     role: Role,
@@ -240,7 +240,7 @@ private fun RoleRow(
                     Text(
                         text = role.name,
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                        color = if (role.enabled) {
+                        color = if (role.isBuiltin || role.enabled) {
                             MaterialTheme.colorScheme.onSurface
                         } else {
                             MaterialTheme.semanticColors.subtleText
@@ -260,7 +260,7 @@ private fun RoleRow(
                     Text(
                         text = role.description,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (role.enabled) {
+                        color = if (role.isBuiltin || role.enabled) {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         } else {
                             MaterialTheme.semanticColors.subtleText
@@ -279,7 +279,7 @@ private fun RoleRow(
                     tint = MaterialTheme.semanticColors.subtleText,
                     modifier = Modifier.size(t.scale(18))
                 )
-            } else {
+            } else if (!role.isBuiltin) {
                 AppSwitch(
                     checked = role.enabled,
                     onCheckedChange = onToggleEnabled,

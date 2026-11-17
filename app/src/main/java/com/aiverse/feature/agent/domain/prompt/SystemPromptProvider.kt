@@ -343,10 +343,16 @@ class SystemPromptProvider @Inject constructor(
      * [PromptFragmentResolver.DISABLE_BUILTIN_FILE] 生效时：只输出 `prompts.custom/` 顶层的数字片段，
      * 不注入任何内置来源；动态内容仅通过 `{{AIVERSE_*}}` 变量按需取回。
      *
-     * 与旧「禁用内置 = 全用自定义」一致：此模式下连默认角色的内置身份也不注入（角色身份属内置来源）。
+     * 角色身份与内置片段解耦：此模式下角色身份仍拼在自定义片段最前（与 [build] 行为一致）。
      */
     private fun buildCustomOnly(ctx: AgentContext): String {
-        val content = promptFragmentCatalog.renderCustomOnly(ctx.projectRoot)
+        val content = buildString {
+            ctx.roleIdentity?.trim()?.takeIf { it.isNotEmpty() }?.let { identity ->
+                append(identity)
+                append("\n\n")
+            }
+            append(promptFragmentCatalog.renderCustomOnly(ctx.projectRoot))
+        }
         if (content.isEmpty()) {
             FileLogger.w(
                 TAG,

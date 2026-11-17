@@ -77,13 +77,15 @@ internal fun RoleDetailSection(role: Role) {
                 label = stringResource(R.string.roles_field_tags),
                 value = role.tags.joinToString(", ").ifBlank { stringResource(R.string.roles_no_tags) }
             )
-            SettingsDivider()
-            InfoRow(
-                label = stringResource(R.string.roles_field_status),
-                value = stringResource(
-                    if (role.enabled) R.string.common_enabled else R.string.common_disabled
+            if (!role.isBuiltin) {
+                SettingsDivider()
+                InfoRow(
+                    label = stringResource(R.string.roles_field_status),
+                    value = stringResource(
+                        if (role.enabled) R.string.common_enabled else R.string.common_disabled
+                    )
                 )
-            )
+            }
             SettingsDivider()
             InfoRow(
                 label = stringResource(R.string.roles_field_type),
