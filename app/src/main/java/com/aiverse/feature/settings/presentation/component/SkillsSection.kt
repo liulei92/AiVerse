@@ -409,7 +409,7 @@ private fun SkillDefaultScopeSetting(
 
     SettingsGroup(
         modifier = Modifier
-            .padding(horizontal = Spacing.lg)
+            .padding(horizontal = Spacing.md)
             .padding(top = Spacing.sm)
     ) {
         SettingsRow(

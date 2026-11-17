@@ -60,6 +60,7 @@ internal fun TtsSettingsSection(viewModel: TtsSettingsViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .padding(horizontal = Spacing.md)
             .padding(bottom = Spacing.xl)
     ) {
     SettingsGroupHeader(stringResource(R.string.settings_tts))
