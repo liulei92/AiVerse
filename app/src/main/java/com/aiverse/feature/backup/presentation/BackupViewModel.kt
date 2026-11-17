@@ -107,6 +107,7 @@ class BackupViewModel @Inject constructor(
             .putBoolean(KEY_CUSTOM_PROMPTS, options.customPrompts)
             .putBoolean(KEY_ROLES, options.roles)
             .putBoolean(KEY_MEDIA_FILES, options.mediaFiles)
+            .putBoolean(KEY_GIT_CREDENTIALS, options.gitCredentials)
             .apply()
     }
 
@@ -120,7 +121,8 @@ class BackupViewModel @Inject constructor(
         workspaceFiles = prefs.getBoolean(KEY_WORKSPACE_FILES, false),
         customPrompts = prefs.getBoolean(KEY_CUSTOM_PROMPTS, true),
         roles = prefs.getBoolean(KEY_ROLES, true),
-        mediaFiles = prefs.getBoolean(KEY_MEDIA_FILES, true)
+        mediaFiles = prefs.getBoolean(KEY_MEDIA_FILES, true),
+        gitCredentials = prefs.getBoolean(KEY_GIT_CREDENTIALS, false)
     )
 
     /** 流式导出到 [output]（调用方打开，本方法负责关闭）。 */
@@ -451,5 +453,6 @@ class BackupViewModel @Inject constructor(
         private const val KEY_CUSTOM_PROMPTS = "custom_prompts"
         private const val KEY_ROLES = "roles"
         private const val KEY_MEDIA_FILES = "media_files"
+        private const val KEY_GIT_CREDENTIALS = "git_credentials"
     }
 }

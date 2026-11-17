@@ -83,7 +83,7 @@ internal fun GeneralSettingsSection(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = Spacing.lg)
+            .padding(horizontal = Spacing.md)
             .padding(bottom = Spacing.xl),
         verticalArrangement = Arrangement.spacedBy(Spacing.sm)
     ) {

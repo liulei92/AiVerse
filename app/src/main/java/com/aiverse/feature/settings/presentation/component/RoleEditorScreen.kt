@@ -220,6 +220,14 @@ internal fun RoleEditorScreen(
                 }
             }
 
+            if (avatarKind != AvatarKind.NONE) {
+                RoleAvatarPreviewCard(
+                    avatarKind = avatarKind,
+                    avatarValue = avatarValue,
+                    name = name
+                )
+            }
+
             SettingsGroupHeader(text = stringResource(R.string.roles_field_identity))
             SettingsGroup {
                 Row(
@@ -306,25 +314,7 @@ internal fun RoleEditorScreen(
                             path = avatarValue,
                             onPathChange = { avatarValue = it },
                             onSaveImage = { uri, onResult -> viewModel.saveAvatarImage(uri, onResult) },
-                            saveErrorRes = R.string.common_image_picker_save_failed,
-                            preview = { value, size ->
-                                RoleAvatar(
-                                    role = Role(
-                                        id = editingId,
-                                        name = name,
-                                        avatarKind = AvatarKind.IMAGE,
-                                        avatarValue = value
-                                    ),
-                                    size = size
-                                )
-                            }
-                        )
-                    }
-                    if (avatarKind != AvatarKind.NONE) {
-                        RoleAvatarPreviewCard(
-                            avatarKind = avatarKind,
-                            avatarValue = avatarValue,
-                            name = name
+                            saveErrorRes = R.string.common_image_picker_save_failed
                         )
                     }
                 }

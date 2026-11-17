@@ -46,7 +46,9 @@ import com.aiverse.feature.backup.domain.SkillBackupMeta
 import com.aiverse.feature.backup.domain.TodoItemDto
 import com.aiverse.feature.backup.domain.WorkspaceBackupMeta
 import com.aiverse.feature.backup.domain.toMetadata
-import com.aiverse.feature.plugins.data.PluginRepository
+import com.aiverse.feature.credentials.data.repository.FileCredentialRepository
+import com.aiverse.feature.plugins.domain.PluginManager
+import java.util.Locale
 import com.aiverse.feature.settings.data.local.dao.AIProviderDao
 import com.aiverse.feature.settings.data.local.entity.AIProviderEntity
 import com.aiverse.feature.settings.data.repository.AppearanceSettingsRepository
@@ -125,10 +127,11 @@ class BackupManagerImpl @Inject constructor(
     private val optimizeInputModelSettingsRepository: OptimizeInputModelSettingsRepository,
     private val syncSettingsRepository: SyncSettingsRepository,
     private val workspaceRepository: WorkspaceRepository,
+    private val credentialRepository: FileCredentialRepository,
     private val memoryRepository: MemoryRepository,
     private val favoriteRepository: FavoriteRepository,
     private val skillRepository: SkillRepository,
-    private val pluginRepository: PluginRepository,
+    private val pluginManager: PluginManager,
     private val welcomeEntriesRepository: WelcomeEntriesRepository,
     private val roleDao: RoleDao,
     private val defaultModelSettingsRepository: DefaultModelSettingsRepository,
@@ -357,6 +360,12 @@ class BackupManagerImpl @Inject constructor(
                     if (options.mediaFiles) {
                         writeMediaEntries(tar)
                     }
+                    if (options.gitCredentials) {
+                        // git 凭据以 git-credential-store 原始格式入包（不走 KeystoreCipher），
+                        // metadata.json 仍为首个条目，新条目只追加在其后。
+                        val raw = credentialRepository.readRawCredentials()
+                        if (raw.isNotBlank()) writeTarEntry(tar, FILE_GIT_CREDENTIALS, raw.toByteArray(Charsets.UTF_8))
+                    }
                     if (options.chatHistory) {
                         writeJsonlFileEntry(tar, FILE_SESSIONS) { writer ->
                             var lastTs = 0L
@@ -554,16 +563,17 @@ class BackupManagerImpl @Inject constructor(
 
     /** 第一遍：统计每个已安装插件的文件数（写 metadata 用）。 */
     private fun collectPluginMetas(): List<PluginBackupMeta> =
-        pluginRepository.listInstalled().mapNotNull { plugin ->
-            val count = pluginRepository.collectPluginFiles(plugin.manifest.id).size
-            if (count > 0) PluginBackupMeta(plugin.manifest.id, plugin.manifest.name, count) else null
+        pluginManager.installedPlugins().mapNotNull { plugin ->
+            val manifest = plugin.manifest ?: return@mapNotNull null
+            val count = pluginManager.collectPluginFiles(plugin.id).size
+            if (count > 0) PluginBackupMeta(plugin.id, manifest.name.resolve(Locale.getDefault().toLanguageTag()), count) else null
         }
 
     /** 第二遍：把各插件目录文件写入 tar（`plugins/<id>/<相对路径>`，zip 内 plugin.json 在插件根）。 */
     private fun writePluginEntries(tar: TarArchiveOutputStream) {
-        pluginRepository.listInstalled().forEach { plugin ->
-            pluginRepository.collectPluginFiles(plugin.manifest.id).forEach { (rel, bytes) ->
-                writeTarEntry(tar, "${PLUGIN_PREFIX}${plugin.manifest.id}/$rel", bytes)
+        pluginManager.installedPlugins().forEach { plugin ->
+            pluginManager.collectPluginFiles(plugin.id).forEach { (rel, bytes) ->
+                writeTarEntry(tar, "${PLUGIN_PREFIX}${plugin.id}/$rel", bytes)
             }
         }
     }
@@ -726,6 +736,11 @@ class BackupManagerImpl @Inject constructor(
                     ensureDefaultRole()
                     FileLogger.i(TAG, "恢复角色 $count 条")
                     stats += RestoreStats(roles = count)
+                }
+                FILE_GIT_CREDENTIALS -> {
+                    val count = restoreGitCredentialsEntry(tar)
+                    FileLogger.i(TAG, "恢复 git 凭据 $count 条")
+                    stats += RestoreStats(gitCredentials = count)
                 }
                 else -> {
                     if (entry.name.startsWith(WORKSPACE_PREFIX)) {
@@ -977,7 +992,7 @@ class BackupManagerImpl @Inject constructor(
         if (id.isBlank() || relParts.any { it.isBlank() || it == "." || it == ".." }) return null
         val bytes = tar.readBytes()
         if (bytes.isEmpty()) return null
-        val target = File(pluginRepository.pluginDir(id), relParts.joinToString("/"))
+        val target = File(pluginManager.pluginDir(id), relParts.joinToString("/"))
         target.parentFile?.mkdirs()
         target.writeBytes(bytes)
         return id
@@ -1019,6 +1034,16 @@ class BackupManagerImpl @Inject constructor(
         if (bytes.isEmpty()) return false
         target.writeBytes(bytes)
         return true
+    }
+
+    /** 还原单个 git 凭据条目：`credentials/git-credentials`（git-credential-store 原始格式，每行一条）。
+     *  写入 filesDir/aiverse/git-credentials（内部做 base64+反转 混淆后原子落盘）；返回还原的凭据条数。 */
+    private suspend fun restoreGitCredentialsEntry(tar: TarArchiveInputStream): Int {
+        val bytes = tar.readBytes()
+        if (bytes.isEmpty()) return 0
+        val raw = String(bytes, Charsets.UTF_8)
+        credentialRepository.writeRawCredentials(raw)
+        return raw.lines().count { it.isNotBlank() }
     }
 
     /** 导入角色后保证内置默认角色存在（缺失则补建空身份默认角色，RoleSeeder 后续会在需要时填充）。 */
@@ -1335,6 +1360,7 @@ class BackupManagerImpl @Inject constructor(
         const val PLUGIN_PREFIX = "plugins/"
         const val CUSTOM_PROMPT_PREFIX = "customPrompts/"
         const val MEDIA_PREFIX = "media/"
+        const val FILE_GIT_CREDENTIALS = "credentials/git-credentials"
         const val WELCOME_ICON_DIR = "welcome_icons"
         const val BACKGROUND_DIR = "backgrounds"
     }
