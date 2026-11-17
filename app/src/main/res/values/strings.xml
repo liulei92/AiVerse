@@ -465,6 +465,10 @@
     <string name="plugins_update_available">可更新</string>
     <string name="plugins_update_version_transition">v%1$s → v%2$s</string>
     <string name="plugins_installing">安装中…</string>
+    <string name="plugins_update_all">全部更新</string>
+    <string name="plugins_update_all_count">全部更新（%1$d）</string>
+    <string name="plugins_update_all_running">更新中 %1$d/%2$d</string>
+    <string name="plugins_update_all_failed">更新完成，%1$d 个失败</string>
     <string name="plugins_back">返回</string>
     <string name="plugins_repo_retry">重试</string>
     <string name="plugins_repo_empty">插件仓库暂无插件</string>
@@ -935,6 +939,9 @@
     <string name="chat_attachment_uploaded_partial">已上传 %1$s 个附件，部分附件未加入</string>
     <string name="chat_image_too_large">图片超过 %1$s，请压缩后重试</string>
     <string name="chat_attachment_uploading">正在上传 %1$d 个文件…</string>
+    <string name="plugin_update_banner_text">检测到 %1$d 个插件可更新</string>
+    <string name="plugin_update_banner_action">去安装</string>
+    <string name="plugin_update_banner_dismiss">关闭</string>
     <string name="chat_uploaded_to">已上传到 %1$s</string>
     <string name="chat_select_workspace_first">请先选择工作区</string>
     <string name="chat_read_file_failed">无法读取所选文件</string>

@@ -465,6 +465,10 @@
     <string name="plugins_update_available">Update</string>
     <string name="plugins_update_version_transition">v%1$s → v%2$s</string>
     <string name="plugins_installing">Installing…</string>
+    <string name="plugins_update_all">Update all</string>
+    <string name="plugins_update_all_count">Update all (%1$d)</string>
+    <string name="plugins_update_all_running">Updating %1$d/%2$d</string>
+    <string name="plugins_update_all_failed">Update finished, %1$d failed</string>
     <string name="plugins_back">Back</string>
     <string name="plugins_repo_retry">Retry</string>
     <string name="plugins_repo_empty">No plugins in repository</string>
@@ -935,6 +939,9 @@
     <string name="chat_attachment_uploaded_partial">%1$s attachments uploaded, some were not added</string>
     <string name="chat_image_too_large">Image exceeds %1$s, please compress and retry</string>
     <string name="chat_attachment_uploading">Uploading %1$d files…</string>
+    <string name="plugin_update_banner_text">%1$d plugin(s) can be updated</string>
+    <string name="plugin_update_banner_action">Install</string>
+    <string name="plugin_update_banner_dismiss">Dismiss</string>
     <string name="chat_uploaded_to">Uploaded to %1$s</string>
     <string name="chat_select_workspace_first">Please select a workspace first</string>
     <string name="chat_read_file_failed">Cannot read the selected file</string>

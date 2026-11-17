@@ -14,10 +14,11 @@ import com.aiverse.feature.plugins.data.index.PluginOfficialRepositories
 import com.aiverse.feature.plugins.data.index.PluginIndexSourceRepository
 import com.aiverse.feature.plugins.domain.PluginError
 import com.aiverse.feature.plugins.domain.PluginInstallOrigin
+import com.aiverse.feature.plugins.domain.PluginInstallResult
 import com.aiverse.feature.plugins.domain.PluginManager
 import com.aiverse.feature.plugins.domain.PluginPreview
 import com.aiverse.feature.plugins.domain.PluginPreviewResult
-import com.aiverse.feature.plugins.domain.SemVer
+import com.aiverse.feature.plugins.domain.PluginUpdateLogic
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -87,7 +88,13 @@ data class PluginStoreUiState(
     val updatesByPluginId: Map<String, PluginStoreItem> = emptyMap(),
     val error: PluginStoreError? = null,
     val installingPluginId: String? = null,
-    val preview: PluginStorePreview? = null
+    val preview: PluginStorePreview? = null,
+    /** 一键更新全部：本轮待更新总数；> 0 表示批量更新进行中，供界面显示「更新中 x/N」。 */
+    val updatingTotal: Int = 0,
+    /** 一键更新全部：剩余未处理数（含正在处理的那一个）。 */
+    val updatingRemaining: Int = 0,
+    /** 一键更新全部：本轮最终失败的插件数，批量结束后由界面提示。 */
+    val updateAllFailures: Int = 0
 )
 
 /**
@@ -309,12 +316,111 @@ class PluginStoreViewModel @Inject constructor(
         _state.update { it.copy(preview = null) }
     }
 
-    private fun isNewer(candidate: String?, installed: String?): Boolean {
-        if (candidate == null || installed == null) return false
-        val left = SemVer.parse(candidate) ?: return false
-        val right = SemVer.parse(installed) ?: return false
-        return left > right
+    /** 一键更新全部是否正在进行，供界面禁用按钮防重复点击。 */
+    val isUpdatingAll: Boolean
+        get() = _state.value.updatingTotal > 0
+
+    /**
+     * 一键更新全部：串行逐个把 [updatesByPluginId] 里的可升级插件下到最新版。
+     *
+     * 复用单插件的下载→预览→校验链路（[resolveAndUpdate]），但预览通过后直接提交安装，
+     * 不再弹出确认层。严格串行：等前一个完成（无论成败）再处理下一个，不并发装包。
+     * 单个失败只记数不阻断后续；全部结束后 [updateAllFailures] 汇报失败数，
+     * 已安装列表变化会由 [manager.plugins] 收集重算 updateAvailable，从而刷新可升级集合。
+     */
+    fun updateAll() {
+        val targets = _state.value.updatesByPluginId.values.toList()
+        if (targets.isEmpty()) return
+        // 已在进行中（或正在单个安装）时忽略，防重复点击。
+        if (_state.value.updatingTotal > 0 || _state.value.installingPluginId != null) return
+        _state.update {
+            it.copy(
+                updatingTotal = targets.size,
+                updatingRemaining = targets.size,
+                updateAllFailures = 0,
+                error = null
+            )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            var failures = 0
+            for ((index, item) in targets.withIndex()) {
+                val ok = resolveAndUpdate(item)
+                if (!ok) failures++
+                _state.update { current ->
+                    current.copy(updatingRemaining = (targets.size - index - 1).coerceAtLeast(0))
+                }
+            }
+            _state.update {
+                it.copy(
+                    updatingTotal = 0,
+                    updatingRemaining = 0,
+                    updateAllFailures = failures
+                )
+            }
+        }
     }
+
+    /** 清除一键更新的失败计数提示（界面展示后调用）。 */
+    fun consumeUpdateAllFailures() {
+        _state.update { it.copy(updateAllFailures = 0) }
+    }
+
+    /**
+     * 单个可升级插件的静默更新：下载→预览→校验→提交安装。
+     * 返回是否更新成功；预览校验失败或下载异常均视为失败，不抛出。
+     */
+    private suspend fun resolveAndUpdate(item: PluginStoreItem): Boolean {
+        if (!item.compatible) return false
+        try {
+            val asset = client.resolveRelease(item.plugin)
+            val packageFile = client.download(asset)
+            val result = packageFile.file.inputStream().use { manager.preview(it) }
+            val preview = when (result) {
+                is PluginPreviewResult.Ready -> result.preview
+                is PluginPreviewResult.Failed -> {
+                    FileLogger.w(TAG, "批量更新预览失败: ${item.plugin.id}")
+                    return false
+                }
+            }
+            val manifestVersion = preview.manifest.version.toString()
+            if (preview.manifest.id != item.plugin.id ||
+                preview.manifest.publisher != item.plugin.author ||
+                preview.manifest.repository != item.plugin.repository ||
+                asset.version != manifestVersion
+            ) {
+                manager.discard(preview.token)
+                FileLogger.w(TAG, "批量更新校验不通过: ${item.plugin.id}")
+                return false
+            }
+            val official = item.official
+            val origin = PluginInstallOrigin(
+                kind = PluginInstallOrigin.KIND_INDEX,
+                sourceId = item.source.id,
+                sourceName = item.source.name,
+                indexUrl = item.source.indexUrl,
+                repository = item.plugin.repository,
+                official = official
+            )
+            return when (val installed = manager.install(preview.token, origin)) {
+                is PluginInstallResult.Installed -> true
+                is PluginInstallResult.Failed -> {
+                    FileLogger.w(TAG, "批量更新安装失败: ${item.plugin.id} ${installed.error.code}")
+                    false
+                }
+            }
+        } catch (e: NoMatchingReleaseException) {
+            FileLogger.w(TAG, "批量更新无可用版本: ${item.plugin.id}", e)
+            return false
+        } catch (e: Exception) {
+            FileLogger.w(TAG, "批量更新下载失败: ${item.plugin.id}", e)
+            return false
+        }
+    }
+
+    // 版本比较规则下沉到 domain 的 PluginUpdateLogic，商店与启动静默检查共用同一实现；
+    // 此处保留同名 thin 委托，最小改动、行为不变。
+    private fun isNewer(candidate: String?, installed: String?): Boolean =
+        PluginUpdateLogic.isNewer(candidate, installed)
 
     /** 每个插件取一个可用的最高版本，同一插件出现在多个来源时只提示一次。 */
     private fun updatesOf(items: List<PluginStoreItem>): Map<String, PluginStoreItem> =
@@ -323,7 +429,7 @@ class PluginStoreViewModel @Inject constructor(
             .groupBy { it.plugin.id }
             .mapValues { (_, candidates) ->
                 candidates.maxByOrNull { item ->
-                    item.plugin.version?.let(SemVer::parse) ?: SemVer(0, 0, 0)
+                    PluginUpdateLogic.versionOrZero(item.plugin.version)
                 }!!
             }
 

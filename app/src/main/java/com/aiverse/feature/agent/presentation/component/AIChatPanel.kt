@@ -48,7 +48,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -146,6 +148,7 @@ import com.aiverse.feature.workspace.presentation.WorkspaceViewModel
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.ArrowDown
 import compose.icons.feathericons.Code
+import compose.icons.feathericons.Download
 import compose.icons.feathericons.MessageCircle
 import compose.icons.feathericons.Search
 import compose.icons.feathericons.X
@@ -752,6 +755,12 @@ fun AIChatPanel(
     onOpenInEditor: (String) -> Unit = {},
     /** 「管理角色」入口：跳设置页角色管理。 */
     onOpenRoles: () -> Unit = {},
+    /** 待升级插件数量：>0 时在底部悬浮层展示「可更新」提示条。 */
+    pluginUpdateCount: Int = 0,
+    /** 提示条「去安装」→ 插件管理页。 */
+    onOpenPlugins: () -> Unit = {},
+    /** 提示条关闭：本次启动不再提示。 */
+    onDismissPluginUpdate: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val agentState by viewModel.agentState.collectAsStateWithLifecycle()
@@ -2265,6 +2274,20 @@ fun AIChatPanel(
                 lastUploadingCount?.let { UploadingBanner(count = it) }
             }
 
+            // 插件「待升级」提示条：与 UploadingBanner 同在底部非阻塞悬浮层，不遮挡输入框。
+            AnimatedVisibility(
+                visible = pluginUpdateCount > 0,
+                modifier = Modifier.graphicsLayer { alpha = floatingPanelAlpha },
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                PluginUpdateBanner(
+                    count = pluginUpdateCount,
+                    onOpenPlugins = onOpenPlugins,
+                    onDismiss = onDismissPluginUpdate
+                )
+            }
+
             // 阻塞式确认面板（权限 / askUserQuestion / 计划审批）已内嵌进上方会话流末尾，
             // 不再挤在输入框上方——键盘弹起时它们可随列表滚动，不再被压缩高度。
 
@@ -2857,3 +2880,65 @@ private fun MessageTimelineRow(
     }
 }
 
+
+/**
+ * 插件「待升级」提示条：与 [UploadingBanner] 同风格，挂在底部非阻塞悬浮层，
+ * 不遮挡输入框。「去安装」用 primaryContainer 填充按钮，与周围中性按钮明显区分。
+ */
+@Composable
+private fun PluginUpdateBanner(
+    count: Int,
+    onOpenPlugins: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.lg, vertical = Spacing.xs),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = RoundedCornerShape(Radius.md),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                start = Spacing.md,
+                end = Spacing.xs,
+                top = Spacing.xs,
+                bottom = Spacing.xs
+            ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = FeatherIcons.Download,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(Spacing.sm))
+            Text(
+                text = stringResource(R.string.plugin_update_banner_text, count),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.weight(1f)
+            )
+            FilledTonalButton(
+                onClick = onOpenPlugins,
+                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.xs)
+            ) {
+                Text(text = stringResource(R.string.plugin_update_banner_action))
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = FeatherIcons.X,
+                    contentDescription = stringResource(R.string.plugin_update_banner_dismiss),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}

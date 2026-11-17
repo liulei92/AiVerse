@@ -2,6 +2,7 @@ package com.aiverse.feature.plugins.presentation
 
 import android.provider.Settings
 import android.view.View
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -230,6 +232,20 @@ internal fun PluginsSection(
     val selectedPlugins = selection.selectedKeys.mapNotNull { id -> plugins.firstOrNull { it.id == id } }
     var showBatchUninstallConfirm by remember { mutableStateOf(false) }
 
+    // 一键更新全部结束后提示失败数；为 0 时成功不额外打扰。
+    val updateAllContext = LocalContext.current
+    LaunchedEffect(storeState.updateAllFailures) {
+        val failed = storeState.updateAllFailures
+        if (failed > 0) {
+            Toast.makeText(
+                updateAllContext,
+                updateAllContext.getString(R.string.plugins_update_all_failed, failed),
+                Toast.LENGTH_SHORT
+            ).show()
+            storeViewModel.consumeUpdateAllFailures()
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         // 开发者侧载开关会改变 tab 数量；连同底栏一起重建，避免底栏内部缓存的 tab 位置残留。
         key(pageCount) {
@@ -262,6 +278,9 @@ internal fun PluginsSection(
                         onSearchQueryChange = { searchQuery = it },
                         listState = installedListState,
                         updates = storeState.updatesByPluginId,
+                        updatingTotal = storeState.updatingTotal,
+                        updatingRemaining = storeState.updatingRemaining,
+                        onUpdateAll = storeViewModel::updateAll,
                         refreshing = refreshing,
                         onRefresh = {
                             onRefresh()
@@ -355,6 +374,9 @@ private fun InstalledPluginsPage(
     onSearchQueryChange: (String) -> Unit,
     listState: LazyListState,
     updates: Map<String, PluginStoreItem>,
+    updatingTotal: Int,
+    updatingRemaining: Int,
+    onUpdateAll: () -> Unit,
     refreshing: Boolean,
     onRefresh: () -> Unit,
     onOpenDetail: (InstalledPlugin) -> Unit,
@@ -377,10 +399,34 @@ private fun InstalledPluginsPage(
             contentPadding = PaddingValues(
                 start = Spacing.lg,
                 end = Spacing.lg,
-                bottom = if (selection.isActive) selectionListBottomContentPadding(true) else t.scale(112)
+                bottom = if (selection.isActive) selectionListBottomContentPadding(true) else t.pluginTabBarReserve
             ),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
+            // 一键更新全部：仅当存在可升级插件时显示；更新中禁用防重复点击。
+            if (updates.isNotEmpty()) {
+                item(key = "update-all", contentType = "update-all") {
+                    val updating = updatingTotal > 0
+                    val processed = (updatingTotal - updatingRemaining).coerceIn(0, updatingTotal)
+                    Button(
+                        onClick = onUpdateAll,
+                        enabled = !updating,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = if (updating) {
+                                stringResource(
+                                    R.string.plugins_update_all_running,
+                                    processed.coerceAtLeast(1),
+                                    updatingTotal
+                                )
+                            } else {
+                                stringResource(R.string.plugins_update_all_count, updates.size)
+                            }
+                        )
+                    }
+                }
+            }
             // 空状态：只有真的没有任何已安装插件时才显示（之前条件写反，装了插件也误报空）。
             if (plugins.isEmpty()) {
                 item(key = "empty", contentType = "empty") {

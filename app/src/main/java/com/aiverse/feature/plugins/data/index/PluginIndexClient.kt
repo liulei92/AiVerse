@@ -71,9 +71,9 @@ class PluginIndexClient @Inject constructor(
     suspend fun fetchIndex(source: PluginIndexSource, forceRefresh: Boolean = false): PluginIndexSnapshot =
         withContext(Dispatchers.IO) {
             val cached = cacheFile(source)
-            val url = source.indexUrl
+            // 镜像优先（gh.aivapp.cn），失败自动回退直连 GitHub 原始地址。
             val bytes = try {
-                getBytes(url, MAX_INDEX_BYTES, noCache = forceRefresh)
+                getBytes(listOf(mirrorUrl(source.indexUrl), source.indexUrl), MAX_INDEX_BYTES, noCache = forceRefresh)
             } catch (e: IOException) {
                 if (forceRefresh) throw e
                 val fallback = readCache(cached) ?: throw e
@@ -108,7 +108,10 @@ class PluginIndexClient @Inject constructor(
             ?: throw NoMatchingReleaseException("不是 GitHub 仓库: ${plugin.repository}")
         val expectedName = plugin.version?.let { assetName(plugin.id, it) }
         val listing = apiGet<List<GitHubContent>>(
-            "$GITHUB_API/repos/$owner/$repo/contents/$PACKAGES_DIR?ref=$DEFAULT_BRANCH"
+            listOf(
+                mirrorUrl("$GITHUB_API/repos/$owner/$repo/contents/$PACKAGES_DIR?ref=$DEFAULT_BRANCH"),
+                "$GITHUB_API/repos/$owner/$repo/contents/$PACKAGES_DIR?ref=$DEFAULT_BRANCH"
+            )
         )
         val candidates = listing.filter { it.type == "file" && it.name.endsWith(".zip") }
         val matched = when {
@@ -134,7 +137,12 @@ class PluginIndexClient @Inject constructor(
         if (asset.size <= 0 || asset.size > MAX_ARCHIVE_BYTES) {
             throw PluginIndexException("资产大小非法: ${asset.size}")
         }
-        val bytes = getBytes(asset.url, asset.size, noCache = true, expectedSize = asset.size)
+        val bytes = getBytes(
+            listOf(mirrorUrl(asset.url), asset.url),
+            asset.size,
+            noCache = true,
+            expectedSize = asset.size
+        )
         val file = File(context.cacheDir, "plugin-${sha256(bytes).take(16)}.zip")
         file.writeBytes(bytes)
         DownloadedPluginPackage(file, asset)
@@ -157,27 +165,69 @@ class PluginIndexClient @Inject constructor(
         return segments[0] to segments[1].removeSuffix(".git")
     }
 
-    private inline fun <reified T> apiGet(url: String): T {
-        val request = Request.Builder()
-            .url(url)
-            .header("Accept", "application/vnd.github+json")
-            .header("User-Agent", "aiverse-plugin-index")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .build()
-        http.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw NoMatchingReleaseException("GitHub 请求失败: HTTP ${response.code}")
-            }
-            val body = response.body?.string() ?: throw NoMatchingReleaseException("GitHub 响应为空")
-            return try {
-                PluginIndexJson.decodeFromString<T>(body)
-            } catch (e: Exception) {
-                throw NoMatchingReleaseException("GitHub 响应解析失败")
+    private inline fun <reified T> apiGet(url: String): T = apiGet(listOf(url))
+
+    /** 按顺序尝试多个地址（镜像优先，直连兜底），全部失败抛最后一个地址的异常。 */
+    private inline fun <reified T> apiGet(urls: List<String>): T {
+        require(urls.isNotEmpty())
+        var lastError: IOException? = null
+        for (url in urls) {
+            val request = Request.Builder()
+                .url(url)
+                .header("Accept", "application/vnd.github+json")
+                .header("User-Agent", "aiverse-plugin-index")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .build()
+            try {
+                http.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw NoMatchingReleaseException("GitHub 请求失败: HTTP ${response.code}")
+                    }
+                    val body = response.body?.string() ?: throw NoMatchingReleaseException("GitHub 响应为空")
+                    return try {
+                        PluginIndexJson.decodeFromString<T>(body)
+                    } catch (e: Exception) {
+                        throw NoMatchingReleaseException("GitHub 响应解析失败")
+                    }
+                }
+            } catch (e: IOException) {
+                lastError = e
             }
         }
+        throw lastError ?: NoMatchingReleaseException("所有地址均失败")
     }
 
     private fun getBytes(
+        url: String,
+        maxBytes: Long,
+        noCache: Boolean,
+        expectedSize: Long? = null
+    ): ByteArray = getBytes(listOf(url), maxBytes, noCache, expectedSize)
+
+    /**
+     * 按顺序尝试 [urls]（首个常为镜像地址，其后为直连 GitHub），第一个成功的返回；
+     * 全部失败则抛最后一个地址的异常。镜像返回 HTML 错误页或非 2xx 时状态码不为成功，
+     * 自然落到下一个地址，与 [ApkDownloader] 的多地址回退约定一致。
+     */
+    private fun getBytes(
+        urls: List<String>,
+        maxBytes: Long,
+        noCache: Boolean,
+        expectedSize: Long? = null
+    ): ByteArray {
+        require(urls.isNotEmpty())
+        var lastError: IOException? = null
+        for (url in urls) {
+            try {
+                return getBytesSingle(url, maxBytes, noCache, expectedSize)
+            } catch (e: IOException) {
+                lastError = e
+            }
+        }
+        throw lastError ?: IOException("所有地址均失败")
+    }
+
+    private fun getBytesSingle(
         url: String,
         maxBytes: Long,
         noCache: Boolean,
@@ -239,9 +289,18 @@ class PluginIndexClient @Inject constructor(
     private fun rawUrl(owner: String, repo: String, path: String): String =
         "$GITHUB_RAW/$owner/$repo/$DEFAULT_BRANCH/$path"
 
+    /**
+     * 把 GitHub 原始地址转成镜像加速地址（固定前缀 `https://gh.aivapp.cn/`，与设置里的镜像源无关）。
+     * 镜像站把完整原始 URL 直接拼在域名后，如：
+     * `https://gh.aivapp.cn/https://raw.githubusercontent.com/yhdmgf/aiverserules/main/index.json`。
+     */
+    private fun mirrorUrl(url: String): String = "$GITHUB_MIRROR$url"
+
     private companion object {
         const val GITHUB_API = "https://api.github.com"
         const val GITHUB_RAW = "https://raw.githubusercontent.com"
+        /** GitHub 加速镜像前缀：优先走镜像，失败自动回退直连 GitHub。 */
+        const val GITHUB_MIRROR = "https://gh.aivapp.cn/"
         const val DEFAULT_BRANCH = "main"
         const val PACKAGES_DIR = "packages"
         const val MAX_INDEX_BYTES = 2L * 1024 * 1024

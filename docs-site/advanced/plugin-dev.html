@@ -375,6 +375,13 @@ aiverse.events.on('fs.changed', (payload) => { /* ... */ });</code></pre>
 <p><strong>审计会拦截</strong>：路径越界、可执行文件、<code>eval</code> / <code>new Function</code>、<code>Runtime.getRuntime</code>、<code>su</code> 提权、<code>pm install/grant</code>、<code>/bin/sh</code> 或 <code>sh -c</code> 拼接。</p>
 <p><strong>审计放行</strong>（插件是 Node 进程，属正常能力）：<code>child_process</code>、<code>spawn</code>、<code>execSync</code>、<code>require('fs'/'http'/'https'/'net'/'os')</code>、宿主自带的 <code>eruda.min.js</code> 与 <code>vue.global.prod.js</code>。</p>
 <p><strong>幂等</strong>：索引里已有同 id 同版本时跳过；重复 id 不会通过格式校验。</p>
+<h3 id="插件的更新机制" tabindex="-1">插件的更新机制 <a class="header-anchor" href="#插件的更新机制" aria-label="Permalink to &quot;插件的更新机制&quot;">​</a></h3>
+<p>已安装插件的升级由宿主自动检测，无需手动比对版本：</p>
+<ul>
+<li><strong>启动自动检查</strong>：App 启动后在后台静默检查一次所有已装插件是否有可升级版本。检查按来源逐个进行，单个来源失败只跳过该来源，整个过程异常吞掉，不打扰用户。</li>
+<li><strong>主界面提示条</strong>：检测到可升级插件后，聊天页底部出现「检测到 N 个插件可更新」提示条，配高对比的「去安装」按钮。提示条可关闭，关闭后本次启动不再提示；点击按钮跳转到插件管理页。</li>
+<li><strong>一键更新全部</strong>：插件管理页「已安装」Tab 提供「全部更新（N）」按钮，串行逐个完成下载 → 预览 → 校验 → 安装。单个插件失败不阻断其余插件，全部结束后提示失败数量。</li>
+</ul>
 <h2 id="最小可用插件" tabindex="-1">最小可用插件 <a class="header-anchor" href="#最小可用插件" aria-label="Permalink to &quot;最小可用插件&quot;">​</a></h2>
 <p><code>plugin.json</code>：</p>
 <pre><code class="language-json">{

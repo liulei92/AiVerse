@@ -218,6 +218,10 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var toolSafetySettings: com.aiverse.feature.settings.data.repository.ToolSafetySettingsRepository
 
+    /** 插件「待升级」提示：App 启动时静默检查一次，结果对整个 App 可见。 */
+    @Inject
+    lateinit var pluginUpdateNotifier: com.aiverse.feature.plugins.domain.PluginUpdateNotifier
+
     /** 环境安装是否成功：本地容器读 /.provisioned 标记（版本匹配才算完成）；远程模式用户自装，恒 true。 */
     private fun isContainerProvisioned(): Boolean =
         if (executionModeHolder.currentMode() == com.aiverse.feature.settings.data.repository.ExecutionMode.REMOTE_SSH) true
@@ -398,6 +402,7 @@ class MainActivity : ComponentActivity() {
                                 agreementAccepted = agreementAccepted,
                                 isContainerReady = isContainerReady,
                                 webMessageBridge = this@MainActivity.webMessageBridge,
+                                pluginUpdateNotifier = this@MainActivity.pluginUpdateNotifier,
                                 fileTreeDisplayPrefs = fileTreeDisplayPrefs
                             )
                             if (agreementAccepted) {
@@ -468,6 +473,7 @@ fun AppNavigation(
     agreementAccepted: Boolean,
     isContainerReady: () -> Boolean,
     webMessageBridge: com.aiverse.feature.web.WebMessageBridge,
+    pluginUpdateNotifier: com.aiverse.feature.plugins.domain.PluginUpdateNotifier,
     fileTreeDisplayPrefs: FileTreeDisplayPrefs
 ) {
     val navController = rememberNavController()
@@ -540,6 +546,11 @@ fun AppNavigation(
     // 自动检查更新：进入主页时异步检测（开关开启，失败静默）
     LaunchedEffect(agreementAccepted) {
         if (agreementAccepted) settingsViewModel.checkUpdate(manual = false)
+    }
+
+    // 启动时后台静默检查插件更新（与 APP 自身更新检查互不干扰，失败静默，不打扰使用者）
+    LaunchedEffect(agreementAccepted) {
+        if (agreementAccepted) pluginUpdateNotifier.refresh()
     }
 
     // 侧边栏打开时，系统返回键先收起侧边栏。
@@ -932,6 +943,8 @@ fun AppNavigation(
                                 portraitHeight = chatBgPortraitHeight,
                                 isDarkTheme = chatBgDarkTheme
                             )
+                            // 插件「待升级」提示条数据源：进程级单例，启动时已在 onCreate 触发 refresh()。
+                            val pendingPluginUpdates by pluginUpdateNotifier.pending.collectAsStateWithLifecycle()
                             CompositionLocalProvider(
                                 androidx.compose.ui.platform.LocalUriHandler provides fileUriHandler
                             ) {
@@ -974,6 +987,11 @@ fun AppNavigation(
                                     onOpenRoles = {
                                         navController.navigate("settings?section=roles&from=chat")
                                     },
+                                    pluginUpdateCount = pendingPluginUpdates.size,
+                                    onOpenPlugins = {
+                                        navController.navigate("settings?section=plugins&from=chat")
+                                    },
+                                    onDismissPluginUpdate = { pluginUpdateNotifier.dismiss() },
                                     onOpenInEditor = openFilePreview
                                 )
                             }

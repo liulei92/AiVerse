@@ -176,7 +176,13 @@ internal fun PluginStoreSection(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, bottom = listBottomContentPadding()),
+            contentPadding = PaddingValues(
+                start = Spacing.lg,
+                end = Spacing.lg,
+                // 商店页与已安装页共用同一个底部悬浮 Tab 栏，底部留白取「常规列表留白」与
+                // 「Tab 栏完整预留高度」的较大值，避免最后一项被 Tab 栏 / 渐变遮罩压住。
+                bottom = maxOf(listBottomContentPadding(), t.pluginTabBarReserve)
+            ),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
             item(key = "upload", contentType = "upload") {

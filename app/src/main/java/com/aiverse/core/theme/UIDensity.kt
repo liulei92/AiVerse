@@ -64,6 +64,10 @@ data class UIDensityTokens(
     val chipHeight: Dp,
     /** 底部悬浮 Tab 栏容器高度（含 6dp 底部留白）。 */
     val tabBarHeight: Dp,
+    /** 插件页底部悬浮 Tab 栏的完整预留高度：容器高度 + 底部 margin(6dp) + 阴影/呼吸余量，
+     *  供插件页各 Tab 列表 contentPadding 底部复用，避免最后一项被 Tab 栏 / 渐变遮罩压住。
+     *  基准 74dp（标准档），随密度档同步放大；不含系统导航栏（列表已落在 Scaffold 安全区内）。 */
+    val pluginTabBarReserve: Dp,
     /** 设置页列表 cell 行内垂直内边距（基准 11dp，对齐普通 SettingsRow）。 */
     val listCellPaddingVertical: Dp,
     /** 设置页列表 cell 卡片间距（基准 8dp）。 */
@@ -140,6 +144,7 @@ data class UIDensityTokens(
                 fieldHeight = (52 * s).dp,
                 chipHeight = (32 * s).dp,
                 tabBarHeight = (68 * s).dp,
+                pluginTabBarReserve = (74 * s).dp,
                 listCellPaddingVertical = 8.dp,
                 listCellGap = (8 * s).dp,
                 elevationSm = (3 * s).dp,
