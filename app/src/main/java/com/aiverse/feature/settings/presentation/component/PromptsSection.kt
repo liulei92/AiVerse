@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,6 +44,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.aiverse.R
+import com.aiverse.core.theme.LocalSurfaceGlassStyle
+import com.aiverse.core.theme.LocalUIDensityTokens
 import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.ui.AppSwitch
@@ -105,11 +107,11 @@ internal fun PromptsSection(
 
     val allSelected = selection.selectedCount > 0 && selection.selectedCount == selectableKeys.size
 
-    Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
         SettingsGroup(
             modifier = Modifier
-                .padding(horizontal = Spacing.lg)
+                .padding(horizontal = Spacing.md)
                 .padding(top = Spacing.sm)
         ) {
             SettingsRow(
@@ -202,12 +204,16 @@ private fun PromptList(
         localFragments = localFragments.toMutableList().apply { add(to.index, removeAt(from.index)) }
     }
     val hapticFeedback = LocalHapticFeedback.current
+    // 非拖拽态阴影跟随 SettingsGroup 规则（浅色玻璃 0 / 否则 elevationSm），拖拽态升到 elevationMd。
+    val t = LocalUIDensityTokens.current
+    val dark = isSystemInDarkTheme()
+    val restElevation = if (LocalSurfaceGlassStyle.current && !dark) 0.dp else t.elevationSm
 
     LazyColumn(
         state = listState,
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = Spacing.lg),
+            .padding(horizontal = Spacing.md),
         contentPadding = PaddingValues(top = Spacing.xs, bottom = selectionListBottomContentPadding(selection.isActive)),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -225,12 +231,12 @@ private fun PromptList(
                     label = "promptDragScale"
                 )
                 val dragElevation by animateDpAsState(
-                    targetValue = if (isDragging) 8.dp else 0.dp,
+                    targetValue = if (isDragging) t.elevationMd else restElevation,
                     animationSpec = tween(durationMillis = if (isDragging) 120 else 220),
                     label = "promptDragElevation"
                 )
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = t.cardShape,
                     color = MaterialTheme.semanticColors.cardSurface,
                     shadowElevation = dragElevation,
                     modifier = Modifier

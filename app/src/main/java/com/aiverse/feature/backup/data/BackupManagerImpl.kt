@@ -47,7 +47,8 @@ import com.aiverse.feature.backup.domain.TodoItemDto
 import com.aiverse.feature.backup.domain.WorkspaceBackupMeta
 import com.aiverse.feature.backup.domain.toMetadata
 import com.aiverse.feature.credentials.data.repository.FileCredentialRepository
-import com.aiverse.feature.plugins.data.PluginRepository
+import com.aiverse.feature.plugins.domain.PluginManager
+import java.util.Locale
 import com.aiverse.feature.settings.data.local.dao.AIProviderDao
 import com.aiverse.feature.settings.data.local.entity.AIProviderEntity
 import com.aiverse.feature.settings.data.repository.AppearanceSettingsRepository
@@ -130,7 +131,7 @@ class BackupManagerImpl @Inject constructor(
     private val memoryRepository: MemoryRepository,
     private val favoriteRepository: FavoriteRepository,
     private val skillRepository: SkillRepository,
-    private val pluginRepository: PluginRepository,
+    private val pluginManager: PluginManager,
     private val welcomeEntriesRepository: WelcomeEntriesRepository,
     private val roleDao: RoleDao,
     private val defaultModelSettingsRepository: DefaultModelSettingsRepository,
@@ -562,16 +563,17 @@ class BackupManagerImpl @Inject constructor(
 
     /** 第一遍：统计每个已安装插件的文件数（写 metadata 用）。 */
     private fun collectPluginMetas(): List<PluginBackupMeta> =
-        pluginRepository.listInstalled().mapNotNull { plugin ->
-            val count = pluginRepository.collectPluginFiles(plugin.manifest.id).size
-            if (count > 0) PluginBackupMeta(plugin.manifest.id, plugin.manifest.name, count) else null
+        pluginManager.installedPlugins().mapNotNull { plugin ->
+            val manifest = plugin.manifest ?: return@mapNotNull null
+            val count = pluginManager.collectPluginFiles(plugin.id).size
+            if (count > 0) PluginBackupMeta(plugin.id, manifest.name.resolve(Locale.getDefault().toLanguageTag()), count) else null
         }
 
     /** 第二遍：把各插件目录文件写入 tar（`plugins/<id>/<相对路径>`，zip 内 plugin.json 在插件根）。 */
     private fun writePluginEntries(tar: TarArchiveOutputStream) {
-        pluginRepository.listInstalled().forEach { plugin ->
-            pluginRepository.collectPluginFiles(plugin.manifest.id).forEach { (rel, bytes) ->
-                writeTarEntry(tar, "${PLUGIN_PREFIX}${plugin.manifest.id}/$rel", bytes)
+        pluginManager.installedPlugins().forEach { plugin ->
+            pluginManager.collectPluginFiles(plugin.id).forEach { (rel, bytes) ->
+                writeTarEntry(tar, "${PLUGIN_PREFIX}${plugin.id}/$rel", bytes)
             }
         }
     }
@@ -990,7 +992,7 @@ class BackupManagerImpl @Inject constructor(
         if (id.isBlank() || relParts.any { it.isBlank() || it == "." || it == ".." }) return null
         val bytes = tar.readBytes()
         if (bytes.isEmpty()) return null
-        val target = File(pluginRepository.pluginDir(id), relParts.joinToString("/"))
+        val target = File(pluginManager.pluginDir(id), relParts.joinToString("/"))
         target.parentFile?.mkdirs()
         target.writeBytes(bytes)
         return id

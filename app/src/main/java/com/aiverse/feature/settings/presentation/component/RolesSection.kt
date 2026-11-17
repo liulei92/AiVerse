@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -35,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.aiverse.R
 import com.aiverse.core.theme.LocalUIDensityTokens
+import com.aiverse.core.theme.Spacing
 import com.aiverse.core.theme.semanticColors
 import com.aiverse.core.ui.AppSwitch
 import com.aiverse.core.ui.BatchDeleteConfirmDialog
@@ -83,13 +83,13 @@ internal fun RolesSection(
 
     val allSelected = selection.selectedCount > 0 && selection.selectedCount == selectableKeys.size
 
-    Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
+    Box(modifier = Modifier.fillMaxSize()) {
         if (roles.isEmpty()) {
             Text(
                 text = stringResource(R.string.roles_empty),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = t.lg, vertical = t.lg)
+                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.md)
             )
         } else {
             RoleList(
@@ -174,8 +174,8 @@ private fun RoleList(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            start = t.lg,
-            end = t.lg,
+            start = Spacing.md,
+            end = Spacing.md,
             top = t.xs,
             bottom = selectionListBottomContentPadding(selection.isActive)
         )

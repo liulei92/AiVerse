@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -138,12 +137,12 @@ internal fun ContainerImageDownloadSection(
 
     val allSelected = selection.selectedCount > 0 && selection.selectedCount == downloadableIds.size
 
-    Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = Spacing.lg)
+                .padding(horizontal = Spacing.md)
                 .padding(bottom = selectionListBottomContentPadding(selection.isActive))
         ) {
         SettingsGroupHeader(text = stringResource(R.string.container_download_image))

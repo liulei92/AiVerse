@@ -195,7 +195,10 @@ object AgentModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(@ApplicationContext context: Context): OkHttpClient {
+    fun provideOkHttpClient(
+        @ApplicationContext context: Context,
+        pluginHttpHookInterceptor: dagger.Lazy<com.aiverse.feature.plugins.runtime.PluginHttpHookInterceptor>
+    ): OkHttpClient {
         // 统一 UA 为 AiVerse/<版本> (Android)；请求已带显式 UA（如用户自定义头）时不覆盖。
         // 版本号走 PackageManager（项目未开启 BuildConfig），dev 构建为 1.x.y-dev.N+hash 天然可溯源。
         val userAgent = runCatching {
@@ -287,6 +290,7 @@ object AgentModule {
                 }
                 chain.proceed(finalRequest)
             }
+            .addInterceptor { chain -> pluginHttpHookInterceptor.get().intercept(chain) }
             .build()
     }
 
@@ -496,6 +500,7 @@ object AgentModule {
         agentNotificationCenter: AgentNotificationCenter,
         eventInjector: AgentEventInjector,
         fileAccess: FileAccessProvider,
+        pluginHookDispatcher: com.aiverse.feature.plugins.runtime.PluginHookDispatcher,
         @ApplicationContext context: Context
     ): AgentWorkflow {
         return StatefulAgentWorkflow(
@@ -524,6 +529,7 @@ object AgentModule {
             agentNotificationCenter,
             eventInjector,
             fileAccess,
+            pluginHookDispatcher,
             context
         )
     }

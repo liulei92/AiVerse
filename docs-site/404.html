@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-Hans" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>页面不存在 - AiVerse</title>
+    <meta name="description" content="你访问的页面不存在或已被移动。返回 AiVerse 首页继续浏览。">
+    <meta name="robots" content="noindex">
+    <meta name="theme-color" content="#3451b2">
+    <link rel="icon" type="image/webp" href="/logo.webp">
+    <script>
+      (function () {
+        var t;
+        try { t = localStorage.getItem('vitepress-theme-appearance'); } catch (e) {}
+        if (t === 'dark' || t === 'light') {
+        } else if (t === 'auto' || !t) {
+          t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        if (t === 'dark') document.documentElement.classList.add('dark');
+      })();
+    </script>
+    <style>
+      :root {
+        --vp-c-brand-1: #3451b2;
+        --vp-c-brand-2: #3a5ccc;
+        --vp-c-brand-3: #5672cd;
+        --vp-c-brand-soft: rgba(100, 108, 255, .14);
+        --vp-c-bg: #ffffff;
+        --vp-c-bg-alt: #f6f6f7;
+        --vp-c-divider: #e2e2e3;
+        --vp-c-text-1: #3c3c43;
+        --vp-c-text-2: #67676c;
+        --vp-c-text-3: #929295;
+        --vp-nav-height: 64px;
+        --vp-font-family-base: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+      }
+      :root:where(:lang(zh)) {
+        --vp-font-family-base: "PingFang SC", "Punctuation SC", "Inter", ui-sans-serif, system-ui, sans-serif, "Noto Sans CJK SC", "Microsoft YaHei";
+      }
+      .dark {
+        --vp-c-brand-1: #a8b1ff;
+        --vp-c-brand-2: #5c73e7;
+        --vp-c-brand-3: #3e63dd;
+        --vp-c-brand-soft: rgba(100, 108, 255, .16);
+        --vp-c-bg: #1b1b1f;
+        --vp-c-bg-alt: #202127;
+        --vp-c-divider: #2e2e32;
+        --vp-c-text-1: #dfdfd6;
+        --vp-c-text-2: #98989f;
+        --vp-c-text-3: #6a6a71;
+      }
+      * { box-sizing: border-box; }
+      html { line-height: 1.4; font-size: 16px; -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        width: 100%;
+        min-width: 320px;
+        min-height: 100vh;
+        line-height: 24px;
+        font-family: var(--vp-font-family-base);
+        font-size: 16px;
+        font-weight: 400;
+        color: var(--vp-c-text-1);
+        background-color: var(--vp-c-bg);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+        display: flex;
+        flex-direction: column;
+      }
+      a { color: inherit; text-decoration: inherit; }
+      .VPNav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 30;
+        height: var(--vp-nav-height);
+        background: var(--vp-c-bg);
+        border-bottom: 1px solid var(--vp-c-divider);
+        transition: background-color .25s;
+      }
+      .VPNavBar .wrapper {
+        max-width: 1152px;
+        margin: 0 auto;
+        padding: 0 24px;
+        height: var(--vp-nav-height);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .VPNavBarTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--vp-c-text-1);
+      }
+      .VPNavBarTitle img { width: 24px; height: 24px; display: block; }
+      .VPNavBarMenu { display: flex; align-items: center; gap: 4px; }
+      .VPNavBarMenu a {
+        padding: 6px 12px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--vp-c-text-2);
+        border-radius: 8px;
+        transition: color .25s;
+      }
+      .VPNavBarMenu a:hover { color: var(--vp-c-text-1); }
+      @media (max-width: 719px) { .VPNavBarMenu { display: none; } }
+      .VPContent {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: calc(var(--vp-nav-height) + 40px) 24px 60px;
+      }
+      .NotFound {
+        max-width: 640px;
+        text-align: center;
+        animation: fadeUp .5s ease both;
+      }
+      @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(16px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .NotFound-code {
+        font-size: 96px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -2px;
+        background: linear-gradient(120deg, var(--vp-c-brand-2), var(--vp-c-brand-1));
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        color: transparent;
+        margin-bottom: 16px;
+      }
+      .dark .NotFound-code {
+        background: linear-gradient(120deg, var(--vp-c-brand-1), var(--vp-c-brand-3));
+        -webkit-background-clip: text;
+        background-clip: text;
+      }
+      .NotFound-title {
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--vp-c-text-1);
+        margin: 0 0 12px;
+      }
+      .NotFound-desc {
+        font-size: 16px;
+        color: var(--vp-c-text-2);
+        margin: 0 0 32px;
+      }
+      .NotFound-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: center;
+      }
+      .VPButton {
+        display: inline-block;
+        padding: 0 20px;
+        height: 40px;
+        line-height: 40px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        transition: color .25s, border-color .25s, background-color .25s;
+        white-space: nowrap;
+      }
+      .VPButton.brand {
+        background: var(--vp-c-brand-3);
+        color: #fff;
+      }
+      .VPButton.brand:hover { background: var(--vp-c-brand-2); }
+      .dark .VPButton.brand { color: #1b1b1f; }
+      .VPButton.alt {
+        background: var(--vp-c-bg-alt);
+        color: var(--vp-c-text-1);
+        border-color: var(--vp-c-divider);
+      }
+      .VPButton.alt:hover { border-color: var(--vp-c-text-3); }
+      .VPFooter {
+        border-top: 1px solid var(--vp-c-divider);
+        padding: 24px;
+        text-align: center;
+        color: var(--vp-c-text-2);
+        font-size: 14px;
+      }
+      .VPFooter .message { margin: 0 0 6px; }
+      .VPFooter .copyright { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <header class="VPNav">
+      <div class="VPNavBar">
+        <div class="wrapper">
+          <a class="VPNavBarTitle" href="/">
+            <img src="/logo.webp" alt="AiVerse">
+            <span>AiVerse</span>
+          </a>
+          <nav class="VPNavBarMenu">
+            <a href="/guide/quick-start">使用手册</a>
+            <a href="/advanced/build-android-app">进阶教程</a>
+            <a href="https://aivapp.cn/download" target="_blank" rel="noreferrer">下载</a>
+            <a href="/terms">用户协议</a>
+            <a href="/privacy">隐私政策</a>
+          </nav>
+        </div>
+      </div>
+    </header>
+    <main class="VPContent">
+      <div class="NotFound">
+        <div class="NotFound-code">404</div>
+        <h1 class="NotFound-title">页面不存在</h1>
+        <p class="NotFound-desc">你访问的地址不存在，或者已经被移动到别的地方了。</p>
+        <div class="NotFound-actions">
+          <a class="VPButton brand" href="/">返回首页</a>
+          <a class="VPButton alt" href="javascript:history.back()">返回上一页</a>
+        </div>
+      </div>
+    </main>
+    <footer class="VPFooter">
+      <p class="message">基于 GPL-3.0 协议开源</p>
+      <p class="copyright">Copyright © 2026-至今 AiVerse</p>
+    </footer>
+  </body>
+</html>

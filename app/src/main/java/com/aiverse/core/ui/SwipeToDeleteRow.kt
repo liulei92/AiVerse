@@ -3,9 +3,11 @@ package com.aiverse.core.ui
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,6 +65,7 @@ import kotlinx.coroutines.launch
  *
  * @param onDelete 点按删除按钮后触发（先收回再回调）。是否弹二次确认由调用方决定。
  * @param onClick 表层未滑开时的点击回调；null 表示整行不可点击。
+ * @param onLongClick 表层未滑开时的长按回调；null 表示不响应长按（多选页用它进入多选模式）。
  * @param deleteEnabled false 时删除按钮可露出但点击无效（如未下载完成的镜像不可删）。
  * @param selectionMode 多选模式：不渲染滑动手势与删除按钮，整行点击改为勾选，行首加勾选框。
  * @param selected 多选模式下该行是否勾选。
@@ -70,11 +73,13 @@ import kotlinx.coroutines.launch
  * @param selectable false 时该行在多选模式下不可勾选（勾选框置灰，如不可编辑的提示词片段）。
  * @param content 表层行内容；背景由本组件提供，内边距由调用方内容自带（与既有各页用法一致）。
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SwipeToDeleteRow(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
     deleteEnabled: Boolean = true,
     selectionMode: Boolean = false,
     selected: Boolean = false,
@@ -224,16 +229,19 @@ fun SwipeToDeleteRow(
                     )
                 }
                 .then(
-                    if (onClick != null) {
-                        Modifier.clickable {
-                            if (offsetX.value < -10f) {
-                                coroutineScope.launch {
-                                    offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                    if (onClick != null || onLongClick != null) {
+                        Modifier.combinedClickable(
+                            onClick = {
+                                if (offsetX.value < -10f) {
+                                    coroutineScope.launch {
+                                        offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                                    }
+                                } else {
+                                    onClick?.invoke()
                                 }
-                            } else {
-                                onClick()
-                            }
-                        }
+                            },
+                            onLongClick = onLongClick
+                        )
                     } else {
                         Modifier
                     }
