@@ -361,7 +361,7 @@ internal fun ChatInputBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .graphicsLayer { alpha = contentAlpha }
-                    .padding(horizontal = Spacing.lg)
+                    .padding(horizontal = densityTokens.lg)
                     .padding(bottom = Spacing.md)
                     .padding(bottom = imeInset)
             ) {

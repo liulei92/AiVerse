@@ -6,12 +6,15 @@ import com.aiverse.feature.agent.domain.memory.Memory
 import com.aiverse.feature.agent.domain.memory.MemoryRepository
 import com.aiverse.feature.agent.domain.memory.MemoryScope
 import com.aiverse.feature.agent.domain.prompt.SystemPromptProvider
+import com.aiverse.feature.settings.data.repository.MemoryToggleRepository
 import com.aiverse.feature.workspace.data.repository.WorkspaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -36,11 +39,21 @@ data class MemoryUiState(
 class MemoryViewModel @Inject constructor(
     private val repository: MemoryRepository,
     private val workspaceRepository: WorkspaceRepository,
-    private val systemPromptProvider: SystemPromptProvider
+    private val systemPromptProvider: SystemPromptProvider,
+    private val memoryToggleRepository: MemoryToggleRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MemoryUiState())
     val state: StateFlow<MemoryUiState> = _state.asStateFlow()
+
+    /** 记忆「假插件」开关：默认开启；关闭时设置页隐藏记忆入口且 AI 不调用记忆。 */
+    val memoryEnabled: StateFlow<Boolean> = memoryToggleRepository.enabledFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** 设置记忆开关（只控制 UI/AI 访问，不删除既有记忆文件）。 */
+    fun setMemoryEnabled(enabled: Boolean) {
+        viewModelScope.launch { memoryToggleRepository.setEnabled(enabled) }
+    }
 
     init {
         refresh()

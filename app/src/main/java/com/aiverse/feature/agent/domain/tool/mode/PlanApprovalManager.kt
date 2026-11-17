@@ -34,6 +34,10 @@ class PlanApprovalManager @Inject constructor(
     private val _pendingApproval = MutableStateFlow<PlanApprovalRequest?>(null)
     val pendingApproval: StateFlow<PlanApprovalRequest?> = _pendingApproval.asStateFlow()
 
+    /** 查指定会话当前挂起的计划审查请求（无挂起或不属于该会话时返回 null）。 */
+    fun pendingForSession(sessionId: String): PlanApprovalRequest? =
+        pendingApproval.value?.takeIf { it.sessionId == sessionId }
+
     // 回滚协程所在 Scope 必须带 SupervisorJob：否则某个回滚失败会让整个 Scope 永久取消，
     // 之后所有「拒绝计划后回滚到 PLAN」静默失效。
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

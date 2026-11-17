@@ -71,26 +71,29 @@ class FileCredentialRepository @Inject constructor(
         return runCatching {
             // 文件内容为「base64 后整体反转」的编码串；解码失败（旧版明文）时按原文处理。
             val content = tryDecode(file.readText()) ?: file.readText()
-            content.lines().mapNotNull { line ->
-                val trimmed = line.trim()
-                if (trimmed.isEmpty()) return@mapNotNull null
-                // https://user:token@host
-                val at = trimmed.lastIndexOf('@')
-                if (at < 0) return@mapNotNull null
-                val host = trimmed.substring(at + 1).trim().lowercase()
-                val cred = trimmed.substring(0, at)
-                val rest = cred.substringAfter("://", "")
-                val sep = rest.indexOf(':')
-                if (sep < 0) return@mapNotNull null
-                val username = URLDecoder.decode(rest.substring(0, sep), "UTF-8")
-                val token = URLDecoder.decode(rest.substring(sep + 1), "UTF-8")
-                if (host.isEmpty() || username.isEmpty()) null
-                else GitCredential(id = host, host = host, username = username, token = token)
-            }
+            parseCredentials(content)
         }.getOrElse {
             FileLogger.w(TAG, "解析 git-credentials 失败: ${it.message}")
             emptyList()
         }
+    }
+
+    /** 逐行解析 git-credentials 内容（每行 `https://user:token@host`）；格式异常的行跳过。 */
+    private fun parseCredentials(content: String): List<GitCredential> = content.lines().mapNotNull { line ->
+        val trimmed = line.trim()
+        if (trimmed.isEmpty()) return@mapNotNull null
+        // https://user:token@host
+        val at = trimmed.lastIndexOf('@')
+        if (at < 0) return@mapNotNull null
+        val host = trimmed.substring(at + 1).trim().lowercase()
+        val cred = trimmed.substring(0, at)
+        val rest = cred.substringAfter("://", "")
+        val sep = rest.indexOf(':')
+        if (sep < 0) return@mapNotNull null
+        val username = URLDecoder.decode(rest.substring(0, sep), "UTF-8")
+        val token = URLDecoder.decode(rest.substring(sep + 1), "UTF-8")
+        if (host.isEmpty() || username.isEmpty()) null
+        else GitCredential(id = host, host = host, username = username, token = token)
     }
 
     /** 按 git-credentials 格式写文件（先写 .tmp 再 rename，避免 git 读到半截文件）。 */
@@ -133,6 +136,32 @@ class FileCredentialRepository @Inject constructor(
         if (encode(decoded) != raw) return@runCatching null
         decoded
     }.getOrNull()
+
+    /**
+     * 读出 git 凭据的原始格式（每行 `https://user:token@host`，按主机排序）；无凭据返回空串。
+     *
+     * 供备份/跨包迁移使用：凭据不走 KeystoreCipher（密钥按 applicationId 隔离，跨包不可解），
+     * 故以 git-credential-store 原始格式随备份导出，导入端再按新包重加密落盘。
+     */
+    fun readRawCredentials(): String {
+        val sb = StringBuilder()
+        _credentials.value.sortedBy { it.host }.forEach { c ->
+            sb.append("https://")
+                .append(enc(c.username)).append(':').append(enc(c.token))
+                .append('@').append(c.host)
+                .append('\n')
+        }
+        return sb.toString()
+    }
+
+    /** 把原始格式写回（内部做 base64+反转 混淆后原子落盘）；入参为旧版明文格式时同样适用。 */
+    suspend fun writeRawCredentials(raw: String) = mutex.withLock {
+        val content = tryDecode(raw) ?: raw
+        val updated = parseCredentials(content)
+        writeFile(updated)
+        _credentials.value = updated
+        FileLogger.i(TAG, "恢复凭据 ${updated.size} 条")
+    }
 
     /** 把旧版明文凭据文件迁移为编码格式（幂等）。 */
     suspend fun migrateToEncoded() = mutex.withLock {

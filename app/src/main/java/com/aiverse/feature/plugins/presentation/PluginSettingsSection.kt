@@ -1,0 +1,379 @@
+package com.aiverse.feature.plugins.presentation
+
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aiverse.R
+import com.aiverse.core.theme.Spacing
+import com.aiverse.core.ui.AdaptiveModalBottomSheet
+import compose.icons.FeatherIcons
+import compose.icons.feathericons.ArrowLeft
+import compose.icons.feathericons.Plus
+import compose.icons.feathericons.Settings
+
+/**
+ * 设置 → 插件主入口（AiCode 移植版）：插件列表（已安装 / 开发中 / 商店 tab）、
+ * 插件详情页、右上角「＋」导入与「⚙」设置弹层。
+ *
+ * 详情与导入均在组件内切换，不新增 SettingsSection 路由，最小侵入 AiVerse 设置页。
+ *
+ * 移植适配说明：
+ * - 顶栏标题/返回由 AiVerse SettingsScreen 统一提供，本组件只渲染操作行（导入 + 设置）。
+ * - [PluginsViewModel] 通过 Hilt 注入；商店/开发者详情与插件配置页均由并行子代理落地，直接接入。
+ *
+ * TODO(P2): 仅剩 data 层类型（permission/开发者/商店设置仓库、PluginDevPackageBuilder）与
+ * [PluginManager.devDir] / [PluginManager.prepareDependencies] 待 AiVerse 新插件 data/domain 层补齐；
+ * P3a（data.index）/ P3c（PluginStore*）/ P3d（PluginWeb*、PluginWebPanelScreen）/ PluginImportHost
+ * 均已由并行子代理落地，可直接编译。
+ */
+@Composable
+internal fun PluginSettingsSection(
+    onNavigateBack: () -> Unit = {}
+) {
+    val viewModel: PluginsViewModel = hiltViewModel()
+    val plugins by viewModel.plugins.collectAsStateWithLifecycle()
+    val loaded by viewModel.loaded.collectAsStateWithLifecycle()
+    val devMode by viewModel.devMode.collectAsStateWithLifecycle()
+    val devProjects by viewModel.devProjects.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val devRefreshing by viewModel.devRefreshing.collectAsStateWithLifecycle()
+    val shizukuState by viewModel.shizukuState.collectAsStateWithLifecycle()
+    val shizukuGranted by viewModel.shizukuGrantedPluginIds.collectAsStateWithLifecycle()
+    val overlayGranted by viewModel.overlayGrantedPluginIds.collectAsStateWithLifecycle()
+    val backupGranted by viewModel.backupGrantedPluginIds.collectAsStateWithLifecycle()
+    val dependencyStates by viewModel.dependencyStates.collectAsStateWithLifecycle()
+    val indexSourceText by viewModel.indexSourceText.collectAsStateWithLifecycle()
+    val downloadMirror by viewModel.downloadMirror.collectAsStateWithLifecycle()
+
+    val languageTag = currentLanguageTag()
+    var selectedPluginId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var selectedStoreItem by remember { mutableStateOf<PluginStoreItem?>(null) }
+    var selectedDevProject by remember { mutableStateOf<PluginDevProject?>(null) }
+    // 记住插件列表当前 tab：从商店详情返回时恢复到商店（page 2）而非已安装（page 0）。
+    var pluginsTab by rememberSaveable { mutableIntStateOf(0) }
+    val zipLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(viewModel::import)
+    }
+    val selectedPlugin = plugins.firstOrNull { it.id == selectedPluginId }
+
+    // 详情/商店详情/开发详情显示时，系统返回应先回插件列表（清选中状态），
+    // 而不是冒泡到 SettingsScreen 直接退出插件分区（之前返回会跳设置主菜单，且状态不清导致再点插件卡详情、需重启）。
+    val inDetail = selectedPlugin != null || selectedStoreItem != null || selectedDevProject != null
+    BackHandler(enabled = inDetail) {
+        selectedPluginId = null
+        selectedStoreItem = null
+        selectedDevProject = null
+    }
+
+    if (selectedPlugin != null) {
+        val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+        Column(modifier = Modifier.fillMaxSize()) {
+            PluginBackBar(onBack = { selectedPluginId = null })
+            PluginDetailSection(
+                plugin = selectedPlugin,
+                onToggleEnabled = { viewModel.setEnabled(selectedPlugin.id, it) },
+                bridgeFactory = { page, post, onClose ->
+                    viewModel.createWebBridge(
+                        page = page,
+                        pluginVersion = page.pluginVersion,
+                        languageTag = languageTag,
+                        theme = { if (isDark) "dark" else "light" },
+                        onClosePage = onClose,
+                        post = post
+                    )
+                },
+                onClosePage = { selectedPluginId = null },
+                dependencyState = dependencyStates[selectedPlugin.id],
+                onPrepareDependencies = { viewModel.prepareDependencies(selectedPlugin.id) },
+                shizukuGranted = selectedPlugin.id in shizukuGranted,
+                shizukuState = shizukuState,
+                onSetShizukuGranted = { viewModel.setShizukuGranted(selectedPlugin, it) },
+                overlayGranted = selectedPlugin.id in overlayGranted,
+                onSetOverlayGranted = { viewModel.setOverlayGranted(selectedPlugin, it) },
+                backupGranted = selectedPlugin.id in backupGranted,
+                onSetBackupGranted = { viewModel.setBackupGranted(selectedPlugin, it) }
+            )
+        }
+        return
+    }
+
+    val storeItem = selectedStoreItem
+    if (storeItem != null) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            PluginBackBar(onBack = { selectedStoreItem = null })
+            PluginStoreDetailSection(
+                item = storeItem,
+                onShowPreview = viewModel::showPreview
+            )
+        }
+        return
+    }
+
+    val devProject = selectedDevProject
+    if (devProject != null) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            PluginBackBar(onBack = { selectedDevProject = null })
+            PluginDevDetailSection(
+                project = devProject,
+                plugins = plugins,
+                devRootPath = viewModel.devRootPath,
+                onInstall = { viewModel.installDevProject(devProject) }
+            )
+        }
+        return
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // 顶栏操作行：返回 + 加号导入 + 设置（标题由 AiVerse SettingsScreen 统一 TopBar 提供）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(
+                        imageVector = FeatherIcons.ArrowLeft,
+                        contentDescription = stringResource(R.string.common_back),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(
+                    onClick = {
+                        zipLauncher.launch(
+                            arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed")
+                        )
+                    }
+                ) {
+                    Icon(
+                        imageVector = FeatherIcons.Plus,
+                        contentDescription = stringResource(R.string.plugins_install),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                IconButton(onClick = { showSettings = true }) {
+                    Icon(
+                        imageVector = FeatherIcons.Settings,
+                        contentDescription = stringResource(R.string.plugins_settings_title),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            PluginsSection(
+                plugins = plugins,
+                loaded = loaded,
+                devMode = devMode,
+                devProjects = devProjects,
+                devRootPath = viewModel.devRootPath,
+                refreshing = refreshing,
+                devRefreshing = devRefreshing,
+                onRefresh = viewModel::refresh,
+                onRefreshDevProjects = viewModel::refreshDevProjects,
+                onOpenDevDetail = { selectedDevProject = it },
+                onSetDevEnabled = { project, enabled ->
+                    val installed = plugins.firstOrNull { it.id == project.pluginId }
+                    when {
+                        installed != null ->
+                            if (installed.manifest != null && installed.content != null) {
+                                viewModel.setEnabled(installed.id, enabled)
+                            }
+                        enabled && project.error == null -> viewModel.installDevProject(project)
+                    }
+                },
+                onOpenDetail = { selectedPluginId = it.id },
+                onToggleEnabled = { plugin, enabled -> viewModel.setEnabled(plugin.id, enabled) },
+                onMemoryToggleEnabled = viewModel::setMemoryEnabled,
+                onUninstall = { plugin -> viewModel.uninstall(plugin.id) },
+                onBatchUninstall = { selected -> viewModel.uninstallAll(selected.map { it.id }) },
+                initialTabPage = pluginsTab,
+                onTabPageChange = { pluginsTab = it },
+                onShowStorePreview = viewModel::showPreview,
+                onOpenStoreDetail = { selectedStoreItem = it }
+            )
+        }
+
+        // 导入/预览确认弹层（复用并行子代理落地的 [PluginImportHost]）
+        PluginImportHost(viewModel = viewModel)
+    }
+
+    if (showSettings) {
+        PluginSettingsSheet(
+            devMode = devMode,
+            devRootPath = viewModel.devRootPath,
+            indexSourceText = indexSourceText,
+            downloadMirror = downloadMirror,
+            onSetIndexSourceText = viewModel::setIndexSourceText,
+            onSetDownloadMirror = viewModel::setDownloadMirror,
+            onSetDevMode = viewModel::setDevMode,
+            onDismiss = {
+                showSettings = false
+                viewModel.savePluginSettings()
+            }
+        )
+    }
+}
+
+/**
+ * 详情页顶部的返回条：返回箭头 + 空标题区（标题由 SettingsScreen 统一 TopBar 提供）。
+ * 点击返回会清选中状态回到插件列表（而非冒泡到 SettingsScreen 退出插件分区）。
+ */
+@Composable
+private fun PluginBackBar(onBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                imageVector = FeatherIcons.ArrowLeft,
+                contentDescription = stringResource(R.string.common_back),
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+/**
+ * 导入/预览确认弹层：读取失败显示错误列表；包校验通过后显示清单信息与确认/取消。
+ * 文案复用既有 plugins_* 键；错误详情显示 [PluginError.detail]（语言无关的技术信息，非硬编码中文）。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PluginImportSheet(
+    state: PluginImportState,
+    languageTag: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    when (state) {
+        PluginImportState.Idle, PluginImportState.Reading -> Unit
+        is PluginImportState.Failed -> {
+            val sheetState = rememberModalBottomSheetState()
+            AdaptiveModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.lg)
+                        .padding(bottom = Spacing.xl),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    Text(
+                        text = stringResource(R.string.plugins_error_read_zip),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    state.errors.forEach { error ->
+                        Text(
+                            text = error.detail.ifBlank { error.code.name },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(Spacing.md))
+                    TextButton(onClick = onDismiss) {
+                        Text(stringResource(R.string.plugins_cancel))
+                    }
+                }
+            }
+        }
+        is PluginImportState.Preview -> {
+            val preview = state.preview
+            val sheetState = rememberModalBottomSheetState()
+            AdaptiveModalBottomSheet(
+                onDismissRequest = onDismiss,
+                sheetState = sheetState,
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.lg)
+                        .padding(bottom = Spacing.xl),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    Text(
+                        text = preview.manifest.name.resolve(languageTag),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${stringResource(R.string.plugins_info_version)}: v${preview.manifest.version}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (preview.manifest.publisher.isNotBlank()) {
+                        Text(
+                            text = "${stringResource(R.string.plugins_info_publisher)}: ${preview.manifest.publisher}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        text = "${stringResource(R.string.plugins_section_contents)}: ${preview.manifest.contributionCount}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    state.error?.let { error ->
+                        Text(
+                            text = error.detail.ifBlank { error.code.name },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = onDismiss, enabled = !state.installing) {
+                            Text(stringResource(R.string.plugins_cancel))
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                        Button(onClick = onConfirm, enabled = !state.installing) {
+                            Text(
+                                stringResource(
+                                    if (state.installing) R.string.plugins_installing
+                                    else R.string.plugins_install
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

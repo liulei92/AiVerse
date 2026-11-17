@@ -2,6 +2,10 @@
 <resources>
     <string name="app_name">AiVerse</string>
     <string name="agent_image_omitted_unsupported">（图片已省略：当前模型被判定为不支持图片输入，可在供应商设置里开启支持）</string>
+    <string name="plugin_provider_missing">插件提供商已被删除，或提供它的插件已停用/卸载，请重新选择模型</string>
+    <string name="plugin_default_provider_missing">默认插件提供商已被删除，或提供它的插件已停用/卸载，请重新选择模型</string>
+    <string name="plugin_tool_hook_denied">插件阻止了该工具调用</string>
+    <string name="plugin_review_denied">插件代审核拒绝了该工具调用</string>
     <string name="common_tool_missing_argument">缺少参数：%1$s。</string>
     <string name="plan_mode_invalid_action">无效的 action：%1$s。支持 enter 或 exit。</string>
     <string name="plan_mode_already_active">当前已处于 PLAN（计划）模式。</string>
@@ -357,7 +361,7 @@
     <string name="settings_backup">备份与还原</string>
     <string name="settings_about">关于</string>
     <string name="settings_memory">记忆</string>
-    <string name="settings_plugins">脚本插件</string>
+    <string name="settings_plugins">插件</string>
     <string name="settings_tts">朗读</string>
     <string name="tts_rate">语速</string>
     <string name="tts_pitch">音调</string>
@@ -382,7 +386,7 @@
     <string name="tts_provider_openai">OpenAI 兼容</string>
     <string name="tts_provider_fish">Fish Audio</string>
     <string name="plugins_install">安装插件</string>
-    <string name="plugins_scripts_docs">查看脚本插件使用文档</string>
+    <string name="plugins_scripts_docs">查看插件使用文档</string>
     <string name="plugins_more_actions">更多操作</string>
     <string name="plugins_share">分享</string>
     <string name="plugins_export">导出</string>
@@ -390,11 +394,12 @@
     <string name="plugins_share_failed">分享失败，无法读取插件文件</string>
     <string name="plugins_export_failed">导出失败</string>
     <string name="plugins_export_success">插件已导出</string>
-    <string name="plugins_empty">尚未安装脚本插件，点击右上角安装 zip 插件包</string>
+    <string name="plugins_empty">尚未安装插件，点击右上角安装 zip 插件包</string>
     <string name="plugins_uninstall">卸载</string>
     <string name="plugins_cancel">取消</string>
     <string name="plugins_confirm_uninstall_title">卸载插件</string>
     <string name="plugins_confirm_uninstall_message">确定卸载「%1$s」吗？此操作会删除插件文件。</string>
+    <string name="plugins_batch_uninstall_confirm">将卸载选中的 %1$d 个插件，此操作会删除插件文件，且不可恢复。确定卸载？</string>
     <string name="plugins_installed_enabled">已安装并启用 %1$s</string>
     <string name="plugins_installed_dangerous">已安装 %1$s，含危险权限，请确认后启用</string>
     <string name="plugins_need_all_files_access">%1$s 需要「所有文件访问」权限，已跳转系统设置，请开启后再启用插件</string>
@@ -405,6 +410,61 @@
     <string name="plugins_install_from_repo">从仓库</string>
     <string name="plugins_install_from_local">从本地</string>
     <string name="plugins_repo_title">插件仓库</string>
+    <!-- 插件设置主界面（AiCode 移植）新增键 -->
+    <string name="plugins_tab_manage">插件管理</string>
+    <string name="plugins_tab_config">插件配置</string>
+    <string name="plugins_tab_installed">已安装</string>
+    <string name="plugins_tab_dev">开发中</string>
+    <string name="plugins_tab_store">插件商店</string>
+    <string name="plugins_settings_title">插件设置</string>
+    <string name="plugins_store_sources_label">第三方插件源</string>
+    <string name="plugins_store_sources_hint">一行一个地址；官方索引始终保留并排在最前。</string>
+    <string name="plugins_store_mirror_label">镜像加速地址</string>
+    <string name="plugins_store_mirror_hint">用于加速 GitHub 上的索引与插件包下载，留空则直连。</string>
+    <string name="plugins_store_mirror_invalid">请填写 http:// 或 https:// 开头的地址</string>
+    <string name="plugins_permissions_section">权限</string>
+    <string name="plugins_shizuku_section">Shizuku</string>
+    <string name="plugins_backup_section">备份与还原事件</string>
+    <string name="plugins_shizuku_system_state">系统状态：%1$s</string>
+    <string name="plugins_overlay_section">悬浮窗</string>
+    <string name="plugins_model_access_section">模型调用</string>
+    <string name="plugins_model_access_desc">可调用你配置的 AI 供应商，请求会计入对应渠道的用量</string>
+    <string name="plugins_overlay_system_missing">请先在「设置 → 软件权限」中开启「显示在其他应用上层」</string>
+    <string name="plugins_overlay_notification_title">插件悬浮窗运行中</string>
+    <string name="plugins_overlay_notification_text">有插件正在其他应用上方显示内容</string>
+    <string name="plugins_overlay_notification_close">全部关闭</string>
+    <string name="plugins_overlay_channel">插件悬浮窗</string>
+    <string name="plugins_overlay_channel_desc">插件系统悬浮窗运行期间保持前台服务</string>
+    <string name="plugins_dev_mode">开发者侧载</string>
+    <string name="plugins_dev_mode_desc">启用后「开发中」标签页会列出开发目录里的插件项目；保存文件后自动重载。仅用于开发调试。</string>
+    <string name="plugins_dev_root">开发目录：%1$s</string>
+    <string name="plugins_mcp_transport_http">HTTP</string>
+    <string name="plugins_mcp_transport_stdio">stdio</string>
+    <string name="plugin_tool_not_authorized">插件已停用，工具不再可用</string>
+    <string name="plugin_runtime_failed">插件运行时执行失败</string>
+    <string name="plugins_enable">启用插件</string>
+    <string name="plugins_section_info">信息</string>
+    <string name="plugins_section_dependencies">依赖环境</string>
+    <string name="plugins_dependencies_ready">依赖已就绪</string>
+    <string name="plugins_dependencies_missing">依赖未准备</string>
+    <string name="plugins_dependencies_prepare">准备依赖</string>
+    <string name="plugins_dependencies_preparing">准备中…</string>
+    <string name="plugins_dependencies_state_not_saved">插件已变更或依赖状态保存失败，请重新准备依赖。</string>
+    <string name="plugins_section_contents">提供的内容</string>
+    <string name="plugins_info_version">版本</string>
+    <string name="plugins_info_publisher">发布者</string>
+    <string name="plugins_info_license">许可证</string>
+    <string name="plugins_info_repository">源码仓库</string>
+    <string name="plugins_info_origin">来源</string>
+    <string name="plugins_origin_local">本地导入</string>
+    <string name="plugins_no_contents">没有可显示的内容</string>
+    <string name="plugins_empty_title">还没有安装插件</string>
+    <string name="plugins_empty_hint">点右上角「＋」导入插件包（.zip）。插件可以为 AI 提供额外的技能和子代理。</string>
+    <string name="plugins_search_placeholder">搜索插件…</string>
+    <string name="plugins_search_empty">未找到匹配的插件</string>
+    <string name="plugins_update_available">可更新</string>
+    <string name="plugins_update_version_transition">v%1$s → v%2$s</string>
+    <string name="plugins_installing">安装中…</string>
     <string name="plugins_back">返回</string>
     <string name="plugins_repo_retry">重试</string>
     <string name="plugins_repo_empty">插件仓库暂无插件</string>
@@ -412,6 +472,103 @@
     <string name="plugins_update">更新</string>
     <string name="plugins_installed_latest">已安装</string>
     <string name="plugins_updated">已更新 %1$s</string>
+    <string name="plugins_ext_entry_subtitle">插件 %1$s</string>
+
+    <!-- 插件包导入：预览与确认（AiCode 移植） -->
+    <string name="plugins_reading">正在读取插件包…</string>
+    <string name="plugins_import_failed_title">无法导入这个插件</string>
+    <string name="plugins_import_failed_more">还有 %1$d 个问题</string>
+    <string name="plugins_preview_title">安装插件</string>
+    <string name="plugins_preview_contents">将提供的内容</string>
+    <string name="plugins_item_subtitle">v%1$s · %2$s</string>
+    <string name="plugins_install_replace">替换安装</string>
+    <string name="plugins_install_repository_header">确认插件来源</string>
+    <string name="plugins_install_repository_reason">非官方来源需要手动输入该插件的源码仓库地址；每次安装或更新都要重新输入。</string>
+    <string name="plugins_install_repository_label">插件源码仓库</string>
+    <string name="plugins_install_repository_hint">请输入上方显示的完整源码仓库地址</string>
+    <string name="plugins_install_repository_mismatch">地址不匹配，无法继续</string>
+    <string name="plugins_install_source_official">来源：%1$s（官方索引）</string>
+    <string name="plugins_install_source_community">来源：%1$s（非官方索引）</string>
+    <string name="plugins_install_source_changed">来源已变化。替换安装会撤销该插件已有的 Shizuku 与悬浮窗授权，并关闭已打开的悬浮窗。</string>
+
+    <!-- 插件包导入：错误码文案（AiCode 移植） -->
+    <string name="plugins_error_archive_unreadable">无法读取这个文件，它不是有效的 ZIP 压缩包。</string>
+    <string name="plugins_error_archive_too_large">压缩包过大。</string>
+    <string name="plugins_error_archive_too_many">压缩包内的文件过多。</string>
+    <string name="plugins_error_entry_too_large">压缩包内有文件过大：%1$s</string>
+    <string name="plugins_error_unsafe_path">压缩包内有不安全的路径：%1$s</string>
+    <string name="plugins_error_duplicate_entry">压缩包内有重复的文件：%1$s</string>
+    <string name="plugins_error_manifest_missing">压缩包根目录里没有 plugin.json。</string>
+    <string name="plugins_error_manifest_too_large">plugin.json 过大。</string>
+    <string name="plugins_error_manifest_not_json">plugin.json 不是有效的 JSON。</string>
+    <string name="plugins_error_field_missing">plugin.json 缺少字段：%1$s</string>
+    <string name="plugins_error_field_invalid">plugin.json 的字段无效：%1$s</string>
+    <string name="plugins_error_manifest_version">不支持的清单版本：%1$s</string>
+    <string name="plugins_error_unsupported_field">此版本不支持的字段：%1$s</string>
+    <string name="plugins_error_unsupported_contribution">此版本暂不支持的内容类型：%1$s</string>
+    <string name="plugins_error_api_incompatible">插件要求的插件接口版本（%1$s）与当前 AiVerse 不兼容。</string>
+    <string name="plugins_error_duplicate_id">重复的 ID：%1$s</string>
+    <string name="plugins_error_file_missing">清单引用的文件不存在：%1$s</string>
+    <string name="plugins_error_content_invalid">内容无效：%1$s</string>
+    <string name="plugins_error_storage_failed">保存失败，请稍后重试。</string>
+    <string name="plugins_error_preview_expired">这次导入已经过期，请重新选择文件。</string>
+
+    <!-- 插件商店（AiCode 移植） -->
+    <string name="plugins_store_empty_title">暂无可用插件</string>
+    <string name="plugins_store_empty_hint">当前索引还没有发布插件，可以在右上角「插件设置」里添加第三方插件源。</string>
+    <string name="plugins_store_badge_unofficial">非官方</string>
+    <string name="plugins_store_retry">重试</string>
+    <string name="plugins_store_refresh_done">索引刷新完成</string>
+    <string name="plugins_store_refresh_done_failed">索引刷新完成，失败 %1$d 个</string>
+    <string name="plugins_store_error_network">无法连接索引仓库，请检查网络或地址。</string>
+    <string name="plugins_store_error_invalid">索引内容无效，已拒绝加载。</string>
+    <string name="plugins_store_error_no_release">未找到可安装的插件版本。</string>
+    <string name="plugins_store_error_download">插件包下载失败，请稍后重试。</string>
+    <string name="plugins_store_error_preview">插件包无法读取，安装已取消。</string>
+    <string name="plugins_store_install">安装</string>
+    <string name="plugins_store_update">更新</string>
+    <string name="plugins_store_installed">已安装</string>
+    <string name="plugins_store_incompatible">不兼容</string>
+    <string name="plugins_store_requires_min_version">要求 AiVerse &gt;= %1$s</string>
+    <string name="plugins_store_version_latest">最新版</string>
+    <string name="plugins_store_detail_version">版本</string>
+    <string name="plugins_store_detail_tags">分类</string>
+    <string name="plugins_store_detail_index_source">索引来源</string>
+    <string name="plugins_store_detail_source">源码仓库</string>
+    <string name="plugins_store_detail_license">许可证</string>
+    <string name="plugins_store_detail_homepage">项目主页</string>
+
+    <!-- 插件开发者侧载（AiCode 移植） -->
+    <string name="plugins_dev_empty_title">开发目录里还没有插件</string>
+    <string name="plugins_dev_empty_hint">把插件目录放到 %1$s 下，每个子目录需包含 plugin.json。</string>
+    <string name="plugins_dev_invalid">清单无效</string>
+    <string name="plugins_dev_not_installed">未安装</string>
+    <string name="plugins_dev_installed">已安装 %1$s</string>
+    <string name="plugins_dev_install">安装</string>
+    <string name="plugins_dev_reload">重载</string>
+    <string name="plugins_dev_detail_dir">项目目录</string>
+    <string name="plugins_dev_detail_id">插件 ID</string>
+    <string name="plugins_dev_detail_version">目录版本</string>
+    <string name="plugins_dev_detail_installed">已安装版本</string>
+    <string name="plugins_dev_detail_status">启用状态</string>
+    <string name="plugins_dev_detail_hint">开启开发者侧载期间，保存项目文件会自动重载。开发目录：%1$s</string>
+
+    <!-- 插件工作区工具抽屉（AiCode 移植） -->
+    <string name="plugins_current_project">当前项目</string>
+    <string name="plugins_no_project_tools">当前项目尚未添加任何工具</string>
+    <string name="plugins_add_tool">添加工具</string>
+    <string name="plugins_all_tools">全部工具</string>
+    <string name="plugins_search_tools">搜索工具…</string>
+    <string name="plugins_no_available_tools">没有找到匹配的可用工具</string>
+    <string name="plugins_tool_add">添加</string>
+    <string name="plugins_tool_added">已添加</string>
+    <string name="plugin_tool_unavailable">插件已停用，工具不可用</string>
+    <string name="plugin_tool_not_found">工具不可用</string>
+    <string name="plugin_tool_not_found_hint">插件可能已停用、卸载或不再提供这个工具。</string>
+
+    <!-- 插件通用状态文案（AiCode 移植） -->
+    <string name="plugins_status_active">已启用</string>
+    <string name="plugins_status_disabled">已停用</string>
     <string name="settings_language">语言</string>
     <string name="settings_token_stats_title">Token 统计</string>
 
@@ -697,6 +854,9 @@
     <string name="common_cut">剪切</string>
     <string name="common_paste">粘贴</string>
     <string name="common_allow">允许</string>
+    <string name="common_deny">拒绝</string>
+    <string name="common_later">暂不</string>
+    <string name="common_recommended">推荐</string>
     <string name="common_close">关闭</string>
     <string name="common_clear">清除</string>
     <string name="common_more">更多</string>
@@ -974,10 +1134,11 @@
     <string name="backup_data_memories">记忆</string>
     <string name="backup_data_favorites">消息收藏</string>
     <string name="backup_data_skills">技能</string>
-    <string name="backup_data_plugins">脚本插件</string>
+    <string name="backup_data_plugins">插件</string>
     <string name="backup_data_roles">角色（新角色系统）</string>
     <string name="backup_data_custom_prompts">自定义提示词</string>
     <string name="backup_data_media_files">自定义图标与聊天背景图</string>
+    <string name="backup_data_git_credentials">Git 凭据</string>
     <string name="backup_workspace_git_hint">工作区文件建议通过 Git 提交备份，导出备份仅作备用</string>
     <string name="backup_password_label">口令（可选）</string>
     <string name="backup_processing">处理中</string>
@@ -995,10 +1156,11 @@
     <string name="backup_stat_memories">· 记忆 %1$s 条</string>
     <string name="backup_stat_favorites">· 消息收藏 %1$s 条</string>
     <string name="backup_stat_skills">· 技能 %1$s 个</string>
-    <string name="backup_stat_plugins">· 脚本插件 %1$s 个</string>
+    <string name="backup_stat_plugins">· 插件 %1$s 个</string>
     <string name="backup_stat_roles">· 角色 %1$s 个</string>
     <string name="backup_stat_custom_prompts">· 自定义提示词 %1$s 个</string>
     <string name="backup_stat_media_files">· 自定义图标与背景图 %1$s 个</string>
+    <string name="backup_stat_git_credentials">· Git 凭据 %1$s 条</string>
     <string name="backup_settings_covered">主题、保活、日志、识图、同步偏好已覆盖</string>
     <string name="backup_restore_workspaces_title">恢复工作区</string>
     <string name="backup_restore_workspaces_warning">将直接覆盖本地同名工作区中的文件，且无法撤销，请谨慎勾选</string>
@@ -1010,6 +1172,23 @@
     <string name="backup_export_failed">导出失败</string>
     <string name="backup_wrong_password">备份口令错误，或加密备份文件已损坏</string>
     <string name="backup_import_failed">导入失败</string>
+
+    <!-- 测试版与正式版并存时的数据接授权（issue #97） -->
+    <string name="auth_grant_title">AiVerse 测试版请求备份授权</string>
+    <string name="auth_grant_risk_header">传输通道安全说明</string>
+    <string name="auth_grant_channel_file_provider">私有目录临时授权</string>
+    <string name="auth_grant_channel_http">本机回环 HTTP 服务</string>
+    <string name="auth_grant_risk_file_provider">备份文件全程留在正式版的私有目录里，只给测试版一次性的读取授权，读完立即收回；其他应用始终碰不到这个文件。</string>
+    <string name="auth_grant_risk_http">备份文件经 127.0.0.1 本机回环地址传输，不经过网络；服务仅存活到本次传输结束，用完自动关闭。</string>
+    <string name="auth_grant_channel_header">选择传输通道</string>
+    <string name="auth_grant_data_header">将共享的数据</string>
+    <string name="auth_grant_data_git_credentials">Git 凭据</string>
+    <string name="auth_grant_fallback_header">更习惯传统方式？</string>
+    <string name="auth_grant_fallback">建议还是直接导入导出</string>
+    <string name="auth_grant_fallback_hint">不启用临时授权，打开现有备份页手动导出/导入</string>
+    <string name="auth_grant_allow">允许并共享</string>
+    <string name="beta_handoff_prompt_title">从正式版导入数据</string>
+    <string name="beta_handoff_prompt_body">本机已安装 AiVerse 正式版。可以授权正式版把数据直接交给测试版，无需先导出文件再手动导入。</string>
 
     <!-- 网络备份 -->
     <string name="backup_net_section">网络备份</string>
@@ -1956,6 +2135,8 @@
     <string name="perm_global_auto_approve_desc">开启后所有会话不再逐次索要权限；灾难性删除与 Shizuku 仍拦截。</string>
     <string name="perm_overlay_ball">悬浮球</string>
     <string name="perm_overlay_ball_desc">屏幕上方常驻 App 悬浮球，单击切换当前应用，长按弹出控制面板；需悬浮窗权限。</string>
+    <string name="settings_permission_overlay">显示在其他应用上层</string>
+    <string name="settings_permission_overlay_desc">允许本应用在其他应用上方显示内容（悬浮球、插件悬浮窗需要）</string>
     <string name="overlay_ball_channel">悬浮球</string>
     <string name="overlay_ball_notification">悬浮球已开启：单击切换应用，长按打开控制面板</string>
     <string name="overlay_ball_panel_title">悬浮球</string>
@@ -2576,6 +2757,11 @@
     <string name="memory_add_expand">新建记忆并展开</string>
     <string name="memory_delete_selected_confirm_title">删除所选记忆</string>
     <string name="memory_delete_selected_confirm_message">确定删除已选的 %1$d 项记忆吗？此操作不可撤销。</string>
+    <!-- 记忆「假插件」开关 -->
+    <string name="memory_toggle_subtitle">开关在右侧；关闭后隐藏记忆入口且 AI 不再读写记忆，已存记忆保留</string>
+    <string name="plugin_memory_name">记忆</string>
+    <string name="plugin_memory_description">AI 长期记忆（内置能力）。关闭后设置页隐藏记忆入口，AI 不再读写记忆；已存记忆保留。</string>
+    <string name="memory_disabled_error">记忆已关闭。可在设置的「记忆」中开启后重试。</string>
     <!-- 顶栏内存胶囊 -->
     <string name="memory_chip_label">内存 %1$d%%</string>
     <string name="memory_chip_used_total">已用 %1$s / 共 %2$s</string>
@@ -2733,7 +2919,7 @@ AI 将自主循环推进（工具自动放行、PLAN 停用），直到达成、
     <string name="plugin_notify_failed">通知失败：%1$s</string>
     <string name="plugin_no_permission">无权限</string>
     <string name="plugin_notification_channel_name">插件通知</string>
-    <string name="plugin_notification_channel_desc">脚本插件发送的通知</string>
+    <string name="plugin_notification_channel_desc">插件发送的通知</string>
     <string name="plugin_err_all_files_permission">需要「所有文件访问」权限，请在系统设置中开启</string>
     <string name="plugin_err_is_directory">是目录，请指定文件路径: %1$s</string>
     <string name="plugin_err_file_not_found">文件不存在: %1$s</string>
@@ -2749,6 +2935,9 @@ AI 将自主循环推进（工具自动放行、PLAN 停用），直到达成、
     <string name="plugin_install_missing_name">plugin.json 缺少 name 字段</string>
     <string name="plugin_install_missing_main">plugin.json 缺少 main 字段</string>
     <string name="plugin_install_bad_dir">plugin.json 所在目录异常</string>
+    <string name="plugin_web_page_failed">插件页面加载失败</string>
+    <string name="plugin_web_page_retry">重试</string>
+    <string name="plugin_page_unsupported">该插件页面贡献暂不支持</string>
     <string name="apk_download_failed">下载失败</string>
     <string name="apk_chunk_incomplete">分片 %1$d 不完整（%2$d/%3$d）</string>
     <string name="apk_size_mismatch">安装包大小不符（%1$d/%2$d）</string>
@@ -2817,4 +3006,16 @@ AI 将自主循环推进（工具自动放行、PLAN 停用），直到达成、
     <string name="roles_no_description">未设置</string>
     <string name="roles_no_tags">未设置</string>
     <string name="roles_identity_empty">该角色未设置身份 Prompt</string>
+    <string name="plugin_tool_permission_title">确认调用插件工具</string>
+    <string name="plugin_tool_permission_summary">AI 请求调用插件「%1$s」的工具「%2$s」</string>
+    <string name="plugin_tool_permission_details">插件：%1$s\n工具：%2$s\n参数：%3$s</string>
+    <string name="plugins_store_upload_title">上传插件</string>
+    <string name="plugins_store_upload_hint">提交 zip 插件包到商店，审核通过后上架</string>
+    <string name="plugins_store_upload_pick">选择 zip 包</string>
+    <string name="plugins_store_uploading">上传中…</string>
+    <string name="plugins_store_upload_success">已提交，审核通过后上架</string>
+    <string name="plugins_store_upload_failed">上传失败：%1$s</string>
+    <string name="plugins_store_upload_invalid_type">只能上传 .zip 插件包</string>
+    <string name="plugins_store_upload_too_large">插件包不能超过 10MB</string>
+    <string name="plugins_store_upload_read_failed">无法读取所选文件</string>
 </resources>

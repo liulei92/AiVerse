@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -107,7 +106,7 @@ internal fun SkillsSection(
     val allSelected = selection.selectedCount > 0 && selection.selectedCount == allKeys.size
     val selectedEntries: List<SkillUiEntry> = selection.selectedKeys.mapNotNull { keyToEntry[it] }
 
-    Box(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
         // 顶部始终渲染「技能默认安装作用域」设置项：技能为空时也可见（issue #85）。
         SkillDefaultScopeSetting(
